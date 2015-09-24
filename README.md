@@ -17,6 +17,8 @@ An important element utilized by this algorithm is the so called Peaked Cosine
 window function, which is applied over sinc function in all filters. Please
 consult the documentation for more details.
 
+*AVIR is devoted to women. Your digital photos can look good at any size!*
+
 ## Requirements ##
 C++ compiler and system with efficient "float" floating point (24-bit
 mantissa) type support. This library can also internally use the "double"
@@ -82,10 +84,18 @@ place for improvement exists, and the default parameters may change in a
 future update. If you need to recall an exact set of parameters, simply save
 them locally for a later use.
 
-This library includes binary command line tool "imageresize" for major desktop
-platforms. These binaries were designed to be used as a demonstration of
-library's performance and as a reference. These binaries use the following
-libraries:
+When the algorithm is run with no resizing applied (k=1), the result of
+resizing will not be an exact copy of the source image: a very small amount of
+non-pronounced ringing artifacts, especially around sharp features like screen
+fonts should be expected. The reason for this is that the image is heavily
+low-pass filtered at first to reduce aliasing during subsequent resizing, and
+at last filtered by a correction filter that has a limited length and moderate
+steepness as to not cause ringing artifacts.
+
+This library includes a binary command line tool "imageresize" for major
+desktop platforms. This tool was designed to be used as a demonstration of
+library's performance and as a reference, it uses 4 threads during processing.
+This tool uses the following libraries:
 * turbojpeg Copyright (c) 2009-2013 D. R. Commander
 * libpng Copyright (c) 1998-2013 Glenn Randers-Pehrson
 * zlib Copyright (c) 1995-2013 Jean-loup Gailly and Mark Adler
@@ -94,5 +104,5 @@ libraries:
 This library is used by:
 
 Please drop me a note at aleksey.vaneev@gmail.com and I will include a link to
-your product to the list of users. This list is important at maintaining
-confidence in this library among the interested parties.
+your software product to the list of users. This list is important at
+maintaining confidence in this library among the interested parties.

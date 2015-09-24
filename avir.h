@@ -35,47 +35,87 @@
  * Cosine window function, which is applied over sinc function in all filters.
  * Please consult the documentation for more details.
  *
+ * AVIR is devoted to women. Your digital photos can look good at any size!
+ *
  * @section license License
  *
- * ! This License Agreement is applicable to non-commercial and low-volume
- * commercial use only. You (individual person or a company) have to sign a
- * special license agreement with AVIR copyright holder if you or your company
- * sells and/or licenses (on a commercial basis, directly or through
- * resellers) software products where AVIR or its parts are included, and if
- * combined sales of such software products reach more than 1000 (one
- * thousand) end user units per year (be it individual or employee users) on
- * desktop and laptop computers and any other devices (e.g. TVs, video
- * projectors, video players, etc), or 5000 (five thousand) end user units per
- * year on smartphones and tablets.
+ * AVIR License Agreement (for AVIR image resizing software library version
+ * 1.1)
  *
- * If you sublicense to a non-end user third party, or transfer rights to your
- * software where AVIR is used, to a third party, this third party should
- * agree to this License Agreement or sign a special license agreement with
- * AVIR copyright holder, or remove AVIR dependence from the received
- * software.
+ * AVIR Copyright (c) 2015 Aleksey Vaneev
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
+ * 1. AVIR image resizing software library and its parts and associated
+ * documentation files (collectively, "AVIR") is licensed, not sold. AVIR and
+ * all rights are owned by AVIR copyright holder and are protected by
+ * copyright law and international copyright treaties. You (individual person
+ * or a company) acknowledge that no title to the intellectual property in
+ * AVIR is transferred to you. You further acknowledge that title and full
+ * ownership rights to AVIR will remain the exclusive property of AVIR
+ * copyright holder and you will not acquire any rights to AVIR except as
+ * expressly set forth in this License Agreement.
  *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
+ * 2. This License Agreement is only applicable to non-commercial and
+ * low-income commercial use of AVIR. This means that you have to sign a
+ * special license agreement with AVIR copyright holder if you or your
+ * company sells and/or licenses (directly or via resellers) software products
+ * and/or non-software products with firmware where AVIR is included or may be
+ * included, and if or when the combined sales of such products reach at your
+ * end a sum of more than 40000 (forty thousand) US dollars per year (or
+ * equivalent value in your native currency). Sales also include subscriptions
+ * where a subscribed end user may get a functioning, and/or feature-extended,
+ * and/or advertisement-free product where AVIR is included or may be
+ * included. Software products also include user-operated server-based image
+ * and video editing applications where AVIR is included or may be included.
+ * Donation-based, but otherwise free from fees, software products where AVIR
+ * is included or may be included are treated herein as non-commercial.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * 3. The execution of AVIR image resizing function in non-commercial,
+ * commercial and any other environments (operations) of any size and for any
+ * purpose is allowed without a fee.
+ *
+ * 4. If you have a considerable development budget, and/or make a
+ * considerable profit from donations (grants), and/or make advertising profit
+ * associated with software where AVIR is included, or if AVIR image resizing
+ * function is an important function (e.g. on a photo hosting, a social web
+ * site) which is performed using proprietary software product where AVIR is
+ * included, then consider voluntarily signing a special license agreement
+ * with AVIR copyright holder.
+ *
+ * 5. If you sublicense to a non-end user third party, or transfer rights to
+ * your software where AVIR or its parts are included, to a third party, this
+ * third party should agree to this License Agreement or sign a special
+ * license agreement with AVIR copyright holder, or remove AVIR dependence
+ * from the received software.
+ *
+ * 6. Permission is hereby granted, free of charge, to any person or company
+ * (subject to the restrictions outlined above) obtaining a copy of AVIR, to
+ * deal in AVIR without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense (except as
+ * noted above), and/or sell copies of AVIR, and to permit persons to whom
+ * AVIR is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this License Agreement shall be included in
+ * all copies or portions of AVIR.
+ *
+ * 7. AVIR IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
- * DEALINGS IN THE SOFTWARE.
+ * FROM, OUT OF OR IN CONNECTION WITH AVIR OR THE USE OR OTHER DEALINGS IN
+ * AVIR.
  *
- * Please credit the creator of this library in your documentation in the
+ * 8. AVIR copyright holder's e-mail: aleksey.vaneev@gmail.com
+ * AVIR copyright holder's registered address:
+ * Aleksey Vaneev
+ * 6-54 Lenin Street,
+ * Syktyvkar, Komi Republic 167000
+ * Russia
+ *
+ * Please credit the author of this library in your documentation in the
  * following way: "AVIR image resizing algorithm designed by Aleksey Vaneev"
  *
- * @version 1.0
+ * @version 1.1
  */
 
 #ifndef AVIR_CIMAGERESIZER_INCLUDED
@@ -1090,7 +1130,7 @@ public:
 
 	CDSPPeakedCosineLPF( const double aLen2, const double aFreq2,
 		const double aAlpha )
-		: fl2( (int) floor( aLen2 ))
+		: fl2( (int) ceil( aLen2 ) - 1 )
 		, KernelLen( fl2 + fl2 + 1 )
 		, Len2( aLen2 )
 		, Freq2( aFreq2 )
@@ -1269,7 +1309,7 @@ private:
  * thread pool should be also able to efficiently wait for all workloads to
  * finish via the waitAllWorkloadsToFinish() function.
  *
- * The image resizer algorithm makes calls to functions of this class.
+ * The image resizing algorithm makes calls to functions of this class.
  */
 
 class CImageResizerThreadPool
@@ -1387,7 +1427,7 @@ struct CImageResizerParams
 {
 	double CorrFltAlpha; ///< Alpha parameter of the Peaked Cosine window
 		///< function used on the correction filter. The "usable" values are
-		///< above 1.0.
+		///< in the range 1.0 to 5.0.
 		///<
 	double CorrFltBaseLen; ///< Correction filter's base length in samples
 		///< (taps). When upsizing is performed, this value is multiplied by
@@ -1397,23 +1437,28 @@ struct CImageResizerParams
 		///<
 	double IntFltAlpha; ///< Alpha parameter of the Peaked Cosine window
 		///< function used on the interpolation low-pass filter. The "usable"
-		///< values are above 1.0.
+		///< values are in the range 1.0 to 5.0.
 		///<
 	double IntFltBaseLen; ///< Interpolation low-pass filter's base length in
 		///< samples (taps). Since resizing algorithm makes sure the image is
 		///< at least 2X upsampled before interpolation, this base length
-		///< should be at least 14 or otherwise a "grid" artifact will be
-		///< introduced due to discontinuity in interpolation function.
-		///< IntFltBaseLen together with other parameters should be tuned in a
-		///< way that produces the flattest frequency response in 0-0.5
-		///< normalized frequency range (this range is due to 2X upsampling).
+		///< should be at least 18 (at Alpha 2.09) or otherwise a "grid"
+		///< artifact will be introduced due to discontinuity in interpolation
+		///< function. IntFltBaseLen together with other IntFlt parameters
+		///< should be tuned in a way that produces the flattest frequency
+		///< response in 0-0.5 normalized frequency range (this range is due
+		///< to 2X upsampling). In practice the default IntFlt set of
+		///< parameters may not need any further optimization, because it was
+		///< already optimized for interpolation after 2X upsizing, and it
+		///< has a considerable steepness while producing a nearly flat
+		///< response.
 		///<
 	double IntFltCutoff; ///< Interpolation low-pass filter's cutoff frequency
 		///< (normalized). The "usable" range is 0.5 to 1.0.
 		///<
 	double LPFltAlpha; ///< Alpha parameter of the Peaked Cosine window
 		///< function used on the low-pass filter. The "usable" values are
-		///< above 1.0.
+		///< in the range 1.0 to 5.0.
 		///<
 	double LPFltBaseLen; ///< Base length of the low-pass (aka anti-aliasing
 		///< or reconstruction) filter, in samples, further adjusted by the
@@ -1431,20 +1476,76 @@ struct CImageResizerParams
 		///< correction filter. The "usable" range is 0.7 to 1.0.
 		///<
 
-	/**
-	 * Constructor assigns default parameter values.
-	 */
-
 	CImageResizerParams()
-		: CorrFltAlpha( 1.0 )
-		, CorrFltBaseLen( 7.0 )
-		, IntFltAlpha( 4.5 )
-		, IntFltBaseLen( 14.0 )
-		, IntFltCutoff( 0.75 )
-		, LPFltAlpha( 4.5 )
-		, LPFltBaseLen( 8.0 )
-		, LPFltCutoffMult( 0.80 )
+		: HBFltAlpha( 1.7 )
+		, HBFltBaseLen( 13.0 )
+		, HBFltCutoff( 0.30 )
 	{
+	}
+
+	double HBFltAlpha; ///< Half-band filter's Alpha. Assigned internally.
+		///<
+	double HBFltBaseLen; ///< Base length of the half-band low-pass filter.
+		///< Assigned internally. Internally used to perform 2X downsampling
+		///< when downsizing is considerable (more than 8 times). These filter
+		///< parameters should be treated as "technical" and do not require
+		///< adjustment as they were tuned to suit all combinations of other
+		///< parameters. This half-band filters provides a wide transition
+		///< band (for minimal ringing artifacts) and a high stop-band
+		///< attenuation (for minimal aliasing).
+		///<
+	double HBFltCutoff; ///< Half-band filter's cutoff point. Assigned
+		///< internally.
+		///<
+};
+
+/**
+ * @brief The default set of resizing algorithm parameters.
+ *
+ * This is the original default set of resizing parameters that was designed
+ * to deliver the sharpest image while still providing a low amount of ringing
+ * artifacts. This set was found manually via visual inspection and via
+ * measurement of the amount of information left after resizing.
+ */
+
+struct CImageResizerParamsDef : public CImageResizerParams
+{
+	CImageResizerParamsDef()
+	{
+		CorrFltAlpha = 1.0112;
+		CorrFltBaseLen = 6.7537;
+		IntFltAlpha = 2.09;
+		IntFltBaseLen = 18.00;
+		IntFltCutoff = 0.73;
+		LPFltAlpha = 4.2000;
+		LPFltBaseLen = 8.00;
+		LPFltCutoffMult = 0.7877;
+	}
+};
+
+/**
+ * @brief Set of resizing algorithm parameters for faster downsizing.
+ *
+ * This set of resizing algorithm parameters offers about 15% faster
+ * downsizing (does not affect upsizing) than the default setting, and a
+ * lesser amount of ringing artifacts (may be good for text resizing), but at
+ * the expense of slightly increased aliasing. This set of parameters also
+ * produces a lower-quality upsizing (this may become evident when a very
+ * strong unsharp mask is applied on an upsized image).
+ */
+
+struct CImageResizerParamsFast : public CImageResizerParams
+{
+	CImageResizerParamsFast()
+	{
+		CorrFltAlpha = 1.0591;
+		CorrFltBaseLen = 6.1013;
+		IntFltAlpha = 2.09;
+		IntFltBaseLen = 18.00;
+		IntFltCutoff = 0.73;
+		LPFltAlpha = 1.8000;
+		LPFltBaseLen = 5.50;
+		LPFltCutoffMult = 0.2534;
 	}
 };
 
@@ -1487,7 +1588,7 @@ public:
 	 */
 
 	CImageResizer( const int aBitDepth = 8,
-		const CImageResizerParams& aParams = CImageResizerParams() )
+		const CImageResizerParams& aParams = CImageResizerParamsDef() )
 		: Params( aParams )
 		, BitDepth( aBitDepth )
 	{
@@ -1512,7 +1613,9 @@ public:
 	 * @param SrcScanlineSize Physical size of source scanline in elements. If
 	 * this value is below 1, SrcWidth * ElCount0 will be used as the physical
 	 * source scanline size.
-	 * @param NewBuf Buffer to accept the resized image.
+	 * @param NewBuf Buffer to accept the resized image. Can be equal to
+	 * SrcBuf if the size of the resized image is smaller or equal to source
+	 * image. 
 	 * @param NewWidth New image width.
 	 * @param NewHeight New image height.
 	 * @param ElCount Number of elements (channels) in each pixel (1-4).
@@ -1624,7 +1727,11 @@ public:
 
 		for( i = 0; i < ThreadCount; i++ )
 		{
-			if( i > 0 ) ThreadPool.addWorkload( &td[ i ]);
+			if( i > 0 )
+			{
+				ThreadPool.addWorkload( &td[ i ]);
+			}
+
 			td[ i ].init( i, ThreadCount, ElCount, &FltSteps,
 				FilterBank.getFilterLen() );
 
@@ -1657,25 +1764,13 @@ public:
 			OutMul = 1.0;
 		}
 		else
-		if( sizeof( Tout ) == 1 )
 		{
-			OutMul = 255.0;
-		}
-		else
-		{
-			OutMul = 65535.0;
+			OutMul = ( sizeof( Tout ) == 1 ? 255.0 : 65535.0 );
 		}
 
 		if( !IsInFloat )
 		{
-			if( sizeof( Tin ) == 1 )
-			{
-				OutMul /= 255.0;
-			}
-			else
-			{
-				OutMul /= 65535.0;
-			}
+			OutMul /= ( sizeof( Tin ) == 1 ? 255.0 : 65535.0 );
 		}
 
 		// Horizontal scanline filtering and resizing.
@@ -1904,7 +1999,7 @@ private:
 			///< resizing step. This value should be >1 if IsUpsample equals
 			///< "true".
 			///<
-		CBuffer< fptype > Flt; ///< Filter kernel to use on this step.
+		CBuffer< fptype > Flt; ///< Filter kernel to use at this step.
 			///<
 		int FltLatency; ///< Filter's latency (shift) in pixels.
 			///<
@@ -1916,10 +2011,16 @@ private:
 		int InBuf; ///< Input buffer index, 0 or 1.
 			///<
 		int InPrefix; ///< Required input prefix pixels. These prefix pixels
-			///< will be filled with source scanline's first pixel value.
+			///< will be filled with source scanline's first pixel value. If
+			///< IsUpsample is "true", this is the additional number of times
+			///< the first pixel will be filtered before processing scanline,
+			///< this number is also reflected in the OutPrefix.
 			///<
 		int InSuffix; ///< Required input suffix pixels. These suffix pixels
-			///< will be filled with source scanline's last pixel value.
+			///< will be filled with source scanline's last pixel value. If
+			///< IsUpsample is "true", this is the additional number of times
+			///< the last pixel will be filtered before processing scanline,
+			///< this number is also reflected in the OutSuffix.
 			///<
 		int OutLen; ///< Length of the resulting scanline.
 			///<
@@ -1941,7 +2042,8 @@ private:
 			///< the end of the resulting scanline, used when IsUpsample
 			///< equals "true".
 			///<
-		CBuffer< CResizePos > RPosBuf; ///< Resizing positions buffer.
+		CBuffer< CResizePos > RPosBuf; ///< Resizing positions buffer. Used
+			///< when ResampleFactor equals 0 (resizing step).
 			///<
 
 		/**
@@ -2038,7 +2140,7 @@ private:
 
 		void prepareInBuf( fptype* Src ) const
 		{
-			if( InPrefix + InSuffix == 0 )
+			if( IsUpsample || InPrefix + InSuffix == 0 )
 			{
 				return;
 			}
@@ -2068,11 +2170,29 @@ private:
 			const fptype* ip = Src;
 			fptype* op;
 			const int opstep = ElCount * ResampleFactor;
-			int l = InLen;
+			int l;
 			int i;
 
 			if( ElCount == 1 )
 			{
+				l = InPrefix;
+
+				while( l > 0 )
+				{
+					op = op0;
+
+					for( i = 0; i < flen; i++ )
+					{
+						op[ 0 ] += f[ i ] * ip[ 0 ];
+						op++;
+					}
+
+					op0 += opstep;
+					l--;
+				}
+
+				l = InLen - 1;
+
 				while( l > 0 )
 				{
 					op = op0;
@@ -2087,10 +2207,47 @@ private:
 					op0 += opstep;
 					l--;
 				}
+
+				l = InSuffix;
+
+				while( l >= 0 )
+				{
+					op = op0;
+
+					for( i = 0; i < flen; i++ )
+					{
+						op[ 0 ] += f[ i ] * ip[ 0 ];
+						op++;
+					}
+
+					op0 += opstep;
+					l--;
+				}
 			}
 			else
 			if( ElCount == 4 )
 			{
+				l = InPrefix;
+
+				while( l > 0 )
+				{
+					op = op0;
+
+					for( i = 0; i < flen; i++ )
+					{
+						op[ 0 ] += f[ i ] * ip[ 0 ];
+						op[ 1 ] += f[ i ] * ip[ 1 ];
+						op[ 2 ] += f[ i ] * ip[ 2 ];
+						op[ 3 ] += f[ i ] * ip[ 3 ];
+						op += 4;
+					}
+
+					op0 += opstep;
+					l--;
+				}
+
+				l = InLen - 1;
+
 				while( l > 0 )
 				{
 					op = op0;
@@ -2108,10 +2265,49 @@ private:
 					op0 += opstep;
 					l--;
 				}
+
+				l = InSuffix;
+
+				while( l >= 0 )
+				{
+					op = op0;
+
+					for( i = 0; i < flen; i++ )
+					{
+						op[ 0 ] += f[ i ] * ip[ 0 ];
+						op[ 1 ] += f[ i ] * ip[ 1 ];
+						op[ 2 ] += f[ i ] * ip[ 2 ];
+						op[ 3 ] += f[ i ] * ip[ 3 ];
+						op += 4;
+					}
+
+					op0 += opstep;
+					l--;
+				}
 			}
 			else
 			if( ElCount == 3 )
 			{
+				l = InPrefix;
+
+				while( l > 0 )
+				{
+					op = op0;
+
+					for( i = 0; i < flen; i++ )
+					{
+						op[ 0 ] += f[ i ] * ip[ 0 ];
+						op[ 1 ] += f[ i ] * ip[ 1 ];
+						op[ 2 ] += f[ i ] * ip[ 2 ];
+						op += 3;
+					}
+
+					op0 += opstep;
+					l--;
+				}
+
+				l = InLen - 1;
+
 				while( l > 0 )
 				{
 					op = op0;
@@ -2128,10 +2324,47 @@ private:
 					op0 += opstep;
 					l--;
 				}
+
+				l = InSuffix;
+
+				while( l >= 0 )
+				{
+					op = op0;
+
+					for( i = 0; i < flen; i++ )
+					{
+						op[ 0 ] += f[ i ] * ip[ 0 ];
+						op[ 1 ] += f[ i ] * ip[ 1 ];
+						op[ 2 ] += f[ i ] * ip[ 2 ];
+						op += 3;
+					}
+
+					op0 += opstep;
+					l--;
+				}
 			}
 			else
 			if( ElCount == 2 )
 			{
+				l = InPrefix;
+
+				while( l > 0 )
+				{
+					op = op0;
+
+					for( i = 0; i < flen; i++ )
+					{
+						op[ 0 ] += f[ i ] * ip[ 0 ];
+						op[ 1 ] += f[ i ] * ip[ 1 ];
+						op += 2;
+					}
+
+					op0 += opstep;
+					l--;
+				}
+
+				l = InLen - 1;
+
 				while( l > 0 )
 				{
 					op = op0;
@@ -2147,9 +2380,25 @@ private:
 					op0 += opstep;
 					l--;
 				}
+
+				l = InSuffix;
+
+				while( l >= 0 )
+				{
+					op = op0;
+
+					for( i = 0; i < flen; i++ )
+					{
+						op[ 0 ] += f[ i ] * ip[ 0 ];
+						op[ 1 ] += f[ i ] * ip[ 1 ];
+						op += 2;
+					}
+
+					op0 += opstep;
+					l--;
+				}
 			}
 
-			ip = &Src[( InLen - 1 ) * ElCount ];
 			op = op0;
 			const fptype* dc = SuffixDC;
 			l = SuffixDC.getCapacity();
@@ -2205,7 +2454,7 @@ private:
 			}
 
 			ip = Src;
-			op = Dst;
+			op = Dst - InPrefix * opstep;
 			dc = PrefixDC;
 			l = PrefixDC.getCapacity();
 
@@ -2258,6 +2507,28 @@ private:
 					l--;
 				}
 			}
+		}
+
+		/**
+		 * Function extends *this upsampling step so that it produces more
+		 * upsampled pixels that cover the prefix and suffix needs of the next
+		 * step. After the call to this function the InPrefix and InSuffix
+		 * variables of the next step will be set to zero.
+		 */
+
+		void extendUpsample( CFilterStep& NextStep )
+		{
+			InPrefix = ( NextStep.InPrefix + ResampleFactor - 1 ) /
+				ResampleFactor;
+
+			OutPrefix += InPrefix * ResampleFactor;
+			NextStep.InPrefix = 0;
+
+			InSuffix = ( NextStep.InSuffix + ResampleFactor - 1 ) /
+				ResampleFactor;
+
+			OutSuffix += InSuffix * ResampleFactor;
+			NextStep.InSuffix = 0;
 		}
 
 		/**
@@ -2398,10 +2669,11 @@ private:
 	 * @param IsUpsample "True" if upsampling step. Should be set to "false"
 	 * if FltCutoff is negative.
 	 * @param ResampleFactor Resampling factor of this filter (>=1).
-	 * @param FltCutoff Filter cutoff point (<= 1.0). If a negative value is
-	 * specified, filter's kernel will not be calculated, and a pre-calculated
-	 * kernel is assumed to be available. This value will be divided by the
-	 * ResampleFactor if IsUpsample equals "true".
+	 * @param FltCutoff Filter cutoff point. If zero value was specified,
+	 * the "half-band" predefined filter will be created. If a negative value
+	 * was specified, filter's kernel will not be calculated, and a
+	 * pre-calculated kernel is assumed to be available. This value will be
+	 * divided by the ResampleFactor if IsUpsample equals "true".
 	 * @param k Resizing coefficient at the previous processing step, may be
 	 * adjusted on return.
 	 * @param o Starting pixel offset inside the source image, may be adjusted
@@ -2420,8 +2692,22 @@ private:
 	{
 		if( FltCutoff >= 0.0 )
 		{
-			double Len2 = 0.25 * Params.LPFltBaseLen / FltCutoff;
-			double Freq = M_PI * Params.LPFltCutoffMult * FltCutoff;
+			double FltAlpha;
+			double Len2;
+			double Freq;
+
+			if( FltCutoff == 0.0 )
+			{
+				FltAlpha = Params.HBFltAlpha;
+				Len2 = 0.25 * Params.HBFltBaseLen / Params.HBFltCutoff;
+				Freq = M_PI * Params.HBFltCutoff;
+			}
+			else
+			{
+				FltAlpha = Params.LPFltAlpha;
+				Len2 = 0.25 * Params.LPFltBaseLen / FltCutoff;
+				Freq = M_PI * Params.LPFltCutoffMult * FltCutoff;
+			}
 
 			if( IsUpsample )
 			{
@@ -2429,7 +2715,7 @@ private:
 				Freq /= ResampleFactor;
 			}
 
-			CDSPPeakedCosineLPF w( Len2, Freq, Params.LPFltAlpha );
+			CDSPPeakedCosineLPF w( Len2, Freq, FltAlpha );
 
 			fs.Flt.alloc( w.KernelLen );
 			fs.FltLatency = w.fl2;
@@ -2531,6 +2817,10 @@ private:
 	 * suitably short correction filter cannot fix steep high-frequency
 	 * damping.
 	 *
+	 * This function assumes that the resizing step is currently the last
+	 * step, even if it was not inserted yet: this allows placement of the
+	 * correction filter both before and after the resizing step.
+	 *
 	 * @param Steps Filtering steps.
 	 * @param bw Resulting bandwidth relative to the original bandwidth (which
 	 * is 1.0), usually 1/k. If image's size was increased this value should
@@ -2557,6 +2847,8 @@ private:
 		double curbw = 1.0; // Bandwidth of the filter at the current step.
 		int i;
 		int j;
+		double re;
+		double im;
 
 		CBuffer< double > Bins( BinCount + AddedBin ); // Adjustment
 			// introduced by all steps at all frequencies of interest.
@@ -2569,46 +2861,35 @@ private:
 		for( i = 0; i < Steps.getItemCount(); i++ )
 		{
 			const CFilterStep& fs = Steps[ i ];
-
-			if( fs.IsUpsample )
-			{
-				curbw *= fs.ResampleFactor;
-			}
-
-			CBuffer< fptype > TmpBuf;
-			const fptype* UseFlt;
-			int UseFltLen;
+			double upsg; // Upsample filter gain correction.
 
 			if( fs.ResampleFactor == 0 )
 			{
-				// Resizing step is accompanied by a filter stored in a filter
-				// bank - it must be extracted first. This is also the last
-				// resizing stage, so "curbw" will not be adjusted.
+				break;
+			}
 
-				UseFltLen = FilterBank.getFilterLen();
-				TmpBuf.alloc( UseFltLen );
-				copyArray( &FilterBank[ 0 ], &TmpBuf[ 0 ], UseFltLen, 2, 1 );
-				UseFlt = &TmpBuf[ 0 ];
+			if( fs.IsUpsample )
+			{
+				upsg = 1.0 / fs.ResampleFactor;
+				curbw *= fs.ResampleFactor;
 			}
 			else
 			{
-				UseFlt = &fs.Flt[ 0 ];
-				UseFltLen = fs.Flt.getCapacity();
+				upsg = 1.0;
 			}
 
 			// Calculate frequency response adjustment introduced by the
-			// filter on this step, within the bounds of bandwidth of
+			// filter at this step, within the bounds of bandwidth of
 			// interest.
 
 			for( j = 0; j < BinCount; j++ )
 			{
 				const double th = M_PI * bwi / curbw * j / BinCount1;
-				double re;
-				double im;
 
-				calcFIRFilterResponse( UseFlt, UseFltLen, th, re, im );
+				calcFIRFilterResponse( &fs.Flt[ 0 ], fs.Flt.getCapacity(), th,
+					re, im );
 
-				Bins[ j ] /= sqrt( re * re + im * im );
+				Bins[ j ] /= sqrt( re * re + im * im ) * upsg;
 			}
 
 			if( !fs.IsUpsample && fs.ResampleFactor > 1 )
@@ -2617,7 +2898,32 @@ private:
 			}
 		}
 
+		// Add correction for the resizing step, even if this step was not
+		// added yet. Resizing step is accompanied by a filter stored in a
+		// filter bank - it must be extracted first.
+
+		const int UseFltLen = FilterBank.getFilterLen();
+		CBuffer< fptype > TmpBuf( UseFltLen );
+		copyArray( &FilterBank[ 0 ], &TmpBuf[ 0 ], UseFltLen, 2, 1 );
+
+		for( j = 0; j < BinCount; j++ )
+		{
+			const double th = M_PI * bwi / curbw * j / BinCount1;
+
+			calcFIRFilterResponse( &TmpBuf[ 0 ], UseFltLen, th, re, im );
+
+			Bins[ j ] /= sqrt( re * re + im * im );
+		}
+
 		// Calculate filter kernel.
+
+		if( AddedBin > 0 )
+		{
+			// Force upper "uncontrolled" part of the spectrum to have the
+			// gain closer to the last "controlled" bin.
+
+			Bins[ BinCount ] = pow( Bins[ BinCount - 1 ], 0.75 );
+		}
 
 		CDSPFIREQ EQ;
 		EQ.init( bw * 2.0, Params.CorrFltBaseLen * ( bw >= 1.0 ? bw : 1.0 ),
@@ -2637,15 +2943,15 @@ private:
 		copyArray( &Kernel[ 0 ], &fs.Flt[ 0 ], Kernel.getCapacity() );
 		normalizeFIRFilter( &fs.Flt[ 0 ], fs.Flt.getCapacity(), 1.0 );
 
-/*		// Print a theoretically achieved final frequency response at various
+		// Print a theoretically achieved final frequency response at various
 		// feature sizes (from DC to 1 pixel). Values above 255 means features
 		// become brighter, values below 255 means features become dimmer.
 
+/*		const double sbw = ( bw > 1.0 ? 1.0 / bw : 1.0 );
+
 		for( j = 0; j < BinCount; j++ )
 		{
-			const double th = M_PI * j / ( BinCount - 1 );
-			double re;
-			double im;
+			const double th = M_PI * sbw * j / BinCount1;
 
 			calcFIRFilterResponse( &fs.Flt[ 0 ], fs.Flt.getCapacity(), th,
 				re, im );
@@ -2680,9 +2986,11 @@ private:
 		Steps.clear();
 
 		const double bw = 1.0 / k; // Resulting bandwidth.
+		const bool IsPreCorrection = ( bw >= 2.0 ); // True if correction
+			// filter should be applied before resizing step.
 		double FltCutoff = ( k <= 1.0 ? 1.0 : 1.0 / k ); // Cutoff frequency
 			// of the first filter step.
-		const int UpsampleFactor = ( (int) floor( k ) >= 2 ? 1 : 2 );
+		const int UpsampleFactor = ( (int) floor( k ) < 2 ? 2 : 1 );
 		CFilterStep* prevfs;
 
 		// Add 1 upsampling or several downsampling filters.
@@ -2692,39 +3000,43 @@ private:
 			assignFilterParams( Steps.add(), true, UpsampleFactor, FltCutoff,
 				k, o, NULL, SrcLen, ElCount );
 
-			prevfs = &Steps[ 0 ];
+			if( IsPreCorrection )
+			{
+				// Add pre-resizing correction to considerably reduce
+				// filtering overhead.
+
+				addCorrectionFilter( Steps, UpsampleFactor, k, o );
+			}
+
+			prevfs = &Steps[ Steps.getItemCount() - 1 ];
 		}
 		else
 		{
-			int DownsampleSteps = 0; // Number of additional 2x downsampling
-				// steps to perform.
-			double tk = k;
+			prevfs = NULL;
 
-			while( (int) floor( tk ) >= 8 )
+			while( true )
 			{
-				tk *= 0.5;
-				DownsampleSteps++;
-				FltCutoff *= 2.0;
-			}
-
-			assignFilterParams( Steps.add(), false,
-				( (int) floor( k ) >= 4 ? 2 : 1 ), FltCutoff, k, o, NULL,
-				SrcLen, ElCount );
-
-			// Insert downsampling steps (if any).
-
-			prevfs = &Steps[ 0 ];
-
-			while( DownsampleSteps > 0 )
-			{
-				DownsampleSteps--;
 				CFilterStep& fs = Steps.add();
-				assignFilterParams( fs, false, 2, 0.25, k, o, prevfs );
+
+				if( FltCutoff > 0.125 )
+				{
+					assignFilterParams( fs, false,
+						( FltCutoff > 0.25 ? 1 : 2 ), FltCutoff, k, o,
+						prevfs, SrcLen, ElCount );
+
+					prevfs = &fs;
+					break;
+				}
+
+				assignFilterParams( fs, false, 2, 0.0, k, o, prevfs, SrcLen,
+					ElCount );
+
 				prevfs = &fs;
+				FltCutoff *= 2.0;
 			}
 		}
 
-		// Insert resizing and correction steps.
+		// Insert resizing and post-correction steps.
 
 		CFilterStep& fs = Steps.add();
 		fs.IsUpsample = false;
@@ -2763,7 +3075,10 @@ private:
 			rpos++;
 		}
 
-		addCorrectionFilter( Steps, bw, k, o );
+		if( !IsPreCorrection )
+		{
+			addCorrectionFilter( Steps, bw, k, o );
+		}
 
 		CFilterStep& lastfs = Steps[ Steps.getItemCount() - 1 ];
 		lastfs.OutBuf = 2;
@@ -2771,6 +3086,11 @@ private:
 		if( lastfs.OutLen > NewLen )
 		{
 			lastfs.OutLen = NewLen;
+		}
+
+		if( UpsampleFactor > 1 )
+		{
+			Steps[ 0 ].extendUpsample( Steps[ 1 ]);
 		}
 	}
 
