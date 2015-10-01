@@ -93,7 +93,6 @@
  * to use, copy, modify, merge, publish, distribute, sublicense (except as
  * noted above), and/or sell copies of AVIR, and to permit persons to whom
  * AVIR is furnished to do so, subject to the following conditions:
- *
  * The above copyright notice and this License Agreement shall be included in
  * all copies or portions of AVIR.
  *
@@ -115,7 +114,7 @@
  * Please credit the author of this library in your documentation in the
  * following way: "AVIR image resizing algorithm designed by Aleksey Vaneev"
  *
- * @version 1.1
+ * @version 1.2
  */
 
 #ifndef AVIR_CIMAGERESIZER_INCLUDED
@@ -1421,13 +1420,41 @@ public:
  * Beside quality, these parameters (except Alpha parameters) directly affect
  * the computative cost of the resizing algorithm. It is possible to trade
  * the visual quality for computative cost.
+ *
+ * Anti-alias filtering during downsizing can be defined as a considerable
+ * reduction of contrast of smallest features of an image. Unfortunately, such
+ * de-contrasting partially affects features of all sizes thus producing a
+ * non-linearity of frequency response. All pre-defined parameter sets are
+ * described by 3 values separated by slashes. The first value is the
+ * de-contrasting factor of small features (which are being removed) while
+ * the second value is the de-contrasting factor of large features (which
+ * should remain intact), with value of 1 equating to "no contrast change".
+ * The third value is the optimization score (see below), with value of 0
+ * equating to the "perfect" linearity of frequency response.
+ *
+ * The pre-defined parameter sets offered by this library were auto-optimized
+ * for the given LPFltBaseLen and LPFltAlpha values (IntFlt* values were also
+ * fixed). The optimization goal was to minimize the score: the sum of squares
+ * of the difference between original and processed images (which was not
+ * actually resized, k=1). The original image was a 0.5 megapixel
+ * uniformly-distributed white-noise image with pixel intensities in 0-1
+ * range. Such goal converges very well and produces filtering system with the
+ * flattest frequency response possible for the given constraints.
+ *
+ * Increasing the LPFltBaseLen value reduces the general amount of aliasing
+ * artifacts. The LPFltAlpha value further controls the balance between
+ * aliasing artifacts and linearity of the final frequency response: lower
+ * LPFltAlpha values produce more aliasing artifacts but more neutral picture
+ * while higher LPFltAlpha values produce less artifacts, but with some
+ * image features over- or under-contrasted. Increase of any of these values
+ * also increases ringing artifacts.
  */
 
 struct CImageResizerParams
 {
 	double CorrFltAlpha; ///< Alpha parameter of the Peaked Cosine window
 		///< function used on the correction filter. The "usable" values are
-		///< in the range 1.0 to 5.0.
+		///< in the range 1.0 to 6.0.
 		///<
 	double CorrFltBaseLen; ///< Correction filter's base length in samples
 		///< (taps). When upsizing is performed, this value is multiplied by
@@ -1437,7 +1464,7 @@ struct CImageResizerParams
 		///<
 	double IntFltAlpha; ///< Alpha parameter of the Peaked Cosine window
 		///< function used on the interpolation low-pass filter. The "usable"
-		///< values are in the range 1.0 to 5.0.
+		///< values are in the range 1.0 to 6.0.
 		///<
 	double IntFltBaseLen; ///< Interpolation low-pass filter's base length in
 		///< samples (taps). Since resizing algorithm makes sure the image is
@@ -1458,12 +1485,12 @@ struct CImageResizerParams
 		///<
 	double LPFltAlpha; ///< Alpha parameter of the Peaked Cosine window
 		///< function used on the low-pass filter. The "usable" values are
-		///< in the range 1.0 to 5.0.
+		///< in the range 1.0 to 6.0.
 		///<
 	double LPFltBaseLen; ///< Base length of the low-pass (aka anti-aliasing
 		///< or reconstruction) filter, in samples, further adjusted by the
 		///< actual cutoff frequency, upsampling and downsampling factors. The
-		///< "usable" range is between 6 and 12.
+		///< "usable" range is between 5 and 9.
 		///<
 	double LPFltCutoffMult; ///< Low-pass filter's cutoff frequency
 		///< multiplier. This value can be both below and above 1.0 as
@@ -1473,7 +1500,7 @@ struct CImageResizerParams
 		///< lower (if below 1.0) or higher (if above 1.0) frequencies. This
 		///< multiplier can be way below 1.0 since any additional
 		///< high-frequency damping will be partially corrected by the
-		///< correction filter. The "usable" range is 0.7 to 1.0.
+		///< correction filter. The "usable" range is 0.2 to 1.0.
 		///<
 
 	CImageResizerParams()
@@ -1500,52 +1527,74 @@ struct CImageResizerParams
 };
 
 /**
- * @brief The default set of resizing algorithm parameters.
+ * @brief The default set of resizing algorithm parameters (10.9/1.02/0.557).
  *
- * This is the original default set of resizing parameters that was designed
- * to deliver the sharpest image while still providing a low amount of ringing
- * artifacts. This set was found manually via visual inspection and via
- * measurement of the amount of information left after resizing.
+ * This is the default set of resizing parameters that was designed to deliver
+ * a sharp image while still providing a low amount of ringing artifacts, and
+ * having a reasonable computational cost.
  */
 
 struct CImageResizerParamsDef : public CImageResizerParams
 {
 	CImageResizerParamsDef()
 	{
-		CorrFltAlpha = 1.0112;
-		CorrFltBaseLen = 6.7537;
+		CorrFltAlpha = 1.03447;
+		CorrFltBaseLen = 6.62377;
 		IntFltAlpha = 2.09;
 		IntFltBaseLen = 18.00;
 		IntFltCutoff = 0.73;
-		LPFltAlpha = 4.2000;
+		LPFltAlpha = 2.95;
 		LPFltBaseLen = 8.00;
-		LPFltCutoffMult = 0.7877;
+		LPFltCutoffMult = 0.76901;
 	}
 };
 
 /**
- * @brief Set of resizing algorithm parameters for faster downsizing.
+ * @brief Set of resizing algorithm parameters for low-ringing performance
+ * (8.1/1.06/0.091).
  *
- * This set of resizing algorithm parameters offers about 15% faster
- * downsizing (does not affect upsizing) than the default setting, and a
- * lesser amount of ringing artifacts (may be good for text resizing), but at
- * the expense of slightly increased aliasing. This set of parameters also
- * produces a lower-quality upsizing (this may become evident when a very
- * strong unsharp mask is applied on an upsized image).
+ * This set of resizing algorithm parameters offers a very low-ringing
+ * performance at the expense of higher aliasing artifacts and a slightly
+ * reduced contrast.
  */
 
-struct CImageResizerParamsFast : public CImageResizerParams
+struct CImageResizerParamsLR : public CImageResizerParams
 {
-	CImageResizerParamsFast()
+	CImageResizerParamsLR()
 	{
-		CorrFltAlpha = 1.0591;
-		CorrFltBaseLen = 6.1013;
+		CorrFltAlpha = 1.02440;
+		CorrFltBaseLen = 5.98142;
 		IntFltAlpha = 2.09;
 		IntFltBaseLen = 18.00;
 		IntFltCutoff = 0.73;
-		LPFltAlpha = 1.8000;
-		LPFltBaseLen = 5.50;
-		LPFltCutoffMult = 0.2534;
+		LPFltAlpha = 1.75;
+		LPFltBaseLen = 6.30;
+		LPFltCutoffMult = 0.57919;
+	}
+};
+
+/**
+ * @brief Set of resizing algorithm parameters for ultra low-aliasing
+ * resizing (13.8/1.0/0.162).
+ *
+ * This set of resizing algorithm parameters offers a very considerable
+ * anti-aliasing performance with a good frequency response linearity. This
+ * set of parameters is computationally expensive and may produce visible
+ * ringing artifacts on sharp features.
+ */
+
+struct CImageResizerParamsUltra : public CImageResizerParams
+{
+	CImageResizerParamsUltra()
+	{
+		CorrFltAlpha = 1.01174;
+		CorrFltBaseLen = 7.77043;
+		IntFltAlpha = 2.09;
+		IntFltBaseLen = 18.00;
+		IntFltCutoff = 0.73;
+		LPFltAlpha = 3.55;
+		LPFltBaseLen = 8.50;
+		LPFltCutoffMult = 0.75926;
 	}
 };
 
