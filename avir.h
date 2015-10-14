@@ -1,3 +1,4 @@
+//$ nobt
 //$ nocpp
 
 /**
@@ -39,8 +40,7 @@
  *
  * @section license License
  *
- * AVIR License Agreement (for AVIR image resizing software library version
- * 1.1)
+ * AVIR License Agreement
  *
  * AVIR Copyright (c) 2015 Aleksey Vaneev
  *
@@ -114,7 +114,7 @@
  * Please credit the author of this library in your documentation in the
  * following way: "AVIR image resizing algorithm designed by Aleksey Vaneev"
  *
- * @version 1.2
+ * @version 1.3
  */
 
 #ifndef AVIR_CIMAGERESIZER_INCLUDED
@@ -155,6 +155,34 @@ template< class T >
 inline T round( const T d )
 {
 	return( d < 0.0 ? -floor( (T) 0.5 - d ) : floor( d + (T) 0.5 ));
+}
+
+/**
+ * Template function "clamps" (clips) the specified value so that it is not
+ * lesser than "minv", and not greater than "maxv".
+ *
+ * @param Value Value to clamp.
+ * @param minv Minimal allowed value.
+ * @param maxv Maximal allowed value.
+ * @return The clamped value.
+ */
+
+template< class T >
+inline T clamp( const T& Value, const T minv, const T maxv )
+{
+	if( Value < minv )
+	{
+		return( minv );
+	}
+	else
+	if( Value > maxv )
+	{
+		return( maxv );
+	}
+	else
+	{
+		return( Value );
+	}
 }
 
 /**
@@ -215,7 +243,7 @@ inline void addArray( const T1* ip, T2* op, int l,
  * @param th Circular frequency [0; pi].
  * @param[out] re0 Resulting real part of the complex frequency response.
  * @param[out] im0 Resulting imaginary part of the complex frequency response.
- * @param fltlat Filter's latency in samples.
+ * @param fltlat Filter's latency in samples (taps).
  */
 
 template< class T >
@@ -310,7 +338,8 @@ inline void normalizeFIRFilter( T* const p, const int l, const double DCGain,
  * allocation of very large memory blocks (with more than 2 billion elements).
  *
  * This class manages memory space only - it does not perform element class
- * construction (initialization) operations.
+ * construction (initialization) operations. Buffer's required memory address
+ * alignment specification is supported.
  *
  * Uses standard library to allocate and deallocate memory.
  *
@@ -323,7 +352,9 @@ class CBuffer
 public:
 	CBuffer()
 		: Data( NULL )
+		, DataAligned( NULL )
 		, Capacity( 0 )
+		, Alignment( 0 )
 	{
 	}
 
@@ -331,17 +362,19 @@ public:
 	 * Constructor creates the buffer with the specified capacity.
 	 *
 	 * @param aCapacity Buffer's capacity.
+	 * @param aAlignment Buffer's required memory address alignment. 0 - use
+	 * stdlib's default alignment.
 	 */
 
-	CBuffer( const int aCapacity )
+	CBuffer( const int aCapacity, const int aAlignment = 0 )
 	{
-		allocinit( aCapacity );
+		allocinit( aCapacity, aAlignment );
 	}
 
 	CBuffer( const CBuffer& Source )
 	{
-		allocinit( Source.Capacity );
-		memcpy( Data, Source.Data, Capacity * sizeof( T ));
+		allocinit( Source.Capacity, Source.Alignment );
+		memcpy( DataAligned, Source.DataAligned, Capacity * sizeof( T ));
 	}
 
 	~CBuffer()
@@ -351,8 +384,8 @@ public:
 
 	CBuffer& operator = ( const CBuffer& Source )
 	{
-		alloc( Source.Capacity );
-		memcpy( Data, Source.Data, Capacity * sizeof( T ));
+		alloc( Source.Capacity, Source.Alignment );
+		memcpy( DataAligned, Source.DataAligned, Capacity * sizeof( T ));
 		return( *this );
 	}
 
@@ -361,12 +394,14 @@ public:
 	 * can be stored in *this buffer object.
 	 *
 	 * @param aCapacity Storage for this number of elements to allocate.
+	 * @param aAlignment Buffer's required memory address alignment,
+	 * power-of-2 values only. 0 - use stdlib's default alignment.
 	 */
 
-	void alloc( const int aCapacity )
+	void alloc( const int aCapacity, const int aAlignment = 0 )
 	{
 		freeData();
-		allocinit( aCapacity );
+		allocinit( aCapacity, aAlignment );
 	}
 
 	/**
@@ -378,6 +413,7 @@ public:
 		freeData();
 		Data = NULL;
 		Capacity = 0;
+		Alignment = 0;
 	}
 
 	/**
@@ -392,7 +428,7 @@ public:
 	/**
 	 * Function reallocates *this buffer to a larger size so that it will be
 	 * able to hold the specified number of elements. Downsizing is not
-	 * performed.
+	 * performed. Alignment is not changed.
 	 *
 	 * @param NewCapacity New (increased) capacity.
 	 */
@@ -404,13 +440,19 @@ public:
 			return;
 		}
 
-		Data = (T*) :: realloc( Data, NewCapacity * sizeof( T ));
-		Capacity = NewCapacity;
+		const int PrevCapacity = Capacity;
+		T* const PrevData = Data;
+		T* const PrevDataAligned = DataAligned;
+
+		allocinit( NewCapacity, Alignment );
+		memcpy( DataAligned, PrevDataAligned, PrevCapacity * sizeof( T ));
+
+		:: free( PrevData );
 	}
 
 	/**
 	 * Function "truncates" (reduces) capacity of the buffer without
-	 * reallocating it.
+	 * reallocating it. Alignment is not changed.
 	 *
 	 * @param NewCapacity New required capacity.
 	 */
@@ -429,7 +471,7 @@ public:
 	 * Function increases capacity so that the specified number of
 	 * elements can be stored. This function increases the previous capacity
 	 * value by third the current capacity value until space for the required
-	 * number of elements is available.
+	 * number of elements is available. Alignment is not changed.
 	 *
 	 * @param ReqCapacity Required capacity.
 	 */
@@ -453,13 +495,18 @@ public:
 
 	operator T* () const
 	{
-		return( Data );
+		return( DataAligned );
 	}
 
 private:
 	T* Data; ///< Element buffer pointer.
 		///<
+	T* DataAligned; ///< Memory address-aligned element buffer pointer.
+		///<
 	int Capacity; ///< Element buffer capacity.
+		///<
+	int Alignment; ///< Memory address alignment in use. 0 - use stdlib's
+		///< default alignment.
 		///<
 
 	/**
@@ -467,11 +514,25 @@ private:
 	 * construction.
 	 *
 	 * @param aCapacity Storage for this number of elements to allocate.
+	 * @param aAlignment Buffer's required memory address alignment. 0 - use
+	 * stdlib's default alignment.
 	 */
 
-	void allocinit( const int aCapacity )
+	void allocinit( const int aCapacity, const int aAlignment )
 	{
-		Data = (T*) :: malloc( aCapacity * sizeof( T ));
+		if( aAlignment == 0 )
+		{
+			Data = (T*) :: malloc( aCapacity * sizeof( T ));
+			DataAligned = Data;
+			Alignment = 0;
+		}
+		else
+		{
+			Data = (T*) :: malloc( aCapacity * sizeof( T ) + aAlignment );
+			DataAligned = alignptr( Data, aAlignment );
+			Alignment = aAlignment;
+		}
+
 		Capacity = aCapacity;
 	}
 
@@ -482,6 +543,24 @@ private:
 	void freeData()
 	{
 		:: free( Data );
+	}
+
+	/**
+	 * Function modifies the specified pointer so that it becomes memory
+	 * address-aligned.
+	 *
+	 * @param ptr Pointer to align.
+	 * @param align Alignment in bytes to apply.
+	 * @return Pointer aligned to align bytes. Works with power-of-2
+	 * alignments only. If no alignment is necessary, "align" bytes will be
+	 * added to the pointer value.
+	 */
+
+	template< class Tp >
+	inline Tp alignptr( const Tp ptr, const uintptr_t align )
+	{
+		return( (Tp) ( (uintptr_t) ptr + align -
+			( (uintptr_t) ptr & ( align - 1 ))) );
 	}
 };
 
@@ -698,7 +777,7 @@ public:
 	 *
 	 * @param aAlpha Alpha parameter, affects the peak shape (peak
 	 * augmentation) of the window function. Should be >= 1.0.
-	 * @param aLen2 Half filter length (non-truncated).
+	 * @param aLen2 Half filter kernel's length (non-truncated).
 	 */
 
 	CDSPWindowGenPeakedCosine( const double aAlpha, const double aLen2 )
@@ -724,7 +803,7 @@ public:
 private:
 	double Alpha; ///< Alpha parameter, affects the peak shape of window.
 		///<
-	double Len2; ///< Half length of the window.
+	double Len2; ///< Half length of the window function.
 		///<
 	int wn; ///< Window function integer position. 0 - center of the
 		///< window function.
@@ -758,8 +837,8 @@ public:
 	 * the first and the last band's gain.
 	 *
 	 * @param SampleRate Processing sample rate (use 2 for image processing).
-	 * @param aKernelLength Required kernel length in samples. The actual
-	 * kernel length is truncated to the nearest integer.
+	 * @param aKernelLength Required kernel length in samples (taps). The
+	 * actual kernel length is truncated to an integer value.
 	 * @param aBandCount Number of band crossover points required to control,
 	 * including bands at MinFreq and MaxFreq.
 	 * @param MinFreq Minimal frequency that should be controlled.
@@ -851,7 +930,7 @@ public:
 	}
 
 	/**
-	 * @return Kernel's length, in samples.
+	 * @return Kernel's length, in samples (taps).
 	 */
 
 	int getKernelLength() const
@@ -860,7 +939,7 @@ public:
 	}
 
 	/**
-	 * @return Kernel's output latency, in samples.
+	 * @return Kernel's output latency, in samples (taps).
 	 */
 
 	int getKernelLatency() const
@@ -872,8 +951,8 @@ public:
 	 * Function creates FIR kernel with the specified gain levels at band
 	 * crossover points.
 	 *
-	 * @param BandGains Array of gain levels, count=BandCount specified in
-	 * the init() function.
+	 * @param BandGains Array of linear gain levels, count=BandCount specified
+	 * in the init() function.
 	 * @param[out] Kernel Output kernel buffer, length = getKernelLength().
 	 */
 
@@ -1105,7 +1184,7 @@ private:
  * @brief Low-pass filter windowed by Peaked Cosine window function.
  *
  * This class implements calculation of linear-phase FIR low-pass filter
- * windowed by the Peaked Cosine window function, for image processing
+ * kernel windowed by the Peaked Cosine window function, for image processing
  * applications.
  */
 
@@ -1115,14 +1194,14 @@ public:
 	int fl2; ///< Half filter's length, excluding the peak value. This value
 		///< can be also used as filter's latency in samples (taps).
 		///<
-	int KernelLen; ///< Filter kernel length in samples (taps).
+	int KernelLen; ///< Filter kernel's length in samples (taps).
 		///<
 
 	/**
 	 * Constructor initalizes *this object.
 	 *
-	 * @param aLen2 Half-length (non-truncated) of low-pass filter, in
-	 * samples.
+	 * @param aLen2 Half-length (non-truncated) of low-pass filter's kernel,
+	 * in samples (taps).
 	 * @param aFreq2 Low-pass filter's corner frequency [0; pi].
 	 * @param aAlpha Peaked Cosine window function Alpha parameter.
 	 */
@@ -1138,10 +1217,10 @@ public:
 	}
 
 	/**
-	 * Function generates a linear-phase low-pass filter windowed by Peaked
-	 * Cosine window function.
+	 * Function generates a linear-phase low-pass filter kernel windowed by
+	 * Peaked Cosine window function.
 	 *
-	 * @param[out] op Output buffer, length = fl2 * 2 + 1.
+	 * @param[out] op Output buffer, length = KernelLen (fl2 * 2 + 1).
 	 * @param DCGain Required gain at DC. The resulting filter will be
 	 * normalized to achieve this DC gain.
 	 */
@@ -1184,7 +1263,7 @@ public:
 
 private:
 	double Len2; ///< Half-length (non-truncated) of low-pass filter, in
-		///< samples.
+		///< samples (taps).
 		///<
 	double Freq2; ///< Low-pass filter's corner frequency.
 		///<
@@ -1198,7 +1277,8 @@ private:
  * Class implements storage and initialization of a bank of sinc-based
  * fractional delay filters, expressed as 1st order polynomial interpolation
  * coefficients. The filters are produced from a single "long" windowed
- * low-pass filter.
+ * low-pass filter kernel. Also supports zero-order bank ("nearest neighbor"
+ * interpolation).
  *
  * @tparam fptype Specifies storage type of the filter coefficients bank. The
  * filters are initially calculated using the "double" precision.
@@ -1214,19 +1294,28 @@ public:
 	 *
 	 * @param ReqFracCount Required number of fractional delays in the filter
 	 * bank. The minimal value is 2.
-	 * @param BaseLen Low-pass filter's base length, in samples.
-	 * @param Cutoff Low-pass filter's normalized cutoff frequency.
+	 * @param ReqOrder Required order of the interpolation polynomial
+	 * (0 or 1).
+	 * @param BaseLen Low-pass filter's base length, in samples (taps).
+	 * Affects the actual length of the filter and its overall steepness.
+	 * @param Cutoff Low-pass filter's normalized cutoff frequency [0; 1].
 	 * @param WFAlpha Peaked Cosine window function's Alpha parameter.
+	 * @param Alignment Memory alignment of the filter bank, power-of-2 value.
+	 * 0 - use default stdlib alignment.
+	 * @param FltLenAlign Filter's length alignment, power-of-2 value.
 	 */
 
-	void init( const int ReqFracCount, const double BaseLen,
-		const double Cutoff, const double WFAlpha )
+	void init( const int ReqFracCount, const int ReqOrder,
+		const double BaseLen, const double Cutoff, const double WFAlpha,
+		const int Alignment = 0, const int FltLenAlign = 1 )
 	{
 		CDSPPeakedCosineLPF p( 0.5 * BaseLen * ReqFracCount,
 			M_PI * Cutoff / ReqFracCount, WFAlpha );
 
-		const int ElementSize = 1 + 1;
+		Order = ReqOrder;
+		const int ElementSize = ReqOrder + 1;
 		FilterLen = ( p.fl2 / ReqFracCount + 1 ) * 2;
+		FilterLen = ( FilterLen + FltLenAlign - 1 ) & ~( FltLenAlign - 1 );
 		FilterSize = FilterLen * ElementSize;
 
 		const int BufLen = FilterLen * ReqFracCount + InterpPoints - 1;
@@ -1240,20 +1329,39 @@ public:
 
 		p.generateLPF( &Buf[ BufCenter - p.fl2 ], ReqFracCount );
 
-		Table.alloc( ReqFracCount * FilterSize );
+		Table.alloc( ReqFracCount * FilterSize, Alignment );
 		fptype* op = Table;
 		int j;
 
-		for( i = ReqFracCount; i > 0; i-- )
+		if( ElementSize == 2 )
 		{
-			double* p = Buf + BufOffs + i;
-
-			for( j = 0; j < FilterLen; j++ )
+			for( i = ReqFracCount; i > 0; i-- )
 			{
-				op[ 0 ] = (fptype) p[ 0 ];
-				op[ 1 ] = (fptype) ( p[ -1 ] - p[ 0 ]);
-				op += ElementSize;
-				p += ReqFracCount;
+				double* p = Buf + BufOffs + i;
+
+				for( j = 0; j < FilterLen; j++ )
+				{
+					op[ 0 ] = (fptype) p[ 0 ];
+					op[ FilterLen ] = (fptype) ( p[ -1 ] - p[ 0 ]);
+					op++;
+					p += ReqFracCount;
+				}
+
+				op += FilterLen;
+			}
+		}
+		else
+		{
+			for( i = ReqFracCount; i > 0; i-- )
+			{
+				double* p = Buf + BufOffs + i;
+
+				for( j = 0; j < FilterLen; j++ )
+				{
+					*op = (fptype) *p;
+					op++;
+					p += ReqFracCount;
+				}
 			}
 		}
 	}
@@ -1264,7 +1372,8 @@ public:
 	 *
 	 * @param i Filter (fractional delay) index, in the range 0 to
 	 * ReqFracCount - 1, inclusive.
-	 * @return Reference to the filter elements.
+	 * @return Reference to the filter elements. Higher order polynomial
+	 * coefficients are stored after after previous order coefficients.
 	 */
 
 	const fptype& operator []( const int i ) const
@@ -1273,7 +1382,8 @@ public:
 	}
 
 	/**
-	 * @return The length of each filter, in samples.
+	 * @return The length of each fractional delay filter, in samples (taps).
+	 * Always an even value.
 	 */
 
 	int getFilterLen() const
@@ -1281,9 +1391,20 @@ public:
 		return( FilterLen );
 	}
 
+	/**
+	 * @return The order of the interpolation polynomial.
+	 */
+
+	int getOrder() const
+	{
+		return( Order );
+	}
+
 private:
 	static const int InterpPoints = 2; ///< The maximal number of points the
 		///< interpolation is based on.
+		///<
+	int Order; ///< The order of the interpolation polynomial.
 		///<
 	int FilterLen; ///< Specifies the number of samples (taps) each fractional
 		///< delay filter has. This is an even value, depends on the
@@ -1433,64 +1554,51 @@ public:
  * equating to the "perfect" linearity of frequency response.
  *
  * The pre-defined parameter sets offered by this library were auto-optimized
- * for the given LPFltBaseLen and LPFltAlpha values (IntFlt* values were also
- * fixed). The optimization goal was to minimize the score: the sum of squares
- * of the difference between original and processed images (which was not
- * actually resized, k=1). The original image was a 0.5 megapixel
- * uniformly-distributed white-noise image with pixel intensities in 0-1
- * range. Such goal converges very well and produces filtering system with the
- * flattest frequency response possible for the given constraints.
- *
- * Increasing the LPFltBaseLen value reduces the general amount of aliasing
- * artifacts. The LPFltAlpha value further controls the balance between
- * aliasing artifacts and linearity of the final frequency response: lower
- * LPFltAlpha values produce more aliasing artifacts but more neutral picture
- * while higher LPFltAlpha values produce less artifacts, but with some
- * image features over- or under-contrasted. Increase of any of these values
- * also increases ringing artifacts.
+ * for the given LPFltBaseLen, IntFltLen and CorrFltAlpha values. The
+ * optimization goal was to minimize the score: the sum of squares of the
+ * difference between original and processed images (which was not actually
+ * resized, k=1). The original image was a 0.5 megapixel uniformly-distributed
+ * white-noise image with pixel intensities in the 0-1 range. Such goal
+ * converges very well and produces filtering system with the flattest
+ * frequency response possible for the given constraints. With this goal,
+ * increasing the LPFltBaseLen value reduces the general amount of aliasing
+ * artifacts.
  */
 
 struct CImageResizerParams
 {
 	double CorrFltAlpha; ///< Alpha parameter of the Peaked Cosine window
 		///< function used on the correction filter. The "usable" values are
-		///< in the range 1.0 to 6.0.
+		///< in the narrow range 1.0 to 1.5.
 		///<
-	double CorrFltBaseLen; ///< Correction filter's base length in samples
-		///< (taps). When upsizing is performed, this value is multiplied by
-		///< the upsizing factor. The "usable" range is narrow, 6 to 8, as to
-		///< minimize the "overcorrection" which is mathematically precise,
-		///< but visually unacceptable.
+	double CorrFltLen; ///< Correction filter's length in samples (taps). The
+		///< "usable" range is narrow, 5.5 to 8, as to minimize the
+		///< "overcorrection" which is mathematically precise, but visually
+		///< unacceptable.
 		///<
 	double IntFltAlpha; ///< Alpha parameter of the Peaked Cosine window
 		///< function used on the interpolation low-pass filter. The "usable"
-		///< values are in the range 1.0 to 6.0.
-		///<
-	double IntFltBaseLen; ///< Interpolation low-pass filter's base length in
-		///< samples (taps). Since resizing algorithm makes sure the image is
-		///< at least 2X upsampled before interpolation, this base length
-		///< should be at least 18 (at Alpha 2.09) or otherwise a "grid"
-		///< artifact will be introduced due to discontinuity in interpolation
-		///< function. IntFltBaseLen together with other IntFlt parameters
-		///< should be tuned in a way that produces the flattest frequency
-		///< response in 0-0.5 normalized frequency range (this range is due
-		///< to 2X upsampling). In practice the default IntFlt set of
-		///< parameters may not need any further optimization, because it was
-		///< already optimized for interpolation after 2X upsizing, and it
-		///< has a considerable steepness while producing a nearly flat
-		///< response.
+		///< values are in the range 1.5 to 2.5.
 		///<
 	double IntFltCutoff; ///< Interpolation low-pass filter's cutoff frequency
-		///< (normalized). The "usable" range is 0.5 to 1.0.
+		///< (normalized, [0; 1]). The "usable" range is 0.6 to 0.8.
+		///<
+	double IntFltLen; ///< Interpolation low-pass filter's length in samples
+		///< (taps). The length value should be at least 18 or otherwise a
+		///< "dark grid" artifact will be introduced if a further sharpening
+		///< is applied. IntFltLen together with other IntFlt parameters
+		///< should be tuned in a way that produces the flattest frequency
+		///< response in 0-0.5 normalized frequency range (this range is due
+		///< to 2X upsampling).
 		///<
 	double LPFltAlpha; ///< Alpha parameter of the Peaked Cosine window
 		///< function used on the low-pass filter. The "usable" values are
-		///< in the range 1.0 to 6.0.
+		///< in the range 1.5 to 6.5.
 		///<
 	double LPFltBaseLen; ///< Base length of the low-pass (aka anti-aliasing
-		///< or reconstruction) filter, in samples, further adjusted by the
-		///< actual cutoff frequency, upsampling and downsampling factors. The
-		///< "usable" range is between 5 and 9.
+		///< or reconstruction) filter, in samples (taps), further adjusted by
+		///< the actual cutoff frequency, upsampling and downsampling factors.
+		///< The "usable" range is between 6 and 9.
 		///<
 	double LPFltCutoffMult; ///< Low-pass filter's cutoff frequency
 		///< multiplier. This value can be both below and above 1.0 as
@@ -1500,34 +1608,35 @@ struct CImageResizerParams
 		///< lower (if below 1.0) or higher (if above 1.0) frequencies. This
 		///< multiplier can be way below 1.0 since any additional
 		///< high-frequency damping will be partially corrected by the
-		///< correction filter. The "usable" range is 0.2 to 1.0.
+		///< correction filter. The "usable" range is 0.3 to 1.0.
 		///<
 
 	CImageResizerParams()
-		: HBFltAlpha( 1.7 )
-		, HBFltBaseLen( 13.0 )
-		, HBFltCutoff( 0.30 )
+		: HBFltAlpha( 1.95296 )
+		, HBFltCutoff( 0.51776 )
+		, HBFltLen( 20.00000 )
 	{
 	}
 
 	double HBFltAlpha; ///< Half-band filter's Alpha. Assigned internally.
 		///<
-	double HBFltBaseLen; ///< Base length of the half-band low-pass filter.
-		///< Assigned internally. Internally used to perform 2X downsampling
-		///< when downsizing is considerable (more than 8 times). These filter
+	double HBFltCutoff; ///< Half-band filter's cutoff point [0; 1]. Assigned
+		///< internally.
+		///<
+	double HBFltLen; ///< Length of the half-band low-pass filter. Assigned
+		///< internally. Internally used to perform 2X downsampling when
+		///< downsizing is considerable (more than 8 times). These filter
 		///< parameters should be treated as "technical" and do not require
 		///< adjustment as they were tuned to suit all combinations of other
-		///< parameters. This half-band filters provides a wide transition
+		///< parameters. This half-band filter provides a wide transition
 		///< band (for minimal ringing artifacts) and a high stop-band
 		///< attenuation (for minimal aliasing).
-		///<
-	double HBFltCutoff; ///< Half-band filter's cutoff point. Assigned
-		///< internally.
 		///<
 };
 
 /**
- * @brief The default set of resizing algorithm parameters (10.9/1.02/0.557).
+ * @brief The default set of resizing algorithm parameters
+ * (10.01/1.029/0.019169).
  *
  * This is the default set of resizing parameters that was designed to deliver
  * a sharp image while still providing a low amount of ringing artifacts, and
@@ -1538,20 +1647,20 @@ struct CImageResizerParamsDef : public CImageResizerParams
 {
 	CImageResizerParamsDef()
 	{
-		CorrFltAlpha = 1.03447;
-		CorrFltBaseLen = 6.62377;
-		IntFltAlpha = 2.09;
-		IntFltBaseLen = 18.00;
-		IntFltCutoff = 0.73;
-		LPFltAlpha = 2.95;
-		LPFltBaseLen = 8.00;
-		LPFltCutoffMult = 0.76901;
+		CorrFltAlpha = 1.0;//10.01/1.88/1.029(522.43)/0.019169:258648,446808
+		CorrFltLen = 6.30770;
+		IntFltAlpha = 2.27825;
+		IntFltCutoff = 0.75493;
+		IntFltLen = 18.0;
+		LPFltAlpha = 3.40127;
+		LPFltBaseLen = 7.78;
+		LPFltCutoffMult = 0.78797;
 	}
 };
 
 /**
  * @brief Set of resizing algorithm parameters for low-ringing performance
- * (8.1/1.06/0.091).
+ * (7.86/1.065/0.000106).
  *
  * This set of resizing algorithm parameters offers a very low-ringing
  * performance at the expense of higher aliasing artifacts and a slightly
@@ -1562,40 +1671,1589 @@ struct CImageResizerParamsLR : public CImageResizerParams
 {
 	CImageResizerParamsLR()
 	{
-		CorrFltAlpha = 1.02440;
-		CorrFltBaseLen = 5.98142;
-		IntFltAlpha = 2.09;
-		IntFltBaseLen = 18.00;
-		IntFltCutoff = 0.73;
-		LPFltAlpha = 1.75;
-		LPFltBaseLen = 6.30;
-		LPFltCutoffMult = 0.57919;
+		CorrFltAlpha = 1.0;//7.86/1.96/1.065(73865.02)/0.000106:258636,437381
+		CorrFltLen = 5.87671;
+		IntFltAlpha = 2.25322;
+		IntFltCutoff = 0.74090;
+		IntFltLen = 18.0;
+		LPFltAlpha = 1.79306;
+		LPFltBaseLen = 7.00;
+		LPFltCutoffMult = 0.68881;
 	}
 };
 
 /**
  * @brief Set of resizing algorithm parameters for ultra low-aliasing
- * resizing (13.8/1.0/0.162).
+ * resizing (13.62/1.001/0.000557).
  *
  * This set of resizing algorithm parameters offers a very considerable
- * anti-aliasing performance with a good frequency response linearity. This
- * set of parameters is computationally expensive and may produce visible
- * ringing artifacts on sharp features.
+ * anti-aliasing performance with a good frequency response linearity (and
+ * contrast). This set of parameters is computationally expensive and may
+ * produce visible ringing artifacts on sharp features.
  */
 
 struct CImageResizerParamsUltra : public CImageResizerParams
 {
 	CImageResizerParamsUltra()
 	{
-		CorrFltAlpha = 1.01174;
-		CorrFltBaseLen = 7.77043;
-		IntFltAlpha = 2.09;
-		IntFltBaseLen = 18.00;
-		IntFltCutoff = 0.73;
-		LPFltAlpha = 3.55;
-		LPFltBaseLen = 8.50;
-		LPFltCutoffMult = 0.75926;
+		CorrFltAlpha = 1.0;//13.62/1.79/1.001(24448.76)/0.000557:258654,457910
+		CorrFltLen = 7.47096;
+		IntFltAlpha = 1.94183;
+		IntFltCutoff = 0.75473;
+		IntFltLen = 18.0;
+		LPFltAlpha = 5.51118;
+		LPFltBaseLen = 8.34;
+		LPFltCutoffMult = 0.78020;
 	}
+};
+
+/**
+ * @brief Image resizing variables class.
+ * 
+ * This is an utility "catch all" class that defines various variables used
+ * during image resizing. Several variables that are explicitly initialized in
+ * this class' constructor are also used as "input" variables to the image
+ * resizing function.
+ */
+
+class CImageResizerVars
+{
+public:
+	int ElCount; ///< The number of "fptype" elements used to store 1 pixel.
+		///<
+	int ElCountIO; ///< The number of source and destination image's elements
+		///< used to store 1 pixel.
+		///<
+	int fppack; ///< The number of atomic types stored in a single "fptype"
+		///< element.
+		///<
+	int fpalign; ///< Suggested alignment size in bytes. This is not a
+		///< required alignment, because image resizing algorithm cannot be
+		///< made to have a strictly aligned data access at all steps (e.g.
+		///< interpolation cannot perform aligned accesses).
+		///<
+	int elalign; ///< Length alignment of arrays of elements. This applies to
+		///< filters and intermediate buffers: this constant forces filters
+		///< and scanlines to have a length which is a multiple of this value,
+		///< for more efficient SIMD implementation. Value different to 1
+		///< also means image pixels are de-interleaved during processing.
+	int IntFltOrder; ///< Interpolation filter's order.
+		///<
+	int IntFltLen; ///< Interpolation filter's length in samples (taps).
+		///<
+	int BufLen; ///< Intermediate buffer's length in "fptype" elements.
+	int BufOffset; ///< Offset into the intermediate buffer, used to provide
+		///< prefix elements required during processing so that no "out of
+		///< range" access happens. This offset is a multiple of ElCount if
+		///< pixels are stored in interleaved form.
+		///<
+	int BufIncr; ///< Intermediate buffer increment in "fptype" elements. Used
+		///< by de-interleaved processing algorithms: in this case each
+		///< image's channel is stored independently, BufIncr elements apart.
+		///<
+	int RndSeed; ///< Random seed parameter. This parameter is incremented by
+		///< 1 after each random generator initialization. The use of this
+		///< variable depends on the ditherer implementation.
+		///<
+	CImageResizerThreadPool* ThreadPool; ///< Thread pool to be used by the
+		///< image resizing function. Set to NULL to use single-threaded
+		///< processing.
+		///<
+
+	CImageResizerVars()
+		: RndSeed( 0 )
+		, ThreadPool( NULL )
+	{
+	}
+};
+
+/**
+ * @brief Image resizer's filtering step class.
+ *
+ * Class defines data to perform a single filtering step over a whole
+ * horizontal or vertical scanline. Resizing consists of 1 or more steps that
+ * may be performed before the actual resizing takes place. Filtering may also
+ * follow a resizing step. Each step must ensure that scanline data contains
+ * enough pixels to perform the next step (which may be resizing) without
+ * exceeding scanline's bounds.
+ *
+ * A derived class must implement several "const" and "static" functions that
+ * are used to perform the actual filtering in interleaved or de-interleaved
+ * mode.
+ *
+ * @tparam fptype Floating point type to use for storing pixel data. SIMD
+ * types can be used: in this case each element may hold a whole pixel.
+ * @tparam fptypeatom The atomic type the "fptype" consists of.
+ */
+
+template< class fptype, class fptypeatom >
+class CImageResizerFilterStep
+{
+public:
+	bool IsUpsample; ///< "True" if this step is an upsampling step, "false"
+		///< if downsampling step. Should be set to "false" if ResampleFactor
+		///< equals 0.
+		///<
+	int ResampleFactor; ///< Resample factor (>=1). If 0, this is a resizing
+		///< step. This value should be >1 if IsUpsample equals "true".
+		///<
+	CBuffer< fptype > Flt; ///< Filter kernel to use at this step.
+		///<
+	double DCGain; ///< DC gain which was applied to the filter. Not defined
+		///< if ResampleFactor = 0.
+		///<
+	int FltLatency; ///< Filter's latency (shift) in pixels.
+		///<
+	const CImageResizerVars* Vars; ///< Image resizing-related variables.
+		///<
+	int InLen; ///< Input scanline's length in pixels.
+		///<
+	int InBuf; ///< Input buffer index, 0 or 1.
+		///<
+	int InPrefix; ///< Required input prefix pixels. These prefix pixels will
+		///< be filled with source scanline's first pixel value. If IsUpsample
+		///< is "true", this is the additional number of times the first pixel
+		///< will be filtered before processing scanline, this number is also
+		///< reflected in the OutPrefix.
+		///<
+	int InSuffix; ///< Required input suffix pixels. These suffix pixels will
+		///< be filled with source scanline's last pixel value. If IsUpsample
+		///< is "true", this is the additional number of times the last pixel
+		///< will be filtered before processing scanline, this number is also
+		///< reflected in the OutSuffix.
+		///<
+	int OutLen; ///< Length of the resulting scanline.
+		///<
+	int OutBuf; ///< Output buffer index. 0 or 1; 2 for the last step.
+		///<
+	int OutPrefix; ///< Required output prefix pixels. These prefix pixels
+		///< will not be pre-filled with any values. Value is valid only if
+		///< IsUpsample equals "true".
+		///<
+	int OutSuffix; ///< Required input suffix pixels. These suffix pixels will
+		///< not be pre-filled with any values. Value is valid only if
+		///< IsUpsample equals "true".
+		///<
+	CBuffer< fptype > PrefixDC; ///< DC component fluctuations added at the
+		///< start of the resulting scanline, used when IsUpsample equals
+		///< "true".
+		///<
+	CBuffer< fptype > SuffixDC; ///< DC component fluctuations added at the
+		///< end of the resulting scanline, used when IsUpsample equals
+		///< "true".
+		///<
+
+	/**
+	 * @brief Resizing position structure.
+	 *
+	 * Structure holds resizing position and pointer to fractional delay
+	 * filter.
+	 */
+
+	struct CResizePos
+	{
+		fptypeatom x; ///< "X" interpolation coefficient.
+			///<
+		const fptype* ftp; ///< Fractional delay filter pointer.
+			///<
+		int SrcOffs; ///< Source scanline offset.
+			///<
+	};
+
+	CBuffer< CResizePos > RPosBuf; ///< Resizing positions buffer. Used when
+		///< ResampleFactor equals 0 (resizing step).
+		///<
+};
+
+/**
+ * @brief Non-interleaved filtering steps implementation class.
+ *
+ * This class implements scanline filtering functions in non-interleaved mode.
+ * This means that each pixel is processed independently.
+ *
+ * @tparam fptype Floating point type to use for storing pixel data. SIMD
+ * types can be used: in this case each element may hold a whole pixel.
+ * @tparam fptypeatom The atomic type the "fptype" consists of.
+ */
+
+template< class fptype, class fptypeatom >
+class CImageResizerFilterStepNI :
+	public CImageResizerFilterStep< fptype, fptypeatom >
+{
+public:
+	using CImageResizerFilterStep< fptype, fptypeatom > :: IsUpsample;
+	using CImageResizerFilterStep< fptype, fptypeatom > :: ResampleFactor;
+	using CImageResizerFilterStep< fptype, fptypeatom > :: Flt;
+	using CImageResizerFilterStep< fptype, fptypeatom > :: FltLatency;
+	using CImageResizerFilterStep< fptype, fptypeatom > :: Vars;
+	using CImageResizerFilterStep< fptype, fptypeatom > :: InLen;
+	using CImageResizerFilterStep< fptype, fptypeatom > :: InPrefix;
+	using CImageResizerFilterStep< fptype, fptypeatom > :: InSuffix;
+	using CImageResizerFilterStep< fptype, fptypeatom > :: OutLen;
+	using CImageResizerFilterStep< fptype, fptypeatom > :: OutPrefix;
+	using CImageResizerFilterStep< fptype, fptypeatom > :: OutSuffix;
+	using CImageResizerFilterStep< fptype, fptypeatom > :: PrefixDC;
+	using CImageResizerFilterStep< fptype, fptypeatom > :: SuffixDC;
+	using CImageResizerFilterStep< fptype, fptypeatom > :: RPosBuf;
+
+	/**
+	 * Function performs "packing" of a scanline and type conversion
+	 * Scanline, depending on the "fptype" can be potentially stored as a
+	 * packed SIMD values having a certain atomic type.
+	 *
+	 * @param ip Input scanline.
+	 * @param op0 Output scanline.
+	 * @param l0 The number of pixels to "unpack".
+	 * @param Vars Image resizing-related variables.
+	 */
+
+	template< class Tin >
+	static void packScanline( const Tin* ip, fptype* const op0, const int l0,
+		const CImageResizerVars& Vars0 )
+	{
+		const int ElCount = Vars0.ElCount;
+		const int ElCountIO = Vars0.ElCountIO;
+		fptype* op = op0;
+		int l = l0;
+
+		if( ElCountIO == 1 )
+		{
+			while( l > 0 )
+			{
+				fptypeatom* v = (fptypeatom*) op;
+				v[ 0 ] = (fptype) ip[ 0 ];
+				op += ElCount;
+				ip++;
+				l--;
+			}
+		}
+		else
+		if( ElCountIO == 4 )
+		{
+			while( l > 0 )
+			{
+				fptypeatom* v = (fptypeatom*) op;
+				v[ 0 ] = (fptype) ip[ 0 ];
+				v[ 1 ] = (fptype) ip[ 1 ];
+				v[ 2 ] = (fptype) ip[ 2 ];
+				v[ 3 ] = (fptype) ip[ 3 ];
+				op += ElCount;
+				ip += 4;
+				l--;
+			}
+		}
+		else
+		if( ElCountIO == 3 )
+		{
+			while( l > 0 )
+			{
+				fptypeatom* v = (fptypeatom*) op;
+				v[ 0 ] = (fptype) ip[ 0 ];
+				v[ 1 ] = (fptype) ip[ 1 ];
+				v[ 2 ] = (fptype) ip[ 2 ];
+				op += ElCount;
+				ip += 3;
+				l--;
+			}
+		}
+		else
+		if( ElCountIO == 2 )
+		{
+			while( l > 0 )
+			{
+				fptypeatom* v = (fptypeatom*) op;
+				v[ 0 ] = (fptype) ip[ 0 ];
+				v[ 1 ] = (fptype) ip[ 1 ];
+				op += ElCount;
+				ip += 2;
+				l--;
+			}
+		}
+
+		const int ZeroCount = ElCount * Vars0.fppack - ElCountIO;
+		op = op0;
+		l = l0;
+
+		if( ZeroCount == 1 )
+		{
+			while( l > 0 )
+			{
+				fptypeatom* v = (fptypeatom*) op + ElCountIO;
+				v[ 0 ] = (fptype) 0.0;
+				op += ElCount;
+				l--;
+			}
+		}
+		else
+		if( ZeroCount == 2 )
+		{
+			while( l > 0 )
+			{
+				fptypeatom* v = (fptypeatom*) op + ElCountIO;
+				v[ 0 ] = (fptype) 0.0;
+				v[ 1 ] = (fptype) 0.0;
+				op += ElCount;
+				l--;
+			}
+		}
+		else
+		if( ZeroCount == 3 )
+		{
+			while( l > 0 )
+			{
+				fptypeatom* v = (fptypeatom*) op + ElCountIO;
+				v[ 0 ] = (fptype) 0.0;
+				v[ 1 ] = (fptype) 0.0;
+				v[ 2 ] = (fptype) 0.0;
+				op += ElCount;
+				l--;
+			}
+		}
+	}
+
+	/**
+	 * Function converts vertical scanline to horizontal scanline. This
+	 * function is called by the image resizer when image is resized
+	 * vertically. This means that the vertical scanline is stored in the
+	 * same format produced by the packScanline() function.
+	 *
+	 * @param ip Input vertical scanline.
+	 * @param op Output buffer (temporary buffer used during resizing).
+	 * @param SrcLen The number of pixels in the input scanline, also used to
+	 * calculate input buffer increment.
+	 * @param SrcIncr Input buffer increment to the next vertical pixel.
+	 * @param Vars0 Image resizing-related variables.
+	 */
+
+	static void convertVtoH( const fptype* ip, fptype* op, const int SrcLen,
+		const int SrcIncr, const CImageResizerVars& Vars0 )
+	{
+		const int ElCount = Vars0.ElCount;
+		int j;
+
+		if( ElCount == 1 )
+		{
+			for( j = 0; j < SrcLen; j++ )
+			{
+				op[ 0 ] = ip[ 0 ];
+				ip += SrcIncr;
+				op++;
+			}
+		}
+		else
+		if( ElCount == 4 )
+		{
+			for( j = 0; j < SrcLen; j++ )
+			{
+				op[ 0 ] = ip[ 0 ];
+				op[ 1 ] = ip[ 1 ];
+				op[ 2 ] = ip[ 2 ];
+				op[ 3 ] = ip[ 3 ];
+				ip += SrcIncr;
+				op += 4;
+			}
+		}
+		else
+		if( ElCount == 3 )
+		{
+			for( j = 0; j < SrcLen; j++ )
+			{
+				op[ 0 ] = ip[ 0 ];
+				op[ 1 ] = ip[ 1 ];
+				op[ 2 ] = ip[ 2 ];
+				ip += SrcIncr;
+				op += 3;
+			}
+		}
+		else
+		if( ElCount == 2 )
+		{
+			for( j = 0; j < SrcLen; j++ )
+			{
+				op[ 0 ] = ip[ 0 ];
+				op[ 1 ] = ip[ 1 ];
+				ip += SrcIncr;
+				op += 2;
+			}
+		}
+	}
+
+	/**
+	 * Function performs "unpacking" of a scanline and type conversion
+	 * (truncation is used when floating point is converted to integer).
+	 * Scanline, depending on the "fptype" can be potentially stored as a
+	 * packed SIMD values having a certain atomic type. The unpacking function
+	 * assumes that scanline is stored in the style produced by the
+	 * packScanline() function.
+	 *
+	 * @param ip Input scanline.
+	 * @param op Output scanline.
+	 * @param l The number of pixels to "unpack".
+	 * @param Vars0 Image resizing-related variables.
+	 */
+
+	template< class Tout >
+	static void unpackScanline( const fptype* ip, Tout* op, int l,
+		const CImageResizerVars& Vars0 )
+	{
+		const int ElCount = Vars0.ElCount;
+		const int ElCountIO = Vars0.ElCountIO;
+
+		if( ElCountIO == 1 )
+		{
+			while( l > 0 )
+			{
+				const fptypeatom* v = (const fptypeatom*) ip;
+				op[ 0 ] = (Tout) v[ 0 ];
+				ip += ElCount;
+				op++;
+				l--;
+			}
+		}
+		else
+		if( ElCountIO == 4 )
+		{
+			while( l > 0 )
+			{
+				const fptypeatom* v = (const fptypeatom*) ip;
+				op[ 0 ] = (Tout) v[ 0 ];
+				op[ 1 ] = (Tout) v[ 1 ];
+				op[ 2 ] = (Tout) v[ 2 ];
+				op[ 3 ] = (Tout) v[ 3 ];
+				ip += ElCount;
+				op += 4;
+				l--;
+			}
+		}
+		else
+		if( ElCountIO == 3 )
+		{
+			while( l > 0 )
+			{
+				const fptypeatom* v = (const fptypeatom*) ip;
+				op[ 0 ] = (Tout) v[ 0 ];
+				op[ 1 ] = (Tout) v[ 1 ];
+				op[ 2 ] = (Tout) v[ 2 ];
+				ip += ElCount;
+				op += 3;
+				l--;
+			}
+		}
+		else
+		if( ElCountIO == 2 )
+		{
+			while( l > 0 )
+			{
+				const fptypeatom* v = (const fptypeatom*) ip;
+				op[ 0 ] = (Tout) v[ 0 ];
+				op[ 1 ] = (Tout) v[ 1 ];
+				ip += ElCount;
+				op += 2;
+				l--;
+			}
+		}
+	}
+
+	/**
+	 * Function that replicates a set of adjacent elements several times in a
+	 * row. This operation is usually used to replicate pixels at the start or
+	 * end of image's scanline.
+	 *
+	 * @param ip Source array.
+	 * @param ipl Source array length (usually 1..4, but can be any number).
+	 * @param[out] op Destination buffer.
+	 * @param l Number of times the source array should be replicated (the
+	 * destination buffer should be able to hold ipl * l number of elements).
+	 * @param opinc Destination buffer position increment after replicating
+	 * the source array. This value should be equal to at least ipl.
+	 */
+
+	template< class T1, class T2 >
+	static void replicateArray( const T1* const ip, const int ipl, T2* op,
+		int l, const int opinc )
+	{
+		if( ipl == 1 )
+		{
+			while( l > 0 )
+			{
+				op[ 0 ] = ip[ 0 ];
+				op += opinc;
+				l--;
+			}
+		}
+		else
+		if( ipl == 4 )
+		{
+			while( l > 0 )
+			{
+				op[ 0 ] = ip[ 0 ];
+				op[ 1 ] = ip[ 1 ];
+				op[ 2 ] = ip[ 2 ];
+				op[ 3 ] = ip[ 3 ];
+				op += opinc;
+				l--;
+			}
+		}
+		else
+		if( ipl == 3 )
+		{
+			while( l > 0 )
+			{
+				op[ 0 ] = ip[ 0 ];
+				op[ 1 ] = ip[ 1 ];
+				op[ 2 ] = ip[ 2 ];
+				op += opinc;
+				l--;
+			}
+		}
+		else
+		if( ipl == 2 )
+		{
+			while( l > 0 )
+			{
+				op[ 0 ] = ip[ 0 ];
+				op[ 1 ] = ip[ 1 ];
+				op += opinc;
+				l--;
+			}
+		}
+		else
+		{
+			while( l > 0 )
+			{
+				int i;
+
+				for( i = 0; i < ipl; i++ )
+				{
+					op[ i ] = ip[ i ];
+				}
+
+				op += opinc;
+				l--;
+			}
+		}
+	}
+
+	/**
+	 * Function prepares input scanline buffer for *this filtering step.
+	 * Left- and right-most pixels are replicated to make sure no buffer
+	 * overrun happens. Such approach also allows to bypass any pointer
+	 * range checks.
+	 *
+	 * @param Src Source buffer.
+	 */
+
+	void prepareInBuf( fptype* Src ) const
+	{
+		if( IsUpsample || InPrefix + InSuffix == 0 )
+		{
+			return;
+		}
+
+		const int ElCount = Vars -> ElCount;
+		replicateArray( Src, ElCount, Src - ElCount, InPrefix, -ElCount );
+
+		Src += ( InLen - 1 ) * ElCount;
+		replicateArray( Src, ElCount, Src + ElCount, InSuffix, ElCount );
+	}
+
+	/**
+	 * Function peforms scanline upsampling with filtering.
+	 *
+	 * @param Src Source scanline buffer (length = this -> InLen). Source
+	 * scanline increment will be equal to ElCount.
+	 * @param Dst Destination scanline buffer.
+	 */
+
+	void doUpsample( const fptype* const Src, fptype* const Dst ) const
+	{
+		const int ElCount = Vars -> ElCount;
+		fptype* op0 = &Dst[ -OutPrefix * ElCount ];
+		memset( op0, 0, ( OutPrefix + OutLen + OutSuffix ) * ElCount *
+			sizeof( fptype ));
+
+		const fptype* const f = Flt;
+		const int flen = Flt.getCapacity();
+		const fptype* ip = Src;
+		fptype* op;
+		const int opstep = ElCount * ResampleFactor;
+		int l;
+		int i;
+
+		if( ElCount == 1 )
+		{
+			l = InPrefix;
+
+			while( l > 0 )
+			{
+				op = op0;
+
+				for( i = 0; i < flen; i++ )
+				{
+					op[ 0 ] += f[ i ] * ip[ 0 ];
+					op++;
+				}
+
+				op0 += opstep;
+				l--;
+			}
+
+			l = InLen - 1;
+
+			while( l > 0 )
+			{
+				op = op0;
+
+				for( i = 0; i < flen; i++ )
+				{
+					op[ 0 ] += f[ i ] * ip[ 0 ];
+					op++;
+				}
+
+				ip += ElCount;
+				op0 += opstep;
+				l--;
+			}
+
+			l = InSuffix;
+
+			while( l >= 0 )
+			{
+				op = op0;
+
+				for( i = 0; i < flen; i++ )
+				{
+					op[ 0 ] += f[ i ] * ip[ 0 ];
+					op++;
+				}
+
+				op0 += opstep;
+				l--;
+			}
+		}
+		else
+		if( ElCount == 4 )
+		{
+			l = InPrefix;
+
+			while( l > 0 )
+			{
+				op = op0;
+
+				for( i = 0; i < flen; i++ )
+				{
+					op[ 0 ] += f[ i ] * ip[ 0 ];
+					op[ 1 ] += f[ i ] * ip[ 1 ];
+					op[ 2 ] += f[ i ] * ip[ 2 ];
+					op[ 3 ] += f[ i ] * ip[ 3 ];
+					op += 4;
+				}
+
+				op0 += opstep;
+				l--;
+			}
+
+			l = InLen - 1;
+
+			while( l > 0 )
+			{
+				op = op0;
+
+				for( i = 0; i < flen; i++ )
+				{
+					op[ 0 ] += f[ i ] * ip[ 0 ];
+					op[ 1 ] += f[ i ] * ip[ 1 ];
+					op[ 2 ] += f[ i ] * ip[ 2 ];
+					op[ 3 ] += f[ i ] * ip[ 3 ];
+					op += 4;
+				}
+
+				ip += ElCount;
+				op0 += opstep;
+				l--;
+			}
+
+			l = InSuffix;
+
+			while( l >= 0 )
+			{
+				op = op0;
+
+				for( i = 0; i < flen; i++ )
+				{
+					op[ 0 ] += f[ i ] * ip[ 0 ];
+					op[ 1 ] += f[ i ] * ip[ 1 ];
+					op[ 2 ] += f[ i ] * ip[ 2 ];
+					op[ 3 ] += f[ i ] * ip[ 3 ];
+					op += 4;
+				}
+
+				op0 += opstep;
+				l--;
+			}
+		}
+		else
+		if( ElCount == 3 )
+		{
+			l = InPrefix;
+
+			while( l > 0 )
+			{
+				op = op0;
+
+				for( i = 0; i < flen; i++ )
+				{
+					op[ 0 ] += f[ i ] * ip[ 0 ];
+					op[ 1 ] += f[ i ] * ip[ 1 ];
+					op[ 2 ] += f[ i ] * ip[ 2 ];
+					op += 3;
+				}
+
+				op0 += opstep;
+				l--;
+			}
+
+			l = InLen - 1;
+
+			while( l > 0 )
+			{
+				op = op0;
+
+				for( i = 0; i < flen; i++ )
+				{
+					op[ 0 ] += f[ i ] * ip[ 0 ];
+					op[ 1 ] += f[ i ] * ip[ 1 ];
+					op[ 2 ] += f[ i ] * ip[ 2 ];
+					op += 3;
+				}
+
+				ip += ElCount;
+				op0 += opstep;
+				l--;
+			}
+
+			l = InSuffix;
+
+			while( l >= 0 )
+			{
+				op = op0;
+
+				for( i = 0; i < flen; i++ )
+				{
+					op[ 0 ] += f[ i ] * ip[ 0 ];
+					op[ 1 ] += f[ i ] * ip[ 1 ];
+					op[ 2 ] += f[ i ] * ip[ 2 ];
+					op += 3;
+				}
+
+				op0 += opstep;
+				l--;
+			}
+		}
+		else
+		if( ElCount == 2 )
+		{
+			l = InPrefix;
+
+			while( l > 0 )
+			{
+				op = op0;
+
+				for( i = 0; i < flen; i++ )
+				{
+					op[ 0 ] += f[ i ] * ip[ 0 ];
+					op[ 1 ] += f[ i ] * ip[ 1 ];
+					op += 2;
+				}
+
+				op0 += opstep;
+				l--;
+			}
+
+			l = InLen - 1;
+
+			while( l > 0 )
+			{
+				op = op0;
+
+				for( i = 0; i < flen; i++ )
+				{
+					op[ 0 ] += f[ i ] * ip[ 0 ];
+					op[ 1 ] += f[ i ] * ip[ 1 ];
+					op += 2;
+				}
+
+				ip += ElCount;
+				op0 += opstep;
+				l--;
+			}
+
+			l = InSuffix;
+
+			while( l >= 0 )
+			{
+				op = op0;
+
+				for( i = 0; i < flen; i++ )
+				{
+					op[ 0 ] += f[ i ] * ip[ 0 ];
+					op[ 1 ] += f[ i ] * ip[ 1 ];
+					op += 2;
+				}
+
+				op0 += opstep;
+				l--;
+			}
+		}
+
+		op = op0;
+		const fptype* dc = SuffixDC;
+		l = SuffixDC.getCapacity();
+
+		if( ElCount == 1 )
+		{
+			while( l > 0 )
+			{
+				op[ 0 ] += ip[ 0 ] * dc[ 0 ];
+				dc++;
+				op++;
+				l--;
+			}
+		}
+		else
+		if( ElCount == 4 )
+		{
+			while( l > 0 )
+			{
+				op[ 0 ] += ip[ 0 ] * dc[ 0 ];
+				op[ 1 ] += ip[ 1 ] * dc[ 0 ];
+				op[ 2 ] += ip[ 2 ] * dc[ 0 ];
+				op[ 3 ] += ip[ 3 ] * dc[ 0 ];
+				dc++;
+				op += 4;
+				l--;
+			}
+		}
+		else
+		if( ElCount == 3 )
+		{
+			while( l > 0 )
+			{
+				op[ 0 ] += ip[ 0 ] * dc[ 0 ];
+				op[ 1 ] += ip[ 1 ] * dc[ 0 ];
+				op[ 2 ] += ip[ 2 ] * dc[ 0 ];
+				dc++;
+				op += 3;
+				l--;
+			}
+		}
+		else
+		if( ElCount == 2 )
+		{
+			while( l > 0 )
+			{
+				op[ 0 ] += ip[ 0 ] * dc[ 0 ];
+				op[ 1 ] += ip[ 1 ] * dc[ 0 ];
+				dc++;
+				op += 2;
+				l--;
+			}
+		}
+
+		ip = Src;
+		op = Dst - InPrefix * opstep;
+		dc = PrefixDC;
+		l = PrefixDC.getCapacity();
+
+		if( ElCount == 1 )
+		{
+			while( l > 0 )
+			{
+				op[ 0 ] += ip[ 0 ] * dc[ 0 ];
+				dc++;
+				op++;
+				l--;
+			}
+		}
+		else
+		if( ElCount == 4 )
+		{
+			while( l > 0 )
+			{
+				op[ 0 ] += ip[ 0 ] * dc[ 0 ];
+				op[ 1 ] += ip[ 1 ] * dc[ 0 ];
+				op[ 2 ] += ip[ 2 ] * dc[ 0 ];
+				op[ 3 ] += ip[ 3 ] * dc[ 0 ];
+				dc++;
+				op += 4;
+				l--;
+			}
+		}
+		else
+		if( ElCount == 3 )
+		{
+			while( l > 0 )
+			{
+				op[ 0 ] += ip[ 0 ] * dc[ 0 ];
+				op[ 1 ] += ip[ 1 ] * dc[ 0 ];
+				op[ 2 ] += ip[ 2 ] * dc[ 0 ];
+				dc++;
+				op += 3;
+				l--;
+			}
+		}
+		else
+		if( ElCount == 2 )
+		{
+			while( l > 0 )
+			{
+				op[ 0 ] += ip[ 0 ] * dc[ 0 ];
+				op[ 1 ] += ip[ 1 ] * dc[ 0 ];
+				dc++;
+				op += 2;
+				l--;
+			}
+		}
+	}
+
+	/**
+	 * Function extends *this upsampling step so that it produces more
+	 * upsampled pixels that cover the prefix and suffix needs of the next
+	 * step. After the call to this function the InPrefix and InSuffix
+	 * variables of the next step will be set to zero.
+	 */
+
+	void extendUpsample( CImageResizerFilterStepNI& NextStep )
+	{
+		InPrefix = ( NextStep.InPrefix + ResampleFactor - 1 ) /
+			ResampleFactor;
+
+		OutPrefix += InPrefix * ResampleFactor;
+		NextStep.InPrefix = 0;
+
+		InSuffix = ( NextStep.InSuffix + ResampleFactor - 1 ) /
+			ResampleFactor;
+
+		OutSuffix += InSuffix * ResampleFactor;
+		NextStep.InSuffix = 0;
+	}
+
+	/**
+	 * Function peforms scanline filtering with optional downsampling.
+	 * Function makes use of the symmetry of the filter kernel.
+	 *
+	 * @param Src Source scanline buffer (length = this -> InLen). Source
+	 * scanline increment will be equal to ElCount.
+	 * @param Dst Destination scanline buffer.
+	 * @param DstIncr Destination scanline buffer increment.
+	 */
+
+	void doFilter( const fptype* const Src, fptype* Dst,
+		const int DstIncr ) const
+	{
+		const int ElCount = Vars -> ElCount;
+		const fptype* const f = &Flt[ FltLatency ];
+		const int flen = FltLatency + 1;
+		const fptype* ip = Src;
+		const fptype* ip1;
+		const fptype* ip2;
+		const int ipstep = ElCount * ResampleFactor;
+		int l = OutLen;
+		int i;
+
+		if( ElCount == 1 )
+		{
+			while( l > 0 )
+			{
+				fptype s = f[ 0 ] * ip[ 0 ];
+				ip1 = ip;
+				ip2 = ip;
+
+				for( i = 1; i < flen; i++ )
+				{
+					ip1++;
+					ip2--;
+					s += f[ i ] * ( ip1[ 0 ] + ip2[ 0 ]);
+				}
+
+				Dst[ 0 ] = s;
+				Dst += DstIncr;
+				ip += ipstep;
+				l--;
+			}
+		}
+		else
+		if( ElCount == 4 )
+		{
+			while( l > 0 )
+			{
+				fptype s1 = f[ 0 ] * ip[ 0 ];
+				fptype s2 = f[ 0 ] * ip[ 1 ];
+				fptype s3 = f[ 0 ] * ip[ 2 ];
+				fptype s4 = f[ 0 ] * ip[ 3 ];
+				ip1 = ip;
+				ip2 = ip;
+
+				for( i = 1; i < flen; i++ )
+				{
+					ip1 += 4;
+					ip2 -= 4;
+					s1 += f[ i ] * ( ip1[ 0 ] + ip2[ 0 ]);
+					s2 += f[ i ] * ( ip1[ 1 ] + ip2[ 1 ]);
+					s3 += f[ i ] * ( ip1[ 2 ] + ip2[ 2 ]);
+					s4 += f[ i ] * ( ip1[ 3 ] + ip2[ 3 ]);
+				}
+
+				Dst[ 0 ] = s1;
+				Dst[ 1 ] = s2;
+				Dst[ 2 ] = s3;
+				Dst[ 3 ] = s4;
+				Dst += DstIncr;
+				ip += ipstep;
+				l--;
+			}
+		}
+		else
+		if( ElCount == 3 )
+		{
+			while( l > 0 )
+			{
+				fptype s1 = f[ 0 ] * ip[ 0 ];
+				fptype s2 = f[ 0 ] * ip[ 1 ];
+				fptype s3 = f[ 0 ] * ip[ 2 ];
+				ip1 = ip;
+				ip2 = ip;
+
+				for( i = 1; i < flen; i++ )
+				{
+					ip1 += 3;
+					ip2 -= 3;
+					s1 += f[ i ] * ( ip1[ 0 ] + ip2[ 0 ]);
+					s2 += f[ i ] * ( ip1[ 1 ] + ip2[ 1 ]);
+					s3 += f[ i ] * ( ip1[ 2 ] + ip2[ 2 ]);
+				}
+
+				Dst[ 0 ] = s1;
+				Dst[ 1 ] = s2;
+				Dst[ 2 ] = s3;
+				Dst += DstIncr;
+				ip += ipstep;
+				l--;
+			}
+		}
+		else
+		if( ElCount == 2 )
+		{
+			while( l > 0 )
+			{
+				fptype s1 = f[ 0 ] * ip[ 0 ];
+				fptype s2 = f[ 0 ] * ip[ 1 ];
+				ip1 = ip;
+				ip2 = ip;
+
+				for( i = 1; i < flen; i++ )
+				{
+					ip1 += 2;
+					ip2 -= 2;
+					s1 += f[ i ] * ( ip1[ 0 ] + ip2[ 0 ]);
+					s2 += f[ i ] * ( ip1[ 1 ] + ip2[ 1 ]);
+				}
+
+				Dst[ 0 ] = s1;
+				Dst[ 1 ] = s2;
+				Dst += DstIncr;
+				ip += ipstep;
+				l--;
+			}
+		}
+	}
+
+	/**
+	 * Function performs resizing of a single scanline. This function does
+	 * not "know" about the length of the source scanline buffer. This buffer
+	 * should be padded with enough pixels so that ( SrcPos - FilterLenD2 ) is
+	 * always >= 0 and ( SrcPos + ( DstLineLen - 1 ) * k + FilterLenD2 + 1 )
+	 * does not exceed source scanline's buffer length. SrcLine's increment is
+	 * assumed to be equal to ElCount.
+	 *
+	 * @param SrcLine Source scanline buffer.
+	 * @param DstLine Destination (resized) scanline buffer.
+	 * @param DstLineInc Destination scanline position increment, should be
+	 * divisible by ElCount.
+	 */
+
+	void doResize( const fptype* SrcLine, fptype* DstLine,
+		const int DstLineInc ) const
+	{
+		const int IntFltLen = Vars -> IntFltLen;
+		const int ElCount = Vars -> ElCount;
+		const typename CImageResizerFilterStep< fptype, fptypeatom > ::
+			CResizePos* rpos = &RPosBuf[ 0 ];
+
+		int DstLineLen = OutLen;
+
+#define AVIR_RESIZE_PART1 \
+			while( DstLineLen > 0 ) \
+			{ \
+				const fptype x = (fptype) rpos -> x; \
+				const fptype* ftp = rpos -> ftp; \
+				const fptype* Src = SrcLine + rpos -> SrcOffs; \
+				int l = IntFltLen;
+
+#define AVIR_RESIZE_PART1nx \
+			while( DstLineLen > 0 ) \
+			{ \
+				const fptype* ftp = rpos -> ftp; \
+				const fptype* Src = SrcLine + rpos -> SrcOffs; \
+				int l = IntFltLen;
+
+#define AVIR_RESIZE_PART2 \
+				DstLineLen--; \
+				DstLine += DstLineInc; \
+				rpos++; \
+			}
+
+		if( Vars -> IntFltOrder == 1 )
+		{
+			if( ElCount == 1 )
+			{
+				AVIR_RESIZE_PART1
+
+				fptype sum = 0.0;
+
+				while( l > 0 )
+				{
+					sum += ( ftp[ 0 ] + ftp[ IntFltLen ] * x ) * Src[ 0 ];
+					ftp++;
+					Src++;
+					l--;
+				}
+
+				DstLine[ 0 ] = sum;
+
+				AVIR_RESIZE_PART2
+			}
+			else
+			if( ElCount == 4 )
+			{
+				AVIR_RESIZE_PART1
+
+				fptype sum[ 4 ];
+				sum[ 0 ] = 0.0;
+				sum[ 1 ] = 0.0;
+				sum[ 2 ] = 0.0;
+				sum[ 3 ] = 0.0;
+
+				while( l > 0 )
+				{
+					const fptype xx = ftp[ 0 ] + ftp[ IntFltLen ] * x;
+					sum[ 0 ] += xx * Src[ 0 ];
+					sum[ 1 ] += xx * Src[ 1 ];
+					sum[ 2 ] += xx * Src[ 2 ];
+					sum[ 3 ] += xx * Src[ 3 ];
+					ftp++;
+					Src += 4;
+					l--;
+				}
+
+				DstLine[ 0 ] = sum[ 0 ];
+				DstLine[ 1 ] = sum[ 1 ];
+				DstLine[ 2 ] = sum[ 2 ];
+				DstLine[ 3 ] = sum[ 3 ];
+
+				AVIR_RESIZE_PART2
+			}
+			else
+			if( ElCount == 3 )
+			{
+				AVIR_RESIZE_PART1
+
+				fptype sum[ 3 ];
+				sum[ 0 ] = 0.0;
+				sum[ 1 ] = 0.0;
+				sum[ 2 ] = 0.0;
+
+				while( l > 0 )
+				{
+					const fptype xx = ftp[ 0 ] + ftp[ IntFltLen ] * x;
+					sum[ 0 ] += xx * Src[ 0 ];
+					sum[ 1 ] += xx * Src[ 1 ];
+					sum[ 2 ] += xx * Src[ 2 ];
+					ftp++;
+					Src += 3;
+					l--;
+				}
+
+				DstLine[ 0 ] = sum[ 0 ];
+				DstLine[ 1 ] = sum[ 1 ];
+				DstLine[ 2 ] = sum[ 2 ];
+
+				AVIR_RESIZE_PART2
+			}
+			else
+			if( ElCount == 2 )
+			{
+				AVIR_RESIZE_PART1
+
+				fptype sum[ 2 ];
+				sum[ 0 ] = 0.0;
+				sum[ 1 ] = 0.0;
+
+				while( l > 0 )
+				{
+					const fptype xx = ftp[ 0 ] + ftp[ IntFltLen ] * x;
+					sum[ 0 ] += xx * Src[ 0 ];
+					sum[ 1 ] += xx * Src[ 1 ];
+					ftp++;
+					Src += 2;
+					l--;
+				}
+
+				DstLine[ 0 ] = sum[ 0 ];
+				DstLine[ 1 ] = sum[ 1 ];
+
+				AVIR_RESIZE_PART2
+			}
+		}
+		else
+		{
+			if( ElCount == 1 )
+			{
+				AVIR_RESIZE_PART1nx
+
+				fptype sum = 0.0;
+
+				while( l > 0 )
+				{
+					sum += ftp[ 0 ] * Src[ 0 ];
+					ftp++;
+					Src++;
+					l--;
+				}
+
+				DstLine[ 0 ] = sum;
+
+				AVIR_RESIZE_PART2
+			}
+			else
+			if( ElCount == 4 )
+			{
+				AVIR_RESIZE_PART1nx
+
+				fptype sum[ 4 ];
+				sum[ 0 ] = 0.0;
+				sum[ 1 ] = 0.0;
+				sum[ 2 ] = 0.0;
+				sum[ 3 ] = 0.0;
+
+				while( l > 0 )
+				{
+					const fptype xx = ftp[ 0 ];
+					sum[ 0 ] += xx * Src[ 0 ];
+					sum[ 1 ] += xx * Src[ 1 ];
+					sum[ 2 ] += xx * Src[ 2 ];
+					sum[ 3 ] += xx * Src[ 3 ];
+					ftp++;
+					Src += 4;
+					l--;
+				}
+
+				DstLine[ 0 ] = sum[ 0 ];
+				DstLine[ 1 ] = sum[ 1 ];
+				DstLine[ 2 ] = sum[ 2 ];
+				DstLine[ 3 ] = sum[ 3 ];
+
+				AVIR_RESIZE_PART2
+			}
+			else
+			if( ElCount == 3 )
+			{
+				AVIR_RESIZE_PART1nx
+
+				fptype sum[ 3 ];
+				sum[ 0 ] = 0.0;
+				sum[ 1 ] = 0.0;
+				sum[ 2 ] = 0.0;
+
+				while( l > 0 )
+				{
+					const fptype xx = ftp[ 0 ];
+					sum[ 0 ] += xx * Src[ 0 ];
+					sum[ 1 ] += xx * Src[ 1 ];
+					sum[ 2 ] += xx * Src[ 2 ];
+					ftp++;
+					Src += 3;
+					l--;
+				}
+
+				DstLine[ 0 ] = sum[ 0 ];
+				DstLine[ 1 ] = sum[ 1 ];
+				DstLine[ 2 ] = sum[ 2 ];
+
+				AVIR_RESIZE_PART2
+			}
+			else
+			if( ElCount == 2 )
+			{
+				AVIR_RESIZE_PART1nx
+
+				fptype sum[ 2 ];
+				sum[ 0 ] = 0.0;
+				sum[ 1 ] = 0.0;
+
+				while( l > 0 )
+				{
+					const fptype xx = ftp[ 0 ];
+					sum[ 0 ] += xx * Src[ 0 ];
+					sum[ 1 ] += xx * Src[ 1 ];
+					ftp++;
+					Src += 2;
+					l--;
+				}
+
+				DstLine[ 0 ] = sum[ 0 ];
+				DstLine[ 1 ] = sum[ 1 ];
+
+				AVIR_RESIZE_PART2
+			}
+		}
+	}
+#undef AVIR_RESIZE_PART1
+#undef AVIR_RESIZE_PART2
+};
+
+/**
+ * @brief Image resizer's default dithering class.
+ *
+ * This class defines an object that performs rounding, clipping and dithering
+ * operations over horizontal scanline pixels before scanline is stored in the
+ * output buffer.
+ *
+ * The ditherer should expect the same storage order of the pixels in a
+ * scanline as used in the "filter step" class. So, a separate ditherer class
+ * should be defined for each scanline pixel storage style. The default
+ * ditherer implements a simple rounding without dithering: it can be used for
+ * an efficient dithering method which can be multi-threaded.
+ *
+ * @tparam fptype Floating point type to use for storing pixel data. SIMD
+ * types can be used.
+ */
+
+template< class fptype >
+class CImageResizerDithererDef
+{
+public:
+	/**
+	 * Function initializes the ditherer object.
+	 *
+	 * @param aLen Scanline length in pixels to process.
+	 * @param aVars Image resizing-related variables.
+	 * @param aTrMul Bit-depth truncation multiplier. 1 - no additional
+	 * truncation.
+	 * @param aPkOut Peak output value allowed.
+	 */
+
+	void init( const int aLen, const CImageResizerVars& aVars,
+		const fptype aTrMul, const fptype aPkOut )
+	{
+		Len = aLen;
+		Vars = &aVars;
+		LenE = aLen * Vars -> ElCount;
+		TrMul = aTrMul;
+		PkOut = aPkOut;
+	}
+
+	/**
+	 * @return "True" if dithering is recursive relative to scanlines meaning
+	 * multi-threaded execution is not supported by this dithering method.
+	 */
+
+	static bool isRecursive()
+	{
+		return( false );
+	}
+
+	/**
+	 * Function performs rounding and clipping operations.
+	 */
+
+	void dither( fptype* const ResScanline ) const
+	{
+		int j;
+
+		for( j = 0; j < LenE; j++ )
+		{
+			const fptype z0 = round( ResScanline[ j ] / TrMul ) * TrMul;
+			ResScanline[ j ] = clamp( z0, (fptype) 0.0, PkOut );
+		}
+	}
+
+protected:
+	int Len; ///< Scanline's length in pixels.
+		///<
+	const CImageResizerVars* Vars; ///< Image resizing-related variables.
+		///<
+	int LenE; ///< = LenE * ElCount.
+		///<
+	fptype TrMul; ///< Bit-depth truncation multiplier.
+		///<
+	fptype PkOut; ///< Peak output value allowed.
+		///<
+};
+
+/**
+ * @brief Image resizer's quasi-random dithering class.
+ *
+ * This ditherer implements a classic quasi-random dithering which looks OK
+ * and whose results are compressed by PNG well.
+ *
+ * @tparam fptype Floating point type to use for storing pixel data. SIMD
+ * types can be used.
+ */
+
+template< class fptype >
+class CImageResizerDithererQRnd : public CImageResizerDithererDef< fptype >
+{
+public:
+	/**
+	 * Function initializes the ditherer object.
+	 *
+	 * @param aLen Scanline length in pixels to process.
+	 * @param aVars Image resizing-related variables.
+	 * @param aTrMul Bit-depth truncation multiplier. 1 - no additional
+	 * truncation.
+	 * @param aPkOut Peak output value allowed.
+	 */
+
+	void init( const int aLen, const CImageResizerVars& aVars,
+		const fptype aTrMul, const fptype aPkOut )
+	{
+		CImageResizerDithererDef< fptype > :: init( aLen, aVars, aTrMul,
+			aPkOut );
+
+		ResScanlineDith0.alloc( LenE + Vars -> ElCount, sizeof( fptype ));
+		ResScanlineDith = ResScanlineDith0 + Vars -> ElCount;
+		int i;
+
+		for( i = 0; i < LenE + Vars -> ElCount; i++ )
+		{
+			ResScanlineDith0[ i ] = 0.0;
+		}
+	}
+
+	static bool isRecursive()
+	{
+		return( true );
+	}
+
+	void dither( fptype* const ResScanline )
+	{
+		const int ElCount = Vars -> ElCount;
+		int j;
+
+		for( j = 0; j < LenE; j++ )
+		{
+			ResScanline[ j ] += ResScanlineDith[ j ];
+			ResScanlineDith[ j ] = 0.0;
+		}
+
+		for( j = 0; j < LenE - ElCount; j++ )
+		{
+			// Perform rounding, noise estimation and saturation.
+
+			const fptype z0 = round( ResScanline[ j ] / TrMul ) * TrMul;
+			const fptype Noise = ResScanline[ j ] - z0;
+			ResScanline[ j ] = clamp( z0, (fptype) 0.0, PkOut );
+
+			ResScanline[ j + ElCount ] += Noise * (fptype) 0.4375;
+			ResScanlineDith[ j + ElCount ] += Noise * (fptype) 0.0625;
+			ResScanlineDith[ j ] += Noise * (fptype) 0.3125;
+			ResScanlineDith[ j - ElCount ] += Noise * (fptype) 0.1875;
+		}
+
+		while( j < LenE )
+		{
+			const fptype z0 = round( ResScanline[ j ] / TrMul ) * TrMul;
+			const fptype Noise = ResScanline[ j ] - z0;
+			ResScanline[ j ] = clamp( z0, (fptype) 0.0, PkOut );
+
+			ResScanlineDith[ j ] += Noise * (fptype) 0.3125;
+			ResScanlineDith[ j - ElCount ] += Noise * (fptype) 0.1875;
+			j++;
+		}
+	}
+
+protected:
+	using CImageResizerDithererDef< fptype > :: Len;
+	using CImageResizerDithererDef< fptype > :: Vars;
+	using CImageResizerDithererDef< fptype > :: LenE;
+	using CImageResizerDithererDef< fptype > :: TrMul;
+	using CImageResizerDithererDef< fptype > :: PkOut;
+
+	CBuffer< fptype > ResScanlineDith0; ///< Error propagation buffer for
+		///< dithering, first pixel unused.
+		///<
+	fptype* ResScanlineDith; ///< Error propagation buffer pointer which skips
+		///< the first ElCount elements.
+		///<
+};
+
+/**
+ * @brief Floating-point processing definition and abstraction class.
+ *
+ * This class defines several constants and typedefs that point to classes
+ * that should be used by the image resizing algorithm. Such "definition
+ * class" can be used to define alternative scanline processing algorithms
+ * (e.g. SIMD) and image scanline packing styles used during processing. This
+ * class also offers an abstraction layer for dithering, rounding and
+ * saturation operation.
+ * 
+ * The fpclass_def class can be used to define processing using both SIMD and
+ * non-SIMD types, but using algorithms that are non-SIMD optimized
+ * themselves.
+ *
+ * @tparam afptype Floating point type to use for storing intermediate data
+ * and variables. For variables that are not used in intensive calculations
+ * the "double" type is always used. On the latest Intel processors (like
+ * i7-4770K) there is almost no performance difference between "double" and
+ * "float". Image quality differences between "double" and "float" are not
+ * apparent on 8-bit images. At the same time the "float" uses half amount of
+ * working memory the "double" type uses. SIMD types can be used. The
+ * functions round() and clamp() in the "avir" or other visible namespace
+ * should be available for the specified type.
+ * @tparam afptypeatom The atomic type the "afptype" consists of.
+ */
+
+template< class afptype, class afptypeatom = afptype >
+class fpclass_def
+{
+public:
+	typedef afptype fptype; ///< Floating-point type to use during processing.
+		///<
+	typedef afptypeatom fptypeatom; ///< Atomic type.
+		///<
+	static const int fppack = sizeof( fptype ) / sizeof( fptypeatom ); ///<
+		///< The number of atomic types stored in a single "fptype" element.
+		///<
+	static const int fpalign = sizeof( fptype ); ///< Suggested alignment size
+		///< in bytes. This is not a required alignment, because image
+		///< resizing algorithm cannot be made to have a strictly aligned data
+		///< access at all steps (e.g. interpolation cannot perform aligned
+		///< accesses).
+		///<
+	static const int elalign = 1; ///< Length alignment of arrays of elements.
+		///< This applies to filters and intermediate buffers: this constant
+		///< forces filters and scanlines to have a length which is a multiple
+		///< of this value, for more efficient SIMD implementation. Value
+		///< different to 1 also means image pixels are de-interleaved during
+		///< processing.
+		///<
+	typedef CImageResizerFilterStepNI< fptype, fptypeatom > CFilterStep; ///<
+		///< Filter step class to use during processing.
+		///<
+	typedef CImageResizerDithererQRnd< fptype > CDitherer; ///<
+		///< Ditherer class to use during processing.
+		///<
 };
 
 /**
@@ -1609,48 +3267,64 @@ struct CImageResizerParamsUltra : public CImageResizerParams
  *
  * Object of this class can be allocated on stack.
  *
- * @tparam fptype Floating point type to use for storing intermediate data and
- * variables. For variables that are not used in intensive calculations the
- * "double" type is always used. On the latest Intel processors (like
- * i7-4770K) there is almost no performance difference between "double" and
- * "float". Image quality differences between "double" and "float" are not
- * apparent on 8-bit images. At the same time the "float" uses half amount of
- * working memory the "double" type uses.
+ * @tparam fpclass Floating-point processing definition class to use. See
+ * avir::fpclass_def for more details.
  */
 
-template< class fptype = float >
+template< class fpclass = fpclass_def< float > >
 class CImageResizer
 {
 public:
 	/**
 	 * Constructor initializes the resizer.
 	 *
-	 * @param aBitDepth Required bit depth of resulting image (4-16). Also
-	 * affects resolution of the interpolation filter. If integer value output
-	 * is used (e.g. uint8_t), the bit depth also affects rounding: for
-	 * example, if aBitDepth=6 and "Tout" is uint8_t, the result will be
-	 * rounded to 6 most significant bits (2 least significant bits
-	 * truncated, with dithering applied).
+	 * @param aResBitDepth Required bit depth of resulting image (4-16). If
+	 * integer value output is used (e.g. uint8_t), the bit depth also affects
+	 * rounding: for example, if aResBitDepth=6 and "Tout" is uint8_t, the
+	 * result will be rounded to 6 most significant bits (2 least significant
+	 * bits truncated, with dithering applied). The source image may have any
+	 * real bit-depth: if this image was correctly dithered, during downsizing
+	 * its bit-depth will increase proportionally to the downsizing factor.
+	 * @param aSrcBitDepth Source image's real bit-depth. Set to 0 to use
+	 * aResBitDepth.
 	 * @param aParams Resizing algorithm's parameters to use. Leave out for
 	 * default values. Can be useful when performing automatic optimization of
 	 * parameters.
 	 */
 
-	CImageResizer( const int aBitDepth = 8,
+	CImageResizer( const int aResBitDepth = 8, const int aSrcBitDepth = 0,
 		const CImageResizerParams& aParams = CImageResizerParamsDef() )
 		: Params( aParams )
-		, BitDepth( aBitDepth )
+		, ResBitDepth( aResBitDepth )
 	{
-		const double SNR = -6.02 * ( BitDepth + 3 );
-		FilterFracs = (int) ceil( 0.2077685412 * exp( -0.05744712479 * SNR ));
+		const int SrcBitDepth = ( aSrcBitDepth == 0 ? ResBitDepth :
+			aSrcBitDepth );
+
+		const int IntBitDepth = ( ResBitDepth > SrcBitDepth ? ResBitDepth :
+			SrcBitDepth );
+
+		const double SNR = -6.02 * ( IntBitDepth + 3 );
+		int UseOrder;
+
+		if( IntBitDepth > 8 )
+		{
+			UseOrder = 1; // -146 dB max
+			FilterFracs = (int) ceil( 0.23134052 * exp( -0.058062929 * SNR ));
+		}
+		else
+		{
+			UseOrder = 0; // -72 dB max
+			FilterFracs = (int) ceil( 0.33287686 * exp( -0.11334583 * SNR ));
+		}
 
 		if( FilterFracs < 2 )
 		{
 			FilterFracs = 2;
 		}
 
-		FilterBank.init( FilterFracs, Params.IntFltBaseLen,
-			Params.IntFltCutoff, Params.IntFltAlpha );
+		FilterBank.init( FilterFracs, UseOrder, Params.IntFltLen,
+			Params.IntFltCutoff, Params.IntFltAlpha, fpclass :: fpalign,
+			fpclass :: elalign );
 	}
 
 	/**
@@ -1660,14 +3334,15 @@ public:
 	 * @param SrcWidth Source image width.
 	 * @param SrcHeight Source image height.
 	 * @param SrcScanlineSize Physical size of source scanline in elements. If
-	 * this value is below 1, SrcWidth * ElCount0 will be used as the physical
-	 * source scanline size.
+	 * this value is below 1, SrcWidth * ElCountIO will be used as the
+	 * physical source scanline size.
 	 * @param NewBuf Buffer to accept the resized image. Can be equal to
 	 * SrcBuf if the size of the resized image is smaller or equal to source
-	 * image. 
+	 * image in size.
 	 * @param NewWidth New image width.
 	 * @param NewHeight New image height.
-	 * @param ElCount Number of elements (channels) in each pixel (1-4).
+	 * @param ElCountIO The number of elements (channels) used to store each
+	 * source and destination pixel (1-4).
 	 * @param k Resizing step (one output pixel corresponds to "k" input
 	 * pixels). A downsizing factor if > 1.0; upsizing factor if <= 1.0.
 	 * Multiply by -1 if you would like to bypass "ox" and "oy" adjustment
@@ -1678,9 +3353,12 @@ public:
 	 * Positive offset moves image to the left.
 	 * @param oy Start Y pixel offset within source image (can be negative).
 	 * Positive offset moves image to the top.
-	 * @param aThreadPool Thread pool to use to perform resizing using
-	 * multiple threads. Leave at default NULL value for no multi-threaded
-	 * operation.
+	 * @param aVars Pointer to variables to be passed to the image resizing
+	 * function. Can be NULL. Only variables that are initialized in default
+	 * constructor are accepted by this function. Any variables in this object
+	 * can be modified by this function. The access to this object is not
+	 * thread-safe, each concurrent instance of this function should use a
+	 * separate aVars object.
 	 * @tparam Tin Input buffer element's type. Can be uint8_t (0-255 value
 	 * range), uint16_t (0-65535 value range), float (0.0-1.0 value range),
 	 * double (0.0-1.0 value range). Larger integer types are treated as
@@ -1694,9 +3372,9 @@ public:
 	template< class Tin, class Tout >
 	void resizeImage( const Tin* const SrcBuf, const int SrcWidth,
 		const int SrcHeight, int SrcScanlineSize, Tout* const NewBuf,
-		const int NewWidth, const int NewHeight, const int ElCount,
+		const int NewWidth, const int NewHeight, const int ElCountIO,
 		const double k, double ox = 0.0, double oy = 0.0,
-		CImageResizerThreadPool* const aThreadPool = NULL ) const
+		CImageResizerVars* const aVars = NULL ) const
 	{
 		if( SrcWidth == 0 || SrcHeight == 0 )
 		{
@@ -1709,9 +3387,12 @@ public:
 			return;
 		}
 
+		CImageResizerVars DefVars;
+		CImageResizerVars& Vars = ( aVars == NULL ? DefVars : *aVars );
+
 		CImageResizerThreadPool DefThreadPool;
-		CImageResizerThreadPool& ThreadPool = ( aThreadPool == NULL ?
-			DefThreadPool : *aThreadPool );
+		CImageResizerThreadPool& ThreadPool = ( Vars.ThreadPool == NULL ?
+			DefThreadPool : *Vars.ThreadPool );
 
 		double kx;
 		double ky;
@@ -1755,58 +3436,11 @@ public:
 			ky = -k;
 		}
 
-		const int SrcWidthE = SrcWidth * ElCount;
-		const int NewWidthE = NewWidth * ElCount;
-
-		if( SrcScanlineSize < 1 )
-		{
-			SrcScanlineSize = SrcWidthE;
-		}
-
-		// Horizontal scanline filtering and resizing.
-
-		CStructArray< CFilterStep > FltSteps;
-		buildFilterSteps( FltSteps, SrcWidth, NewWidth, ElCount, kx, ox );
-
-		const int ThreadCount = ThreadPool.getSuggestedWorkloadCount();
-			// Includes the current thread.
-
-		CThreadData< Tin > td[ ThreadCount ];
-		int i;
-
-		for( i = 0; i < ThreadCount; i++ )
-		{
-			if( i > 0 )
-			{
-				ThreadPool.addWorkload( &td[ i ]);
-			}
-
-			td[ i ].init( i, ThreadCount, ElCount, &FltSteps,
-				FilterBank.getFilterLen() );
-
-			td[ i ].initScanlineQueue( false, SrcHeight, SrcWidth );
-		}
-
-		CBuffer< fptype > FltBuf( NewWidthE * SrcHeight ); // Temporary buffer
-			// that receives horizontally-filtered and resized image.
-
-		for( i = 0; i < SrcHeight; i++ )
-		{
-			td[ i % ThreadCount ].addScanlineToQueue(
-				(void*) &SrcBuf[ i * SrcScanlineSize ],
-				&FltBuf[ i * NewWidthE ]);
-		}
-
-		ThreadPool.startAllWorkloads();
-		td[ 0 ].processScanlineQueue();
-		ThreadPool.waitAllWorkloadsToFinish();
-
-		// Evaluate pre-multipliers used on output stage.
+		// Evaluate pre-multipliers used on the output stage.
 
 		const bool IsInFloat = ( (Tin) 0.4 != 0 );
 		const bool IsOutFloat = ( (Tout) 0.4 != 0 );
 		fptype OutMul; // Output multiplier.
-		int j;
 
 		if( IsOutFloat )
 		{
@@ -1822,18 +3456,77 @@ public:
 			OutMul /= ( sizeof( Tin ) == 1 ? 255.0 : 65535.0 );
 		}
 
+		const int ElCount = ( ElCountIO + fpclass :: fppack - 1 ) /
+			fpclass :: fppack;
+
+		const int NewWidthE = NewWidth * ElCount;
+
+		if( SrcScanlineSize < 1 )
+		{
+			SrcScanlineSize = SrcWidth * ElCountIO;
+		}
+
+		Vars.ElCount = ElCount;
+		Vars.ElCountIO = ElCountIO;
+		Vars.fppack = fpclass :: fppack;
+		Vars.fpalign = fpclass :: fpalign;
+		Vars.elalign = fpclass :: elalign;
+		Vars.IntFltOrder = FilterBank.getOrder();
+		Vars.IntFltLen = FilterBank.getFilterLen();
+
 		// Horizontal scanline filtering and resizing.
 
-		buildFilterSteps( FltSteps, SrcHeight, NewHeight, ElCount, ky, oy );
+		CFilterSteps FltSteps;
+		buildFilterSteps( FltSteps, Vars, SrcWidth, NewWidth, kx, ox,
+			OutMul );
 
-		if( IsOutFloat && sizeof( FltBuf[ 0 ]) == sizeof( Tout ))
+		const int ThreadCount = ThreadPool.getSuggestedWorkloadCount();
+			// Includes the current thread.
+
+		CThreadData< Tin, Tout > td[ ThreadCount ];
+		int i;
+
+		for( i = 0; i < ThreadCount; i++ )
+		{
+			if( i > 0 )
+			{
+				ThreadPool.addWorkload( &td[ i ]);
+			}
+
+			td[ i ].init( i, ThreadCount, FltSteps, Vars );
+
+			td[ i ].initScanlineQueue( td[ i ].sopResizeH, SrcHeight,
+				SrcWidth );
+		}
+
+		CBuffer< fptype > FltBuf( NewWidthE * SrcHeight, fpclass :: fpalign );
+			// Temporary buffer that receives horizontally-filtered and
+			// resized image.
+
+		for( i = 0; i < SrcHeight; i++ )
+		{
+			td[ i % ThreadCount ].addScanlineToQueue(
+				(void*) &SrcBuf[ i * SrcScanlineSize ],
+				&FltBuf[ i * NewWidthE ]);
+		}
+
+		ThreadPool.startAllWorkloads();
+		td[ 0 ].processScanlineQueue();
+		ThreadPool.waitAllWorkloadsToFinish();
+
+		// Horizontal scanline filtering and resizing.
+
+		buildFilterSteps( FltSteps, Vars, SrcHeight, NewHeight, ky, oy );
+
+		if( IsOutFloat && sizeof( FltBuf[ 0 ]) == sizeof( Tout ) &&
+			fpclass :: elalign == 1 )
 		{
 			// In-place output.
 
 			for( i = 0; i < ThreadCount; i++ )
 			{
-				td[ i ].initScanlineQueue( true, NewWidth, SrcHeight,
-					NewWidthE, NewWidthE );
+				td[ i ].initScanlineQueue( td[ i ].sopResizeV, NewWidth,
+					SrcHeight, NewWidthE, NewWidthE );
 			}
 
 			for( i = 0; i < NewWidth; i++ )
@@ -1847,24 +3540,15 @@ public:
 			ThreadPool.waitAllWorkloadsToFinish();
 			ThreadPool.removeAllWorkloads();
 
-			if( OutMul != 1.0 )
-			{
-				for( i = 0; i < NewWidthE * NewHeight; i++ )
-				{
-					NewBuf[ i ] = (Tout) ( NewBuf[ i ] * OutMul );
-				}
-			}
-
 			return;
 		}
 
-		CBuffer< fptype > ResBuf(( NewWidthE + ElCount ) * NewHeight );
-			// Resulting resized image, includes 1 more pixel for dithering.
+		CBuffer< fptype > ResBuf( NewWidthE * NewHeight, fpclass :: fpalign );
 
 		for( i = 0; i < ThreadCount; i++ )
 		{
-			td[ i ].initScanlineQueue( true, NewWidth, SrcHeight,
-				NewWidthE, NewWidthE + ElCount );
+			td[ i ].initScanlineQueue( td[ i ].sopResizeV, NewWidth,
+				SrcHeight, NewWidthE, NewWidthE );
 		}
 
 		for( i = 0; i < NewWidth; i++ )
@@ -1876,131 +3560,101 @@ public:
 		ThreadPool.startAllWorkloads();
 		td[ 0 ].processScanlineQueue();
 		ThreadPool.waitAllWorkloadsToFinish();
-		ThreadPool.removeAllWorkloads();
-
-		// Perform output with dithering (for integer output only).
 
 		if( IsOutFloat )
 		{
-			for( i = 0; i < NewHeight; i++ )
+			// Perform output, but skip dithering.
+
+			for( i = 0; i < ThreadCount; i++ )
 			{
-				fptype* const ResScanline =
-					&ResBuf[ i * ( NewWidthE + ElCount )];
-
-				Tout* op = &NewBuf[ i * NewWidthE ];
-
-				if( OutMul == 1.0 )
-				{
-					for( j = 0; j < NewWidthE; j++ )
-					{
-						op[ j ] = (Tout) ResScanline[ j ];
-					}
-				}
-				else
-				{
-					for( j = 0; j < NewWidthE; j++ )
-					{
-						op[ j ] = (Tout) ( ResScanline[ j ] * OutMul );
-					}
-				}
+				td[ i ].initScanlineQueue( td[ i ].sopUnpackH,
+					NewHeight, NewWidth );
 			}
 
+			for( i = 0; i < NewHeight; i++ )
+			{
+				td[ i % ThreadCount ].addScanlineToQueue(
+					&ResBuf[ i * NewWidthE ],
+					&NewBuf[ i * NewWidth * ElCountIO ]);
+			}
+
+			ThreadPool.startAllWorkloads();
+			td[ 0 ].processScanlineQueue();
+			ThreadPool.waitAllWorkloadsToFinish();
+			ThreadPool.removeAllWorkloads();
 			return;
 		}
 
+		// Perform output with dithering (for integer output only).
+
 		int TruncBits; // The number of lower bits to truncate and dither.
-		int PeakOutVal;
+		fptype PkOut;
 
 		if( sizeof( Tout ) == 1 )
 		{
-			TruncBits = 8 - BitDepth;
-			PeakOutVal = 255;
+			TruncBits = 8 - ResBitDepth;
+			PkOut = 255.0;
 		}
 		else
 		{
-			TruncBits = 16 - BitDepth;
-			PeakOutVal = 65535;
+			TruncBits = 16 - ResBitDepth;
+			PkOut = 65535.0;
 		}
 
-		const int TrMul = ( TruncBits > 0 ? 1 << TruncBits : 1 );
+		const fptype TrMul = (fptype) ( TruncBits > 0 ? 1 << TruncBits : 1 );
 
-		CBuffer< fptype > ResScanlineDith0( NewWidthE + ElCount * 2 );
-			// Error propagation array for dithering, first and last pixels
-			// unused.
-		fptype* const ResScanlineDith = ResScanlineDith0 + ElCount;
-			// Offsetted pointer to support -ElCount offset addressing.
-
-		for( i = -ElCount; i < NewWidthE + ElCount; i++ )
+		if( CDitherer :: isRecursive() )
 		{
-			ResScanlineDith[ i ] = 0.0;
-		}
+			td[ 0 ].getDitherer().init( NewWidth, Vars, TrMul, PkOut );
 
-		for( i = 0; i < NewHeight; i++ )
+			for( i = 0; i < NewHeight; i++ )
+			{
+				fptype* const ResScanline = &ResBuf[ i * NewWidthE ];
+
+				td[ 0 ].getDitherer().dither( ResScanline );
+
+				CFilterStep :: unpackScanline( ResScanline,
+					&NewBuf[ i * NewWidth * ElCountIO ], NewWidth, Vars );
+			}
+		}
+		else
 		{
-			fptype* const ResScanline = &ResBuf[ i * ( NewWidthE + ElCount )];
-
-			for( j = 0; j < ElCount; j++ )
+			for( i = 0; i < ThreadCount; i++ )
 			{
-				ResScanline[ NewWidthE + j ] = 0.0;
+				td[ i ].initScanlineQueue( td[ i ].sopDitherAndUnpackH,
+					NewHeight, NewWidth );
+
+				td[ i ].getDitherer().init( NewWidth, Vars, TrMul, PkOut );
 			}
 
-			if( OutMul == 1.0 )
+			for( i = 0; i < NewHeight; i++ )
 			{
-				for( j = 0; j < NewWidthE; j++ )
-				{
-					ResScanline[ j ] += ResScanlineDith[ j ];
-					ResScanlineDith[ j ] = 0.0;
-				}
-			}
-			else
-			{
-				for( j = 0; j < NewWidthE; j++ )
-				{
-					ResScanline[ j ] = ResScanline[ j ] * OutMul +
-						ResScanlineDith[ j ];
-
-					ResScanlineDith[ j ] = 0.0;
-				}
+				td[ i % ThreadCount ].addScanlineToQueue(
+					&ResBuf[ i * NewWidthE ],
+					&NewBuf[ i * NewWidth * ElCountIO ]);
 			}
 
-			Tout* op = &NewBuf[ i * NewWidthE ];
-
-			for( j = 0; j < NewWidthE; j++ )
-			{
-				const int z = (int) round( ResScanline[ j ] / TrMul ) * TrMul;
-				const fptype Noise = ResScanline[ j ] - z;
-
-				// Classic quasi-random dithering. Compressed by PNG well,
-				// looks OK.
-
-				ResScanline[ j + ElCount ] += Noise * (fptype) 0.4375;
-				ResScanlineDith[ j + ElCount ] += Noise * (fptype) 0.0625;
-				ResScanlineDith[ j ] += Noise * (fptype) 0.3125;
-				ResScanlineDith[ j - ElCount ] += Noise * (fptype) 0.1875;
-
-				if( z < 0 )
-				{
-					*op = 0;
-				}
-				else
-				if( z > PeakOutVal )
-				{
-					*op = (Tout) PeakOutVal;
-				}
-				else
-				{
-					*op = (Tout) z;
-				}
-
-				op++;
-			}
+			ThreadPool.startAllWorkloads();
+			td[ 0 ].processScanlineQueue();
+			ThreadPool.waitAllWorkloadsToFinish();
 		}
+
+		ThreadPool.removeAllWorkloads();
 	}
 
 private:
+	typedef typename fpclass :: fptype fptype; ///< Floating-point type to use
+		///< during processing.
+		///<
+	typedef typename fpclass :: CFilterStep CFilterStep; ///< Filter step
+		///< class to use during processing.
+		///<
+	typedef typename fpclass :: CDitherer CDitherer; ///< Ditherer class to
+		///< use during processing.
+		///<
 	CImageResizerParams Params; ///< Algorithm's parameters currently in use.
 		///<
-	int BitDepth; ///< Bit resolution of the resulting image.
+	int ResBitDepth; ///< Bit resolution of the resulting image.
 		///<
 	int FilterFracs; ///< The number of fractional delay filters sampled by
 		///< the filter bank. This variable affects the signal-to-noise ratio
@@ -2013,702 +3667,44 @@ private:
 		///<
 
 	/**
-	 * @brief Resizing position structure.
+	 * @brief Filtering steps array.
 	 *
-	 * Structure holds resizing position and pointer to fractional delay
-	 * filter.
+	 * The object of this class stores filtering steps together.
 	 */
 
-	struct CResizePos
-	{
-		fptype x; ///< "X" interpolation coefficient.
-			///<
-		const fptype* ftp; ///< Fractional delay filter pointer.
-			///<
-		int SrcOffs; ///< Source scanline offset.
-			///<
-	};
+	typedef CStructArray< CFilterStep > CFilterSteps;
 
 	/**
-	 * @brief Filtering step structure.
+	 * Function allocates filter buffer taking "fpclass" alignments into
+	 * account. The allocated buffer may be higher than the requested size: in
+	 * this case the additional elements will be zeroed by this function.
 	 *
-	 * Structure defines a single filtering step. 1 or more steps may be
-	 * performed before the actual resizing takes place. Each step ensures
-	 * that scanline data contains enough pixels to perform the next step
-	 * (which may be resizing) without exceeding scanline's bounds.
+	 * @param Flt Filter buffer.
+	 * @param ReqCapacity The required filter buffer's capacity.
+	 * @param FltExt If non-NULL this variable will receive the number of
+	 * elements the filter was extended by.
 	 */
 
-	struct CFilterStep
+	static void allocFilter( CBuffer< fptype >& Flt, const int ReqCapacity,
+		int* const FltExt = NULL )
 	{
-		bool IsUpsample; ///< "True" if this step is an upsampling step,
-			///< "false" if downsampling step. Should be set to "false" if
-			///< ResampleFactor equals 0.
-			///<
-		int ResampleFactor; ///< Resample factor (>=1). If 0, this is a
-			///< resizing step. This value should be >1 if IsUpsample equals
-			///< "true".
-			///<
-		CBuffer< fptype > Flt; ///< Filter kernel to use at this step.
-			///<
-		int FltLatency; ///< Filter's latency (shift) in pixels.
-			///<
-		int ElCount; ///< The number of channels in each source and
-			///< destination pixel.
-			///<
-		int InLen; ///< Input scanline's length in pixels.
-			///<
-		int InBuf; ///< Input buffer index, 0 or 1.
-			///<
-		int InPrefix; ///< Required input prefix pixels. These prefix pixels
-			///< will be filled with source scanline's first pixel value. If
-			///< IsUpsample is "true", this is the additional number of times
-			///< the first pixel will be filtered before processing scanline,
-			///< this number is also reflected in the OutPrefix.
-			///<
-		int InSuffix; ///< Required input suffix pixels. These suffix pixels
-			///< will be filled with source scanline's last pixel value. If
-			///< IsUpsample is "true", this is the additional number of times
-			///< the last pixel will be filtered before processing scanline,
-			///< this number is also reflected in the OutSuffix.
-			///<
-		int OutLen; ///< Length of the resulting scanline.
-			///<
-		int OutBuf; ///< Output buffer index. 0 or 1; 2 for the last step.
-			///<
-		int OutPrefix; ///< Required output prefix pixels. These prefix pixels
-			///< will not be pre-filled with any values. Value is valid only
-			///< if IsUpsample equals "true".
-			///<
-		int OutSuffix; ///< Required input suffix pixels. These suffix pixels
-			///< will not be pre-filled with any values. Value is valid only
-			///< if IsUpsample equals "true".
-			///<
-		CBuffer< fptype > PrefixDC; ///< DC component fluctuations added at
-			///< the start of the resulting scanline, used when IsUpsample
-			///< equals "true".
-			///<
-		CBuffer< fptype > SuffixDC; ///< DC component fluctuations added at
-			///< the end of the resulting scanline, used when IsUpsample
-			///< equals "true".
-			///<
-		CBuffer< CResizePos > RPosBuf; ///< Resizing positions buffer. Used
-			///< when ResampleFactor equals 0 (resizing step).
-			///<
+		int UseCapacity = ( ReqCapacity + fpclass :: elalign - 1 ) &
+			~( fpclass :: elalign - 1 );
 
-		/**
-		 * Function that replicates a set of adjacent elements several times
-		 * in a row. This operation is usually used to replicate pixels at the
-		 * start or end of image's scanline.
-		 *
-		 * @param ip Source array.
-		 * @param ipl Source array length (usually 1..4, but can be any
-		 * number).
-		 * @param[out] op Destination buffer.
-		 * @param l Number of times the source array should be replicated (the
-		 * destination buffer should be able to hold ipl * l number of
-		 * elements).
-		 * @param opinc Destination buffer position increment after
-		 * replicating the source array. This value should be equal to at
-		 * least ipl.
-		 */
+		Flt.alloc( UseCapacity, fpclass :: fpalign );
+		int Ext = UseCapacity - ReqCapacity;
 
-		template< class T1, class T2 >
-		static void replicateArray( const T1* const ip, const int ipl, T2* op,
-			int l, const int opinc )
+		if( FltExt != NULL )
 		{
-			if( ipl == 1 )
-			{
-				while( l > 0 )
-				{
-					op[ 0 ] = ip[ 0 ];
-					op += opinc;
-					l--;
-				}
-			}
-			else
-			if( ipl == 4 )
-			{
-				while( l > 0 )
-				{
-					op[ 0 ] = ip[ 0 ];
-					op[ 1 ] = ip[ 1 ];
-					op[ 2 ] = ip[ 2 ];
-					op[ 3 ] = ip[ 3 ];
-					op += opinc;
-					l--;
-				}
-			}
-			else
-			if( ipl == 3 )
-			{
-				while( l > 0 )
-				{
-					op[ 0 ] = ip[ 0 ];
-					op[ 1 ] = ip[ 1 ];
-					op[ 2 ] = ip[ 2 ];
-					op += opinc;
-					l--;
-				}
-			}
-			else
-			if( ipl == 2 )
-			{
-				while( l > 0 )
-				{
-					op[ 0 ] = ip[ 0 ];
-					op[ 1 ] = ip[ 1 ];
-					op += opinc;
-					l--;
-				}
-			}
-			else
-			{
-				while( l > 0 )
-				{
-					int i;
-
-					for( i = 0; i < ipl; i++ )
-					{
-						op[ i ] = ip[ i ];
-					}
-
-					op += opinc;
-					l--;
-				}
-			}
+			*FltExt = Ext;
 		}
 
-		/**
-		 * Function prepares input scanline buffer for *this filtering step.
-		 * Left- and right-most pixels are replicated to make sure no buffer
-		 * overrun happens. Such approach also allows to bypass any pointer
-		 * range checks.
-		 *
-		 * @param Src Source buffer.
-		 */
-
-		void prepareInBuf( fptype* Src ) const
+		while( Ext > 0 )
 		{
-			if( IsUpsample || InPrefix + InSuffix == 0 )
-			{
-				return;
-			}
-
-			replicateArray( Src, ElCount, Src - ElCount, InPrefix, -ElCount );
-
-			Src += ( InLen - 1 ) * ElCount;
-			replicateArray( Src, ElCount, Src + ElCount, InSuffix, ElCount );
+			Ext--;
+			Flt[ ReqCapacity + Ext ] = (fptype) 0.0;
 		}
-
-		/**
-		 * Function peforms scanline upsampling with filtering.
-		 *
-		 * @param Src Source scanline buffer (length = this -> InLen). Source
-		 * scanline increment will be equal to ElCount.
-		 * @param Dst Destination scanline buffer.
-		 */
-
-		void doUpsample( const fptype* const Src, fptype* const Dst ) const
-		{
-			fptype* op0 = &Dst[ -OutPrefix * ElCount ];
-			memset( op0, 0, ( OutPrefix + OutLen + OutSuffix ) * ElCount *
-				sizeof( fptype ));
-
-			const fptype* const f = Flt;
-			const int flen = Flt.getCapacity();
-			const fptype* ip = Src;
-			fptype* op;
-			const int opstep = ElCount * ResampleFactor;
-			int l;
-			int i;
-
-			if( ElCount == 1 )
-			{
-				l = InPrefix;
-
-				while( l > 0 )
-				{
-					op = op0;
-
-					for( i = 0; i < flen; i++ )
-					{
-						op[ 0 ] += f[ i ] * ip[ 0 ];
-						op++;
-					}
-
-					op0 += opstep;
-					l--;
-				}
-
-				l = InLen - 1;
-
-				while( l > 0 )
-				{
-					op = op0;
-
-					for( i = 0; i < flen; i++ )
-					{
-						op[ 0 ] += f[ i ] * ip[ 0 ];
-						op++;
-					}
-
-					ip += ElCount;
-					op0 += opstep;
-					l--;
-				}
-
-				l = InSuffix;
-
-				while( l >= 0 )
-				{
-					op = op0;
-
-					for( i = 0; i < flen; i++ )
-					{
-						op[ 0 ] += f[ i ] * ip[ 0 ];
-						op++;
-					}
-
-					op0 += opstep;
-					l--;
-				}
-			}
-			else
-			if( ElCount == 4 )
-			{
-				l = InPrefix;
-
-				while( l > 0 )
-				{
-					op = op0;
-
-					for( i = 0; i < flen; i++ )
-					{
-						op[ 0 ] += f[ i ] * ip[ 0 ];
-						op[ 1 ] += f[ i ] * ip[ 1 ];
-						op[ 2 ] += f[ i ] * ip[ 2 ];
-						op[ 3 ] += f[ i ] * ip[ 3 ];
-						op += 4;
-					}
-
-					op0 += opstep;
-					l--;
-				}
-
-				l = InLen - 1;
-
-				while( l > 0 )
-				{
-					op = op0;
-
-					for( i = 0; i < flen; i++ )
-					{
-						op[ 0 ] += f[ i ] * ip[ 0 ];
-						op[ 1 ] += f[ i ] * ip[ 1 ];
-						op[ 2 ] += f[ i ] * ip[ 2 ];
-						op[ 3 ] += f[ i ] * ip[ 3 ];
-						op += 4;
-					}
-
-					ip += ElCount;
-					op0 += opstep;
-					l--;
-				}
-
-				l = InSuffix;
-
-				while( l >= 0 )
-				{
-					op = op0;
-
-					for( i = 0; i < flen; i++ )
-					{
-						op[ 0 ] += f[ i ] * ip[ 0 ];
-						op[ 1 ] += f[ i ] * ip[ 1 ];
-						op[ 2 ] += f[ i ] * ip[ 2 ];
-						op[ 3 ] += f[ i ] * ip[ 3 ];
-						op += 4;
-					}
-
-					op0 += opstep;
-					l--;
-				}
-			}
-			else
-			if( ElCount == 3 )
-			{
-				l = InPrefix;
-
-				while( l > 0 )
-				{
-					op = op0;
-
-					for( i = 0; i < flen; i++ )
-					{
-						op[ 0 ] += f[ i ] * ip[ 0 ];
-						op[ 1 ] += f[ i ] * ip[ 1 ];
-						op[ 2 ] += f[ i ] * ip[ 2 ];
-						op += 3;
-					}
-
-					op0 += opstep;
-					l--;
-				}
-
-				l = InLen - 1;
-
-				while( l > 0 )
-				{
-					op = op0;
-
-					for( i = 0; i < flen; i++ )
-					{
-						op[ 0 ] += f[ i ] * ip[ 0 ];
-						op[ 1 ] += f[ i ] * ip[ 1 ];
-						op[ 2 ] += f[ i ] * ip[ 2 ];
-						op += 3;
-					}
-
-					ip += ElCount;
-					op0 += opstep;
-					l--;
-				}
-
-				l = InSuffix;
-
-				while( l >= 0 )
-				{
-					op = op0;
-
-					for( i = 0; i < flen; i++ )
-					{
-						op[ 0 ] += f[ i ] * ip[ 0 ];
-						op[ 1 ] += f[ i ] * ip[ 1 ];
-						op[ 2 ] += f[ i ] * ip[ 2 ];
-						op += 3;
-					}
-
-					op0 += opstep;
-					l--;
-				}
-			}
-			else
-			if( ElCount == 2 )
-			{
-				l = InPrefix;
-
-				while( l > 0 )
-				{
-					op = op0;
-
-					for( i = 0; i < flen; i++ )
-					{
-						op[ 0 ] += f[ i ] * ip[ 0 ];
-						op[ 1 ] += f[ i ] * ip[ 1 ];
-						op += 2;
-					}
-
-					op0 += opstep;
-					l--;
-				}
-
-				l = InLen - 1;
-
-				while( l > 0 )
-				{
-					op = op0;
-
-					for( i = 0; i < flen; i++ )
-					{
-						op[ 0 ] += f[ i ] * ip[ 0 ];
-						op[ 1 ] += f[ i ] * ip[ 1 ];
-						op += 2;
-					}
-
-					ip += ElCount;
-					op0 += opstep;
-					l--;
-				}
-
-				l = InSuffix;
-
-				while( l >= 0 )
-				{
-					op = op0;
-
-					for( i = 0; i < flen; i++ )
-					{
-						op[ 0 ] += f[ i ] * ip[ 0 ];
-						op[ 1 ] += f[ i ] * ip[ 1 ];
-						op += 2;
-					}
-
-					op0 += opstep;
-					l--;
-				}
-			}
-
-			op = op0;
-			const fptype* dc = SuffixDC;
-			l = SuffixDC.getCapacity();
-
-			if( ElCount == 1 )
-			{
-				while( l > 0 )
-				{
-					op[ 0 ] += ip[ 0 ] * dc[ 0 ];
-					dc++;
-					op++;
-					l--;
-				}
-			}
-			else
-			if( ElCount == 4 )
-			{
-				while( l > 0 )
-				{
-					op[ 0 ] += ip[ 0 ] * dc[ 0 ];
-					op[ 1 ] += ip[ 1 ] * dc[ 0 ];
-					op[ 2 ] += ip[ 2 ] * dc[ 0 ];
-					op[ 3 ] += ip[ 3 ] * dc[ 0 ];
-					dc++;
-					op += 4;
-					l--;
-				}
-			}
-			else
-			if( ElCount == 3 )
-			{
-				while( l > 0 )
-				{
-					op[ 0 ] += ip[ 0 ] * dc[ 0 ];
-					op[ 1 ] += ip[ 1 ] * dc[ 0 ];
-					op[ 2 ] += ip[ 2 ] * dc[ 0 ];
-					dc++;
-					op += 3;
-					l--;
-				}
-			}
-			else
-			if( ElCount == 2 )
-			{
-				while( l > 0 )
-				{
-					op[ 0 ] += ip[ 0 ] * dc[ 0 ];
-					op[ 1 ] += ip[ 1 ] * dc[ 0 ];
-					dc++;
-					op += 2;
-					l--;
-				}
-			}
-
-			ip = Src;
-			op = Dst - InPrefix * opstep;
-			dc = PrefixDC;
-			l = PrefixDC.getCapacity();
-
-			if( ElCount == 1 )
-			{
-				while( l > 0 )
-				{
-					op[ 0 ] += ip[ 0 ] * dc[ 0 ];
-					dc++;
-					op++;
-					l--;
-				}
-			}
-			else
-			if( ElCount == 4 )
-			{
-				while( l > 0 )
-				{
-					op[ 0 ] += ip[ 0 ] * dc[ 0 ];
-					op[ 1 ] += ip[ 1 ] * dc[ 0 ];
-					op[ 2 ] += ip[ 2 ] * dc[ 0 ];
-					op[ 3 ] += ip[ 3 ] * dc[ 0 ];
-					dc++;
-					op += 4;
-					l--;
-				}
-			}
-			else
-			if( ElCount == 3 )
-			{
-				while( l > 0 )
-				{
-					op[ 0 ] += ip[ 0 ] * dc[ 0 ];
-					op[ 1 ] += ip[ 1 ] * dc[ 0 ];
-					op[ 2 ] += ip[ 2 ] * dc[ 0 ];
-					dc++;
-					op += 3;
-					l--;
-				}
-			}
-			else
-			if( ElCount == 2 )
-			{
-				while( l > 0 )
-				{
-					op[ 0 ] += ip[ 0 ] * dc[ 0 ];
-					op[ 1 ] += ip[ 1 ] * dc[ 0 ];
-					dc++;
-					op += 2;
-					l--;
-				}
-			}
-		}
-
-		/**
-		 * Function extends *this upsampling step so that it produces more
-		 * upsampled pixels that cover the prefix and suffix needs of the next
-		 * step. After the call to this function the InPrefix and InSuffix
-		 * variables of the next step will be set to zero.
-		 */
-
-		void extendUpsample( CFilterStep& NextStep )
-		{
-			InPrefix = ( NextStep.InPrefix + ResampleFactor - 1 ) /
-				ResampleFactor;
-
-			OutPrefix += InPrefix * ResampleFactor;
-			NextStep.InPrefix = 0;
-
-			InSuffix = ( NextStep.InSuffix + ResampleFactor - 1 ) /
-				ResampleFactor;
-
-			OutSuffix += InSuffix * ResampleFactor;
-			NextStep.InSuffix = 0;
-		}
-
-		/**
-		 * Function peforms scanline filtering with optional downsampling.
-		 * Function makes use of the symmetry of the filter kernel.
-		 *
-		 * @param Src Source scanline buffer (length = this -> InLen). Source
-		 * scanline increment will be equal to ElCount.
-		 * @param Dst Destination scanline buffer.
-		 * @param DstIncr Destination scanline buffer increment.
-		 */
-
-		void doFilter( const fptype* const Src, fptype* Dst,
-			const int DstIncr ) const
-		{
-			const fptype* const f = &Flt[ FltLatency ];
-			const int flen = FltLatency + 1;
-			const fptype* ip = Src;
-			const fptype* ip1;
-			const fptype* ip2;
-			const int ipstep = ElCount * ResampleFactor;
-			int l = OutLen;
-			int i;
-
-			if( ElCount == 1 )
-			{
-				while( l > 0 )
-				{
-					fptype s = f[ 0 ] * ip[ 0 ];
-					ip1 = ip;
-					ip2 = ip;
-
-					for( i = 1; i < flen; i++ )
-					{
-						ip1++;
-						ip2--;
-						s += f[ i ] * ( ip1[ 0 ] + ip2[ 0 ]);
-					}
-
-					Dst[ 0 ] = s;
-					Dst += DstIncr;
-					ip += ipstep;
-					l--;
-				}
-			}
-			else
-			if( ElCount == 4 )
-			{
-				while( l > 0 )
-				{
-					fptype s1 = f[ 0 ] * ip[ 0 ];
-					fptype s2 = f[ 0 ] * ip[ 1 ];
-					fptype s3 = f[ 0 ] * ip[ 2 ];
-					fptype s4 = f[ 0 ] * ip[ 3 ];
-					ip1 = ip;
-					ip2 = ip;
-
-					for( i = 1; i < flen; i++ )
-					{
-						ip1 += 4;
-						ip2 -= 4;
-						s1 += f[ i ] * ( ip1[ 0 ] + ip2[ 0 ]);
-						s2 += f[ i ] * ( ip1[ 1 ] + ip2[ 1 ]);
-						s3 += f[ i ] * ( ip1[ 2 ] + ip2[ 2 ]);
-						s4 += f[ i ] * ( ip1[ 3 ] + ip2[ 3 ]);
-					}
-
-					Dst[ 0 ] = s1;
-					Dst[ 1 ] = s2;
-					Dst[ 2 ] = s3;
-					Dst[ 3 ] = s4;
-					Dst += DstIncr;
-					ip += ipstep;
-					l--;
-				}
-			}
-			else
-			if( ElCount == 3 )
-			{
-				while( l > 0 )
-				{
-					fptype s1 = f[ 0 ] * ip[ 0 ];
-					fptype s2 = f[ 0 ] * ip[ 1 ];
-					fptype s3 = f[ 0 ] * ip[ 2 ];
-					ip1 = ip;
-					ip2 = ip;
-
-					for( i = 1; i < flen; i++ )
-					{
-						ip1 += 3;
-						ip2 -= 3;
-						s1 += f[ i ] * ( ip1[ 0 ] + ip2[ 0 ]);
-						s2 += f[ i ] * ( ip1[ 1 ] + ip2[ 1 ]);
-						s3 += f[ i ] * ( ip1[ 2 ] + ip2[ 2 ]);
-					}
-
-					Dst[ 0 ] = s1;
-					Dst[ 1 ] = s2;
-					Dst[ 2 ] = s3;
-					Dst += DstIncr;
-					ip += ipstep;
-					l--;
-				}
-			}
-			else
-			if( ElCount == 2 )
-			{
-				while( l > 0 )
-				{
-					fptype s1 = f[ 0 ] * ip[ 0 ];
-					fptype s2 = f[ 0 ] * ip[ 1 ];
-					ip1 = ip;
-					ip2 = ip;
-
-					for( i = 1; i < flen; i++ )
-					{
-						ip1 += 2;
-						ip2 -= 2;
-						s1 += f[ i ] * ( ip1[ 0 ] + ip2[ 0 ]);
-						s2 += f[ i ] * ( ip1[ 1 ] + ip2[ 1 ]);
-					}
-
-					Dst[ 0 ] = s1;
-					Dst[ 1 ] = s2;
-					Dst += DstIncr;
-					ip += ipstep;
-					l--;
-				}
-			}
-		}
-	};
+	}
 
 	/**
 	 * Function assigns filter parameters to the specified filter step object.
@@ -2728,17 +3724,25 @@ private:
 	 * @param o Starting pixel offset inside the source image, may be adjusted
 	 * on return.
 	 * @param prevfs Previous parameters to derive buffer index and length
-	 * from. If NULL was specified, then SrcLen and ElCount should be
+	 * from. If NULL was specified, then SrcLen and Vars should be
 	 * provided explicitly.
 	 * @param SrcLen Source scanline length in pixels.
+	 * @param Vars Image resizing-related variables. If prevfs is NULL and
+	 * Vars is NULL it means that Vars, InLen, InBuf, OutLen and OutBuf
+	 * variables were pre-assigned.
 	 * @param ElCount The number of elements (channels) in each pixel.
+	 * @param DCGain DC gain to apply to the filter. Assigned to filter step's
+	 * DCGain variable.
+	 * @return Pointer to the "fs" object.
 	 */
 
-	void assignFilterParams( CFilterStep& fs, const bool IsUpsample,
+	CFilterStep* assignFilterParams( CFilterStep& fs, const bool IsUpsample,
 		const int ResampleFactor, const double FltCutoff, double& k,
-		double& o, const CFilterStep* const prevfs, const int SrcLen = 0,
-		const int ElCount = 0 ) const
+		double& o, const CFilterStep* const prevfs, const int SrcLen,
+		const CImageResizerVars* const Vars, const double DCGain ) const
 	{
+		int FltExt; // Filter's extension due to fpclass :: elalign.
+
 		if( FltCutoff >= 0.0 )
 		{
 			double FltAlpha;
@@ -2748,7 +3752,7 @@ private:
 			if( FltCutoff == 0.0 )
 			{
 				FltAlpha = Params.HBFltAlpha;
-				Len2 = 0.25 * Params.HBFltBaseLen / Params.HBFltCutoff;
+				Len2 = 0.5 * Params.HBFltLen;
 				Freq = M_PI * Params.HBFltCutoff;
 			}
 			else
@@ -2762,16 +3766,29 @@ private:
 			{
 				Len2 *= ResampleFactor;
 				Freq /= ResampleFactor;
+				fs.DCGain = DCGain * ResampleFactor;
+			}
+			else
+			{
+				fs.DCGain = DCGain;
 			}
 
 			CDSPPeakedCosineLPF w( Len2, Freq, FltAlpha );
 
-			fs.Flt.alloc( w.KernelLen );
+			CBuffer< double > Kernel( w.KernelLen );
 			fs.FltLatency = w.fl2;
-			w.generateLPF( &fs.Flt[ 0 ], 1.0 );
-			optimizeFIRFilter( fs.Flt, fs.FltLatency );
-			normalizeFIRFilter( &fs.Flt[ 0 ], fs.Flt.getCapacity(),
-				( IsUpsample ? ResampleFactor : 1.0 ));
+			w.generateLPF( &Kernel[ 0 ], 1.0 );
+			optimizeFIRFilter( Kernel, fs.FltLatency );
+			normalizeFIRFilter( &Kernel[ 0 ], Kernel.getCapacity(),
+				fs.DCGain );
+
+			allocFilter( fs.Flt, Kernel.getCapacity(), &FltExt );
+			copyArray( &Kernel[ 0 ], &fs.Flt[ 0 ], Kernel.getCapacity() );
+		}
+		else
+		{
+			fs.DCGain = DCGain;
+			FltExt = 0;
 		}
 
 		fs.IsUpsample = IsUpsample;
@@ -2779,13 +3796,16 @@ private:
 
 		if( prevfs == NULL )
 		{
-			fs.ElCount = ElCount;
-			fs.InLen = SrcLen;
-			fs.InBuf = 0;
+			if( Vars != NULL )
+			{
+				fs.Vars = Vars;
+				fs.InLen = SrcLen;
+				fs.InBuf = 0;
+			}
 		}
 		else
 		{
-			fs.ElCount = prevfs -> ElCount;
+			fs.Vars = prevfs -> Vars;
 			fs.InLen = prevfs -> OutLen;
 			fs.InBuf = prevfs -> OutBuf;
 		}
@@ -2794,7 +3814,7 @@ private:
 		{
 			fs.InPrefix = 0;
 			fs.InSuffix = 0;
-			fs.OutLen = SrcLen * ResampleFactor;
+			fs.OutLen = fs.InLen * ResampleFactor;
 			fs.OutPrefix = fs.FltLatency;
 			fs.OutSuffix = fs.Flt.getCapacity() - fs.FltLatency -
 				ResampleFactor;
@@ -2802,9 +3822,9 @@ private:
 			k *= ResampleFactor;
 			o *= ResampleFactor;
 
-			fs.PrefixDC.alloc( fs.OutSuffix );
+			int l = fs.OutSuffix - FltExt;
 			const fptype* ip = &fs.Flt[ fs.FltLatency + ResampleFactor ];
-			int l = fs.OutSuffix;
+			allocFilter( fs.PrefixDC, l );
 			copyArray( ip, &fs.PrefixDC[ 0 ], l );
 
 			while( true )
@@ -2820,9 +3840,9 @@ private:
 				addArray( ip, &fs.PrefixDC[ 0 ], l );
 			}
 
-			fs.SuffixDC.alloc( fs.FltLatency );
-			fptype* op = &fs.SuffixDC[ 0 ];
 			l = fs.FltLatency;
+			allocFilter( fs.SuffixDC, l );
+			fptype* op = &fs.SuffixDC[ 0 ];
 			copyArray( &fs.Flt[ 0 ], op, l );
 
 			while( true )
@@ -2836,6 +3856,21 @@ private:
 				}
 
 				addArray( &fs.Flt[ 0 ], op, l );
+			}
+
+			int l0 = fs.OutPrefix + fs.OutLen + fs.OutSuffix;
+			l = fs.InLen * ResampleFactor + fs.SuffixDC.getCapacity();
+
+			if( l > l0 )
+			{
+				fs.OutSuffix += l - l0;
+			}
+
+			l0 = fs.OutLen + fs.OutSuffix;
+
+			if( fs.PrefixDC.getCapacity() > l0 )
+			{
+				fs.OutSuffix += fs.PrefixDC.getCapacity() - l0;
 			}
 		}
 		else
@@ -2857,6 +3892,8 @@ private:
 		}
 
 		fs.OutBuf = ( fs.InBuf + 1 ) & 1;
+
+		return( &fs );
 	}
 
 	/**
@@ -2872,59 +3909,48 @@ private:
 	 *
 	 * @param Steps Filtering steps.
 	 * @param bw Resulting bandwidth relative to the original bandwidth (which
-	 * is 1.0), usually 1/k. If image's size was increased this value should
-	 * be >1.0, otherwise <1.0.
+	 * is 1.0), usually 1/k. Should be <= 1.0.
 	 * @param k Resizing coefficient at the last processing step, may be
 	 * adjusted on return.
 	 * @param o Starting pixel offset inside the source image, may be
 	 * adjusted on return.
+	 * @param IsPreCorrection "True" if the filter step was already created
+	 * and it is first in the Steps array.
 	 */
 
-	void addCorrectionFilter( CStructArray< CFilterStep >& Steps,
-		const double bw, double& k, double& o ) const
+	void addCorrectionFilter( CFilterSteps& Steps, const double bw, double& k,
+		double& o, const bool IsPreCorrection ) const
 	{
 		const int BinCount = 65; // Frequency response bins to control.
 		const int BinCount1 = BinCount - 1;
-		const double bwi = ( bw >= 1.0 ? 1.0 : bw ); // Spectrum bandwidth of
-			// interest which is covered by spectral bins.
-		const double bwiPerBin = bwi / BinCount1; // Bandwidth controlled by a
-			// single spectral bin.
-		const int AddedBin = ( bwi + bwiPerBin <= bw ? 1 : 0 ); // If the
-			// total bandwidth is much larger than bandwidth of interest, add
-			// an additional bin which will not be corrected: it works to
-			// bypass correction of frequencies beyond interest.
 		double curbw = 1.0; // Bandwidth of the filter at the current step.
 		int i;
 		int j;
 		double re;
 		double im;
 
-		CBuffer< double > Bins( BinCount + AddedBin ); // Adjustment
-			// introduced by all steps at all frequencies of interest.
+		CBuffer< double > Bins( BinCount ); // Adjustment introduced by all
+			// steps at all frequencies of interest.
 
-		for( j = 0; j < BinCount + AddedBin; j++ )
+		for( j = 0; j < BinCount; j++ )
 		{
 			Bins[ j ] = 1.0;
 		}
 
-		for( i = 0; i < Steps.getItemCount(); i++ )
+		for( i = ( IsPreCorrection ? 1 : 0 ); i < Steps.getItemCount(); i++ )
 		{
 			const CFilterStep& fs = Steps[ i ];
-			double upsg; // Upsample filter gain correction.
 
 			if( fs.ResampleFactor == 0 )
 			{
 				break;
 			}
 
+			const double dcg = 1.0 / fs.DCGain; // DC gain correction.
+
 			if( fs.IsUpsample )
 			{
-				upsg = 1.0 / fs.ResampleFactor;
 				curbw *= fs.ResampleFactor;
-			}
-			else
-			{
-				upsg = 1.0;
 			}
 
 			// Calculate frequency response adjustment introduced by the
@@ -2933,12 +3959,12 @@ private:
 
 			for( j = 0; j < BinCount; j++ )
 			{
-				const double th = M_PI * bwi / curbw * j / BinCount1;
+				const double th = M_PI * bw / curbw * j / BinCount1;
 
 				calcFIRFilterResponse( &fs.Flt[ 0 ], fs.Flt.getCapacity(), th,
 					re, im );
 
-				Bins[ j ] /= sqrt( re * re + im * im ) * upsg;
+				Bins[ j ] /= sqrt( re * re + im * im ) * dcg;
 			}
 
 			if( !fs.IsUpsample && fs.ResampleFactor > 1 )
@@ -2949,48 +3975,48 @@ private:
 
 		// Add correction for the resizing step, even if this step was not
 		// added yet. Resizing step is accompanied by a filter stored in a
-		// filter bank - it must be extracted first.
-
-		const int UseFltLen = FilterBank.getFilterLen();
-		CBuffer< fptype > TmpBuf( UseFltLen );
-		copyArray( &FilterBank[ 0 ], &TmpBuf[ 0 ], UseFltLen, 2, 1 );
+		// filter bank.
 
 		for( j = 0; j < BinCount; j++ )
 		{
-			const double th = M_PI * bwi / curbw * j / BinCount1;
+			const double th = M_PI * bw / curbw * j / BinCount1;
 
-			calcFIRFilterResponse( &TmpBuf[ 0 ], UseFltLen, th, re, im );
+			calcFIRFilterResponse( &FilterBank[ 0 ],
+				FilterBank.getFilterLen(), th, re, im );
 
 			Bins[ j ] /= sqrt( re * re + im * im );
 		}
 
 		// Calculate filter kernel.
 
-		if( AddedBin > 0 )
-		{
-			// Force upper "uncontrolled" part of the spectrum to have the
-			// gain closer to the last "controlled" bin.
-
-			Bins[ BinCount ] = pow( Bins[ BinCount - 1 ], 0.75 );
-		}
-
 		CDSPFIREQ EQ;
-		EQ.init( bw * 2.0, Params.CorrFltBaseLen * ( bw >= 1.0 ? bw : 1.0 ),
-			BinCount + AddedBin, 0.0, bwi + bwiPerBin * AddedBin, false,
+		EQ.init( bw * 2.0, Params.CorrFltLen, BinCount, 0.0, bw, false,
 			Params.CorrFltAlpha );
 
-		const CFilterStep* const prevfs = &Steps[ Steps.getItemCount() - 1 ];
-		CFilterStep& fs = Steps.add();
-		fs.FltLatency = EQ.getKernelLatency();
+		const CFilterStep* prevfs;
+		CFilterStep* fs;
+
+		if( IsPreCorrection )
+		{
+			prevfs = NULL;
+			fs = &Steps[ 0 ];
+		}
+		else
+		{
+			prevfs = &Steps[ Steps.getItemCount() - 1 ];
+			fs = &Steps.add();
+		}
+
+		fs -> FltLatency = EQ.getKernelLatency();
 
 		CBuffer< double > Kernel( EQ.getKernelLength() );
 		EQ.buildKernel( Bins, &Kernel[ 0 ]);
 		normalizeFIRFilter( &Kernel[ 0 ], Kernel.getCapacity(), 1.0 );
-		optimizeFIRFilter( Kernel, fs.FltLatency );
+		optimizeFIRFilter( Kernel, fs -> FltLatency );
+		normalizeFIRFilter( &Kernel[ 0 ], Kernel.getCapacity(), 1.0 );
 
-		fs.Flt.alloc( Kernel.getCapacity() );
-		copyArray( &Kernel[ 0 ], &fs.Flt[ 0 ], Kernel.getCapacity() );
-		normalizeFIRFilter( &fs.Flt[ 0 ], fs.Flt.getCapacity(), 1.0 );
+		allocFilter( fs -> Flt, Kernel.getCapacity() );
+		copyArray( &Kernel[ 0 ], &fs -> Flt[ 0 ], Kernel.getCapacity() );
 
 		// Print a theoretically achieved final frequency response at various
 		// feature sizes (from DC to 1 pixel). Values above 255 means features
@@ -3002,15 +4028,170 @@ private:
 		{
 			const double th = M_PI * sbw * j / BinCount1;
 
-			calcFIRFilterResponse( &fs.Flt[ 0 ], fs.Flt.getCapacity(), th,
-				re, im );
+			calcFIRFilterResponse( &fs -> Flt[ 0 ], fs -> Flt.getCapacity(),
+				th, re, im );
 
 			printf( "%f\n", sqrt( re * re + im * im ) / Bins[ j ] * 255 );
 		}
 
 		printf( "***\n" );
 */
-		assignFilterParams( fs, false, 1, -1.0, k, o, prevfs );
+		assignFilterParams( *fs, false, 1, -1.0, k, o, prevfs, 0, NULL, 1.0 );
+	}
+
+	/**
+	 * Function adds a sharpening filter if image is being upsized. Such
+	 * sharpening allows to spot interpolation filter's stop-band attenuation:
+	 * if attenuation is too weak, a "dark grid" artifact may become visible.
+	 *
+	 * It is assumed that 40 decibel stop-band attenuation should be
+	 * considered a required minimum: this allows application of 64X
+	 * sharpening without spotting any artifacts.
+	 *
+	 * @param Steps Filtering steps.
+	 * @param bw Resulting bandwidth relative to the original bandwidth (which
+	 * is 1.0), usually 1/k.
+	 * @param k Resizing coefficient at the last processing step, may be
+	 * adjusted on return.
+	 * @param o Starting pixel offset inside the source image, may be
+	 * adjusted on return.
+	 */
+
+	void addSharpenTest( CFilterSteps& Steps, const double bw, double& k,
+		double& o ) const
+	{
+		if( bw < 1.0 )
+		{
+			return;
+		}
+
+		const int BinCount = 200;
+		CBuffer< double > Bins( BinCount );
+		int Thresh = (int) round( BinCount / bw * 1.75 );
+
+		if( Thresh > BinCount )
+		{
+			Thresh = BinCount;
+		}
+
+		int j;
+
+		for( j = 0; j < Thresh; j++ )
+		{
+			Bins[ j ] = 1.0;
+		}
+
+		for( j = Thresh; j < BinCount; j++ )
+		{
+			Bins[ j ] = 256.0;
+		}
+
+		CDSPFIREQ EQ;
+		EQ.init( bw * 2.0, 10 * bw, BinCount, 0.0, bw, false, 1.7 );
+
+		const CFilterStep* prevfs = &Steps[ Steps.getItemCount() - 1 ];
+		CFilterStep* fs = &Steps.add();
+
+		fs -> FltLatency = EQ.getKernelLatency();
+
+		CBuffer< double > Kernel( EQ.getKernelLength() );
+		EQ.buildKernel( Bins, &Kernel[ 0 ]);
+		normalizeFIRFilter( &Kernel[ 0 ], Kernel.getCapacity(), 1.0 );
+		optimizeFIRFilter( Kernel, fs -> FltLatency );
+		normalizeFIRFilter( &Kernel[ 0 ], Kernel.getCapacity(), 1.0 );
+
+		allocFilter( fs -> Flt, Kernel.getCapacity() );
+		copyArray( &Kernel[ 0 ], &fs -> Flt[ 0 ], Kernel.getCapacity() );
+
+/*		for( j = 0; j < BinCount; j++ )
+		{
+			const double th = M_PI * j / ( BinCount - 1 );
+			double re;
+			double im;
+
+			calcFIRFilterResponse( &fs -> Flt[ 0 ], fs -> Flt.getCapacity(),
+				th, re, im );
+
+			printf( "%f\n", sqrt( re * re + im * im ));
+		}
+
+		printf( "***\n" );
+*/
+		assignFilterParams( *fs, false, 1, -1.0, k, o, prevfs, 0, NULL, 1.0 );
+	}
+
+	/**
+	 * Function calculates an optimal intermediate buffer length that will
+	 * cover all needs of the specified filtering steps.
+	 *
+	 * @param Steps Filtering steps.
+	 * @param[out] Vars Variables object, will receive buffer size and length.
+	 */
+
+	static void calcBufLen( CFilterSteps& Steps, CImageResizerVars& Vars )
+	{
+		int MaxPrefix = 0;
+		int MaxLen = 0;
+		int i;
+
+		for( i = 0; i < Steps.getItemCount(); i++ )
+		{
+			const CFilterStep& fs = Steps[ i ];
+
+			int l = fs.InPrefix;
+
+			if( l > MaxPrefix )
+			{
+				MaxPrefix = l;
+			}
+
+			l = fs.InLen + fs.InSuffix;
+
+			if( l > MaxLen )
+			{
+				MaxLen = l;
+			}
+
+			if( fs.IsUpsample )
+			{
+				l = fs.OutPrefix;
+
+				if( l > MaxPrefix )
+				{
+					MaxPrefix = l;
+				}
+
+				l = fs.OutLen + fs.OutSuffix;
+
+				if( l > MaxLen )
+				{
+					MaxLen = l;
+				}
+			}
+			else
+			{
+				l = fs.OutLen;
+
+				if( l > MaxLen )
+				{
+					MaxLen = l;
+				}
+			}
+		}
+
+		Vars.BufLen = MaxPrefix + MaxLen;
+		Vars.BufOffset = MaxPrefix;
+
+		if( Vars.elalign == 1 )
+		{
+			Vars.BufOffset *= Vars.ElCount;
+		}
+		else
+		{
+			Vars.BufIncr = Vars.BufLen;
+		}
+
+		Vars.BufLen *= Vars.ElCount;
 	}
 
 	/**
@@ -3019,24 +4200,24 @@ private:
 	 * step then the correction step.
 	 *
 	 * @param Steps Array that receives filtering steps.
+	 * @param[out] Vars Variables object, will receive buffer size and length.
 	 * @param SrcLen Source scanline's length in pixels.
 	 * @param NewLen New scanline's length in pixels.
-	 * @param ElCount Number of elements in each pixel (1..4), corresponds to
-	 * the number of channels in both source and destination images.
-	 * @param k Resizing coefficient, will be adjusted on return.
-	 * @param o Starting pixel offset inside the source image, will be
-	 * adjusted on return.
+	 * @param k Resizing coefficient.
+	 * @param o Starting pixel offset inside the source image.
+	 * @param DCGain The overall DC gain to apply. This DC gain is applied to
+	 * the first filter step only (upsampling or filtering step).
 	 */
 
-	void buildFilterSteps( CStructArray< CFilterStep >& Steps,
-		const int SrcLen, const int NewLen, const int ElCount, double& k,
-		double& o ) const
+	void buildFilterSteps( CFilterSteps& Steps, CImageResizerVars& Vars,
+		const int SrcLen, const int NewLen, double k, double o,
+		const double DCGain = 1.0 ) const
 	{
 		Steps.clear();
 
 		const double bw = 1.0 / k; // Resulting bandwidth.
-		const bool IsPreCorrection = ( bw >= 2.0 ); // True if correction
-			// filter should be applied before resizing step.
+		bool IsPreCorrection; // "True" if the correction filter is applied
+			// first.
 		double FltCutoff = ( k <= 1.0 ? 1.0 : 1.0 / k ); // Cutoff frequency
 			// of the first filter step.
 		const int UpsampleFactor = ( (int) floor( k ) < 2 ? 2 : 1 );
@@ -3046,51 +4227,48 @@ private:
 
 		if( UpsampleFactor > 1 )
 		{
-			assignFilterParams( Steps.add(), true, UpsampleFactor, FltCutoff,
-				k, o, NULL, SrcLen, ElCount );
+			IsPreCorrection = true;
+			prevfs = &Steps.add();
+			prevfs -> Vars = &Vars;
+			prevfs -> InLen = SrcLen;
+			prevfs -> InBuf = 0;
+			prevfs -> OutLen = SrcLen;
+			prevfs -> OutBuf = 1;
 
-			if( IsPreCorrection )
-			{
-				// Add pre-resizing correction to considerably reduce
-				// filtering overhead.
-
-				addCorrectionFilter( Steps, UpsampleFactor, k, o );
-			}
-
-			prevfs = &Steps[ Steps.getItemCount() - 1 ];
+			prevfs = assignFilterParams( Steps.add(), true, UpsampleFactor,
+				FltCutoff, k, o, prevfs, 0, NULL, DCGain );
 		}
 		else
 		{
+			IsPreCorrection = false;
 			prevfs = NULL;
+			double UseDCGain = DCGain;
 
 			while( true )
 			{
-				CFilterStep& fs = Steps.add();
-
 				if( FltCutoff > 0.125 )
 				{
-					assignFilterParams( fs, false,
+					prevfs = assignFilterParams( Steps.add(), false,
 						( FltCutoff > 0.25 ? 1 : 2 ), FltCutoff, k, o,
-						prevfs, SrcLen, ElCount );
+						prevfs, SrcLen, &Vars, UseDCGain );
 
-					prevfs = &fs;
 					break;
 				}
 
-				assignFilterParams( fs, false, 2, 0.0, k, o, prevfs, SrcLen,
-					ElCount );
+				prevfs = assignFilterParams( Steps.add(), false, 2, 0.0, k, o,
+					prevfs, SrcLen, &Vars, UseDCGain );
 
-				prevfs = &fs;
 				FltCutoff *= 2.0;
+				UseDCGain = 1.0;
 			}
 		}
 
-		// Insert resizing and post-correction steps.
+		// Insert resizing and correction steps.
 
 		CFilterStep& fs = Steps.add();
 		fs.IsUpsample = false;
 		fs.ResampleFactor = 0;
-		fs.ElCount = ElCount;
+		fs.Vars = &Vars;
 		fs.InLen = prevfs -> OutLen;
 		fs.InBuf = prevfs -> OutBuf;
 
@@ -3109,8 +4287,9 @@ private:
 		// Fill resizing positions buffer.
 
 		fs.RPosBuf.alloc( fs.OutLen );
-		CResizePos* rpos = &fs.RPosBuf[ 0 ];
+		typename CFilterStep :: CResizePos* rpos = &fs.RPosBuf[ 0 ];
 		int i;
+		const int em = ( fpclass :: elalign == 1 ? Vars.ElCount : 1 );
 
 		for( i = 0; i < fs.OutLen; i++ )
 		{
@@ -3118,16 +4297,16 @@ private:
 			const int SrcPosInt = (int) floor( SrcPos );
 			double x = ( SrcPos - SrcPosInt ) * FilterFracs;
 			const int fti = (int) x;
-			rpos -> x = (fptype) ( x - fti );
+			rpos -> x = (typename fpclass :: fptypeatom) ( x - fti );
 			rpos -> ftp = &FilterBank[ fti ];
-			rpos -> SrcOffs = ( SrcPosInt - FilterLenD21 ) * ElCount;
+			rpos -> SrcOffs = ( SrcPosInt - FilterLenD21 ) * em;
 			rpos++;
 		}
 
-		if( !IsPreCorrection )
-		{
-			addCorrectionFilter( Steps, bw, k, o );
-		}
+		addCorrectionFilter( Steps, ( bw >= 1.0 ? 1.0 : bw ), k, o,
+			IsPreCorrection );
+
+		//addSharpenTest( Steps, bw, k, o );
 
 		CFilterStep& lastfs = Steps[ Steps.getItemCount() - 1 ];
 		lastfs.OutBuf = 2;
@@ -3139,215 +4318,11 @@ private:
 
 		if( UpsampleFactor > 1 )
 		{
-			Steps[ 0 ].extendUpsample( Steps[ 1 ]);
+			Steps[ 1 ].extendUpsample( Steps[ 2 ]);
 		}
+
+		calcBufLen( Steps, Vars );
 	}
-
-	/**
-	 * Function calculates an optimal buffer size that will cover all needs of
-	 * the specified filtering steps.
-	 *
-	 * @param Steps Filtering steps.
-	 * @param BufSize This variable receives the required buffer size.
-	 * @param BufOffset This variable receives buffer offset that should be
-	 * used when passing the buffer pointer to the filtering functions.
-	 */
-
-	static void calcBufSize( const CStructArray< CFilterStep >& Steps,
-		int& BufSize, int& BufOffset )
-	{
-		int MaxPrefix = 0;
-		int MaxLen = 0;
-		int i;
-
-		for( i = 0; i < Steps.getItemCount(); i++ )
-		{
-			const CFilterStep& fs = Steps[ i ];
-
-			int l = fs.InPrefix * fs.ElCount;
-
-			if( l > MaxPrefix )
-			{
-				MaxPrefix = l;
-			}
-
-			l = ( fs.InLen + fs.InSuffix ) * fs.ElCount;
-
-			if( l > MaxLen )
-			{
-				MaxLen = l;
-			}
-
-			if( fs.IsUpsample )
-			{
-				l = fs.OutPrefix * fs.ElCount;
-
-				if( l > MaxPrefix )
-				{
-					MaxPrefix = l;
-				}
-
-				l = ( fs.OutLen + fs.OutSuffix ) * fs.ElCount;
-
-				if( l > MaxLen )
-				{
-					MaxLen = l;
-				}
-			}
-			else
-			{
-				l = fs.OutLen * fs.ElCount;
-
-				if( l > MaxLen )
-				{
-					MaxLen = l;
-				}
-			}
-		}
-
-		BufSize = MaxPrefix + MaxLen;
-		BufOffset = MaxPrefix;
-	}
-
-	/**
-	 * Function performs resizing of a single scanline. This function does
-	 * not "know" about the length of the source scanline buffer. This buffer
-	 * should be padded with enough pixels so that ( SrcPos - FilterLenD2 ) is
-	 * always >= 0 and ( SrcPos + ( DstLineLen - 1 ) * k + FilterLenD2 + 1 )
-	 * does not exceed source scanline's buffer length. SrcLine's increment is
-	 * assumed to be equal to ElCount.
-	 *
-	 * @param SrcLine Source scanline buffer.
-	 * @param DstLine Destination (resized) scanline buffer.
-	 * @param DstLineLen Required length of destination scanline, in pixels.
-	 * @param DstLineInc Destination scanline position increment, should be
-	 * divisible by ElCount.
-	 * @param ElCount Number of elements in each pixel (1..4), corresponds to
-	 * the number of channels in the image.
-	 * @param rpos Resizing positions buffer (length = DstLineLen).
-	 * @param aFilterLen Interpolation filter length.
-	 */
-
-	static void resizeLine( const fptype* SrcLine, fptype* DstLine,
-		int DstLineLen, const int DstLineInc, const int ElCount,
-		const CResizePos* rpos, const int aFilterLen )
-	{
-#define AVIR_RESIZE_PART1 \
-			while( DstLineLen > 0 ) \
-			{ \
-				const fptype x = rpos -> x; \
-				const fptype* ftp = rpos -> ftp; \
-				const fptype* Src = SrcLine + rpos -> SrcOffs; \
-				int l = aFilterLen;
-
-#define AVIR_RESIZE_PART2 \
-				DstLineLen--; \
-				DstLine += DstLineInc; \
-				rpos++; \
-			}
-
-		if( ElCount == 1 )
-		{
-			AVIR_RESIZE_PART1
-
-			fptype sum = 0.0;
-
-			while( l > 0 )
-			{
-				sum += ( ftp[ 0 ] + ftp[ 1 ] * x ) * Src[ 0 ];
-				ftp += 2;
-				Src++;
-				l--;
-			}
-
-			DstLine[ 0 ] = sum;
-
-			AVIR_RESIZE_PART2
-		}
-		else
-		if( ElCount == 4 )
-		{
-			AVIR_RESIZE_PART1
-
-			fptype sum[ 4 ];
-			sum[ 0 ] = 0.0;
-			sum[ 1 ] = 0.0;
-			sum[ 2 ] = 0.0;
-			sum[ 3 ] = 0.0;
-
-			while( l > 0 )
-			{
-				const fptype xx = ftp[ 0 ] + ftp[ 1 ] * x;
-				ftp += 2;
-				sum[ 0 ] += xx * Src[ 0 ];
-				sum[ 1 ] += xx * Src[ 1 ];
-				sum[ 2 ] += xx * Src[ 2 ];
-				sum[ 3 ] += xx * Src[ 3 ];
-				Src += 4;
-				l--;
-			}
-
-			DstLine[ 0 ] = sum[ 0 ];
-			DstLine[ 1 ] = sum[ 1 ];
-			DstLine[ 2 ] = sum[ 2 ];
-			DstLine[ 3 ] = sum[ 3 ];
-
-			AVIR_RESIZE_PART2
-		}
-		else
-		if( ElCount == 3 )
-		{
-			AVIR_RESIZE_PART1
-
-			fptype sum[ 3 ];
-			sum[ 0 ] = 0.0;
-			sum[ 1 ] = 0.0;
-			sum[ 2 ] = 0.0;
-
-			while( l > 0 )
-			{
-				const fptype xx = ftp[ 0 ] + ftp[ 1 ] * x;
-				ftp += 2;
-				sum[ 0 ] += xx * Src[ 0 ];
-				sum[ 1 ] += xx * Src[ 1 ];
-				sum[ 2 ] += xx * Src[ 2 ];
-				Src += 3;
-				l--;
-			}
-
-			DstLine[ 0 ] = sum[ 0 ];
-			DstLine[ 1 ] = sum[ 1 ];
-			DstLine[ 2 ] = sum[ 2 ];
-
-			AVIR_RESIZE_PART2
-		}
-		else
-		if( ElCount == 2 )
-		{
-			AVIR_RESIZE_PART1
-
-			fptype sum[ 2 ];
-			sum[ 0 ] = 0.0;
-			sum[ 1 ] = 0.0;
-
-			while( l > 0 )
-			{
-				const fptype xx = ftp[ 0 ] + ftp[ 1 ] * x;
-				ftp += 2;
-				sum[ 0 ] += xx * Src[ 0 ];
-				sum[ 1 ] += xx * Src[ 1 ];
-				Src += 2;
-				l--;
-			}
-
-			DstLine[ 0 ] = sum[ 0 ];
-			DstLine[ 1 ] = sum[ 1 ];
-
-			AVIR_RESIZE_PART2
-		}
-	}
-#undef AVIR_RESIZE_PART1
-#undef AVIR_RESIZE_PART2
 
 	/**
 	 * @brief Thread-isolated data used for scanline processing.
@@ -3357,9 +4332,11 @@ private:
 	 *
 	 * @tparam Tin Source element data type. Intermediate buffers store data
 	 * in floating point format.
+	 * @tparam Tout Destination element data type. Intermediate buffers store
+	 * data in floating point format.
 	 */
 
-	template< class Tin >
+	template< class Tin, class Tout >
 	class CThreadData : public CImageResizerThreadPool :: CWorkload
 	{
 	public:
@@ -3369,33 +4346,41 @@ private:
 		}
 
 		/**
+		 * This enumeration lists possible scanline operations.
+		 */
+
+		enum EScanlineOperation
+		{
+			sopResizeH, ///< Resize horizontal scanline.
+			sopResizeV, ///< Resize vertical scanline.
+			sopDitherAndUnpackH, ///< Dither and unpack scanline.
+			sopUnpackH ///< Unpack scanline.
+		};
+
+		/**
 		 * Function initializes *this thread data object and assigns certain
 		 * variables provided by the higher level code.
 		 *
 		 * @param aThreadIndex Index of this thread data (0-based).
 		 * @param aThreadCount Total number of threads used during processing.
-		 * @param aElCount Pixel element count.
 		 * @param aSteps Filtering steps.
-		 * @param aFilterLen Interpolation filter length.
+		 * @param aVars Image resizer variables.
 		 */
 
 		void init( const int aThreadIndex, const int aThreadCount,
-			const int aElCount, const CStructArray< CFilterStep >* aSteps,
-			const int aFilterLen )
+			const CFilterSteps& aSteps, const CImageResizerVars& aVars )
 		{
 			ThreadIndex = aThreadIndex;
 			ThreadCount = aThreadCount;
-			ElCount = aElCount;
-			Steps = aSteps;
-			FilterLen = aFilterLen;
+			Steps = &aSteps;
+			Vars = &aVars;
 		}
 
 		/**
 		 * Function initializes scanline processing queue, and updates
 		 * capacities of intermediate buffers.
 		 *
-		 * @param aIsVertical "True" if this queue uses vertical scanline
-		 * processing.
+		 * @param aOp Operation to perform over scanline.
 		 * @param TotalLines The total number of scanlines that will be
 		 * processed by all threads.
 		 * @param aSrcLen Source scanline length in pixels.
@@ -3405,19 +4390,15 @@ private:
 		 * horizontal scanline processing.
 		 */
 
-		void initScanlineQueue( const bool aIsVertical, const int TotalLines,
-			const int aSrcLen, const int aSrcIncr = 0,
+		void initScanlineQueue( const EScanlineOperation aOp,
+			const int TotalLines, const int aSrcLen, const int aSrcIncr = 0,
 			const int aResIncr = 0 )
 		{
-			int BufSize;
-			int BufOffset;
-			calcBufSize( *Steps, BufSize, BufOffset );
+			Bufs.alloc( Vars -> BufLen * 2, fpclass :: fpalign );
+			BufPtrs[ 0 ] = Bufs + Vars -> BufOffset;
+			BufPtrs[ 1 ] = BufPtrs[ 0 ] + Vars -> BufLen;
 
-			Bufs.alloc( BufSize * 2 );
-			BufPtrs[ 0 ] = Bufs + BufOffset;
-			BufPtrs[ 1 ] = BufPtrs[ 0 ] + BufSize;
-
-			IsVertical = aIsVertical;
+			ScanlineOp = aOp;
 			SrcLen = aSrcLen;
 			SrcIncr = aSrcIncr;
 			ResIncr = aResIncr;
@@ -3435,7 +4416,7 @@ private:
 		 * @param ResBuf Resulting scanline buffer.
 		 */
 
-		void addScanlineToQueue( void* const SrcBuf, fptype* const ResBuf )
+		void addScanlineToQueue( void* const SrcBuf, void* const ResBuf )
 		{
 			Queue[ QueueLen ].SrcBuf = SrcBuf;
 			Queue[ QueueLen ].ResBuf = ResBuf;
@@ -3450,22 +4431,66 @@ private:
 		{
 			int i;
 
-			if( IsVertical )
+			switch( ScanlineOp )
 			{
-				for( i = 0; i < QueueLen; i++ )
+				case sopResizeH:
 				{
-					processScanlineV( (fptype*) Queue[ i ].SrcBuf,
-						Queue[ i ].ResBuf );
+					for( i = 0; i < QueueLen; i++ )
+					{
+						resizeScanlineH( (Tin*) Queue[ i ].SrcBuf,
+							(fptype*) Queue[ i ].ResBuf );
+					}
+
+					break;
+				}
+
+				case sopResizeV:
+				{
+					for( i = 0; i < QueueLen; i++ )
+					{
+						resizeScanlineV( (fptype*) Queue[ i ].SrcBuf,
+							(fptype*) Queue[ i ].ResBuf );
+					}
+
+					break;
+				}
+
+				case sopDitherAndUnpackH:
+				{
+					for( i = 0; i < QueueLen; i++ )
+					{
+						Ditherer.dither( (fptype*) Queue[ i ].SrcBuf );
+
+						CFilterStep :: unpackScanline(
+							(fptype*) Queue[ i ].SrcBuf,
+							(Tout*) Queue[ i ].ResBuf, SrcLen, *Vars );
+					}
+
+					break;
+				}
+
+				case sopUnpackH:
+				{
+					for( i = 0; i < QueueLen; i++ )
+					{
+						CFilterStep :: unpackScanline(
+							(fptype*) Queue[ i ].SrcBuf,
+							(Tout*) Queue[ i ].ResBuf, SrcLen, *Vars );
+					}
+
+					break;
 				}
 			}
-			else
-			{
-				for( i = 0; i < QueueLen; i++ )
-				{
-					processScanlineH( (Tin*) Queue[ i ].SrcBuf,
-						Queue[ i ].ResBuf );
-				}
-			}
+		}
+
+		/**
+		 * Function returns ditherer object associated with *this thread data
+		 * object.
+		 */
+
+		CDitherer& getDitherer()
+		{
+			return( Ditherer );
 		}
 
 	private:
@@ -3473,19 +4498,17 @@ private:
 			///<
 		int ThreadCount; ///< Thread count.
 			///<
-		int ElCount; ///< Pixel element count.
+		const CFilterSteps* Steps; ///< Filtering steps.
 			///<
-		const CStructArray< CFilterStep >* Steps; ///< Filtering steps.
-			///<
-		int FilterLen; ///< Interpolation filter len.
+		const CImageResizerVars* Vars; ///< Image resizer variables.
 			///<
 		CBuffer< fptype > Bufs; ///< Flip-flop intermediate buffers.
 			///<
 		fptype* BufPtrs[ 3 ]; ///< Flip-flop buffer pointers (referenced by
 			///< filtering step's InBuf and OutBuf indices).
 			///<
-		bool IsVertical; ///< "True" if the last queue uses vertical scanline
-			///< processing.
+		EScanlineOperation ScanlineOp; ///< Operation to perform over
+			///< scanline.
 			///<
 		int SrcLen; ///< Source scanline length in the last queue.
 			///<
@@ -3493,6 +4516,8 @@ private:
 			///<
 		int ResIncr; ///< Resulting scanline buffer increment in the last
 			///< queue.
+			///<
+		CDitherer Ditherer; ///< Ditherer object to use.
 			///<
 
 		/**
@@ -3506,7 +4531,7 @@ private:
 			void* SrcBuf; ///< Source scanline buffer, will by typecasted to
 				///< Tin or fptype*.
 				///<
-			fptype* ResBuf; ///< Resulting scanline buffer.
+			void* ResBuf; ///< Resulting scanline buffer.
 				///<
 		};
 
@@ -3516,73 +4541,70 @@ private:
 			///<
 
 		/**
-		 * Function processes a single vertical scanline.
+		 * Function resizes a single horizontal scanline.
 		 *
 		 * @param SrcBuf Source scanline buffer. Can be either horizontal or
 		 * vertical.
 		 * @param ResBuf Resulting scanline buffer.
 		 */
 
-		void processScanlineV( const fptype* const SrcBuf,
-			fptype* const ResBuf )
+		void resizeScanlineH( const Tin* const SrcBuf, fptype* const ResBuf )
 		{
-			const fptype* ip = SrcBuf;
-			fptype* op = BufPtrs[ 0 ];
-			int j;
-
-			if( ElCount == 1 )
-			{
-				for( j = 0; j < SrcLen; j++ )
-				{
-					op[ 0 ] = ip[ 0 ];
-					ip += SrcIncr;
-					op++;
-				}
-			}
-			else
-			if( ElCount == 4 )
-			{
-				for( j = 0; j < SrcLen; j++ )
-				{
-					op[ 0 ] = ip[ 0 ];
-					op[ 1 ] = ip[ 1 ];
-					op[ 2 ] = ip[ 2 ];
-					op[ 3 ] = ip[ 3 ];
-					ip += SrcIncr;
-					op += 4;
-				}
-			}
-			else
-			if( ElCount == 3 )
-			{
-				for( j = 0; j < SrcLen; j++ )
-				{
-					op[ 0 ] = ip[ 0 ];
-					op[ 1 ] = ip[ 1 ];
-					op[ 2 ] = ip[ 2 ];
-					ip += SrcIncr;
-					op += 3;
-				}
-			}
-			else
-			if( ElCount == 2 )
-			{
-				for( j = 0; j < SrcLen; j++ )
-				{
-					op[ 0 ] = ip[ 0 ];
-					op[ 1 ] = ip[ 1 ];
-					ip += SrcIncr;
-					op += 2;
-				}
-			}
+			CFilterStep :: packScanline( SrcBuf, BufPtrs[ 0 ], SrcLen,
+				*Vars );
 
 			BufPtrs[ 2 ] = ResBuf;
+			int j;
 
 			for( j = 0; j < Steps -> getItemCount(); j++ )
 			{
 				const CFilterStep& fs = (*Steps)[ j ];
 				fs.prepareInBuf( BufPtrs[ fs.InBuf ]);
-				const int DstIncr = ( fs.OutBuf == 2 ? ResIncr : ElCount );
+
+				if( fs.ResampleFactor != 0 )
+				{
+					if( fs.IsUpsample )
+					{
+						fs.doUpsample( BufPtrs[ fs.InBuf ],
+							BufPtrs[ fs.OutBuf ]);
+					}
+					else
+					{
+						fs.doFilter( BufPtrs[ fs.InBuf ],
+							BufPtrs[ fs.OutBuf ], Vars -> ElCount );
+					}
+				}
+				else
+				{
+					fs.doResize( BufPtrs[ fs.InBuf ], BufPtrs[ fs.OutBuf ],
+						Vars -> ElCount );
+				}
+			}
+		}
+
+		/**
+		 * Function resizes a single vertical scanline.
+		 *
+		 * @param SrcBuf Source scanline buffer. Can be either horizontal or
+		 * vertical.
+		 * @param ResBuf Resulting scanline buffer.
+		 */
+
+		void resizeScanlineV( const fptype* const SrcBuf,
+			fptype* const ResBuf )
+		{
+			CFilterStep :: convertVtoH( SrcBuf, BufPtrs[ 0 ], SrcLen, SrcIncr,
+				*Vars );
+
+			BufPtrs[ 2 ] = ResBuf;
+			int j;
+
+			for( j = 0; j < Steps -> getItemCount(); j++ )
+			{
+				const CFilterStep& fs = (*Steps)[ j ];
+				fs.prepareInBuf( BufPtrs[ fs.InBuf ]);
+				const int DstIncr = ( fs.OutBuf == 2 ?
+					ResIncr : Vars -> ElCount );
 
 				if( fs.ResampleFactor != 0 )
 				{
@@ -3599,65 +4621,8 @@ private:
 				}
 				else
 				{
-					resizeLine( BufPtrs[ fs.InBuf ], BufPtrs[ fs.OutBuf ],
-						fs.OutLen, DstIncr, ElCount, fs.RPosBuf, FilterLen );
-				}
-			}
-		}
-
-		/**
-		 * Function processes a single horizontal scanline.
-		 *
-		 * @param SrcBuf Source scanline buffer. Can be either horizontal or
-		 * vertical.
-		 * @param ResBuf Resulting scanline buffer.
-		 */
-
-		void processScanlineH( const Tin* const SrcBuf,
-			fptype* const ResBuf )
-		{
-			bool IsDirectInput;
-
-			if( (*Steps)[ 0 ].IsUpsample && sizeof( Tin ) == sizeof( fptype ))
-			{
-				// This is not so reliable way to check for equality between
-				// Tin and fptype (typeinfo would be perfect), but should work
-				// in most practical cases.
-
-				IsDirectInput = true;
-			}
-			else
-			{
-				IsDirectInput = false;
-				copyArray( SrcBuf, BufPtrs[ 0 ], SrcLen * ElCount );
-			}
-
-			BufPtrs[ 2 ] = ResBuf;
-			int j;
-
-			for( j = 0; j < Steps -> getItemCount(); j++ )
-			{
-				const CFilterStep& fs = (*Steps)[ j ];
-				fs.prepareInBuf( BufPtrs[ fs.InBuf ]);
-
-				if( fs.ResampleFactor != 0 )
-				{
-					if( fs.IsUpsample )
-					{
-						fs.doUpsample(( j == 0 && IsDirectInput ?
-							(fptype*) SrcBuf : BufPtrs[ fs.InBuf ]),
-							BufPtrs[ fs.OutBuf ]);
-					}
-					else
-					{
-						fs.doFilter( BufPtrs[ fs.InBuf ],
-							BufPtrs[ fs.OutBuf ], ElCount );
-					}
-				}
-				else
-				{
-					resizeLine( BufPtrs[ fs.InBuf ], BufPtrs[ fs.OutBuf ],
-						fs.OutLen, ElCount, ElCount, fs.RPosBuf, FilterLen );
+					fs.doResize( BufPtrs[ fs.InBuf ], BufPtrs[ fs.OutBuf ],
+						DstIncr );
 				}
 			}
 		}

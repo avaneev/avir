@@ -21,9 +21,9 @@ consult the documentation for more details.
 
 ## Requirements ##
 C++ compiler and system with efficient "float" floating point (24-bit
-mantissa) type support. This library can also internally use the "double"
-floating point type during resizing if needed. This library does not have
-dependencies beside the standard C library.
+mantissa) type support. This library can also internally use the "double" and
+SIMD floating point types during resizing if needed. This library does not
+have dependencies beside the standard C library.
 
 ## Links ##
 * [Documentation](http://avaneev.atspace.cc/avir/Documentation/)
@@ -56,13 +56,29 @@ the code was suitably documented allowing you to make modifications, and to
 gain full understanding of the algorithm.
 
 Preliminary tests show that this library can resize 8-bit RGB 5184x3456
-(17.9 Mpixel) image down to 1037x691 (0.7 Mpixel) image in 380 milliseconds,
+(17.9 Mpixel) image down to 1037x691 (0.7 Mpixel) image in 355 milliseconds,
 utilizing a single thread, on a typical Intel Core i7-4770K processor-based
-system without overclocking. This scales down to 130 milliseconds if 4 threads
-are utilized. However, multi-threaded operation is not provided by this
-library "out of the box". The multi-threaded infrastructure is fully
-available, but requires additional system-specific interfacing code for
-engagement.
+system without overclocking. This scales down to 110 milliseconds if 4 threads
+are utilized. This time can be reduced further down to 80 milliseconds by
+utilizing SIMD floating point type. This library's performance has a big
+potential to grow together with evolving processor architectures as currently
+performance is clearly limited by memory bandwidth, not by algorithm's
+overhead.
+
+Multi-threaded operation is not provided by this library "out of the box".
+The multi-threaded infrastructure is fully available, but requires additional
+system-specific interfacing code for engagement.
+
+## SIMD Usage Information ##
+This library is capable of using SIMD floating point types for internal
+variables. This means that up to 4 color channels can be processed in
+parallel. For example, this gives 40% performance boost when downsizing
+3-channel images. During upsizing the boost is limited to 12%, but is still
+significant. Since the processing algorithm itself remains non-SIMD, the use
+of SIMD types is not practical for 1-channel image resizing (due to overhead).
+SIMD type can be used this way:
+* # include "avir_float4_sse.h"
+* avir :: CImageResizer< avir :: fpclass_float4 > ImageResizer( 8 );
 
 ## Notes ##
 This library was tested for compatibility with [GNU C++](http://gcc.gnu.org/),
@@ -94,11 +110,32 @@ steepness as to not cause ringing artifacts.
 
 This library includes a binary command line tool "imageresize" for major
 desktop platforms. This tool was designed to be used as a demonstration of
-library's performance and as a reference, it uses 4 threads during processing.
-This tool uses the following libraries:
+library's performance and as a reference, it uses 4 threads and float4 SIMD
+internal type during processing. This tool uses the following libraries:
 * turbojpeg Copyright (c) 2009-2013 D. R. Commander
 * libpng Copyright (c) 1998-2013 Glenn Randers-Pehrson
 * zlib Copyright (c) 1995-2013 Jean-loup Gailly and Mark Adler
+
+## Interpolation Discussion ##
+The use of certain low-pass filters and 2X upsampling in this library is
+hardly debatable, because they are needed to attain a certain anti-aliasing
+effect and keep ringing artifacts low. But the use of sinc function-based
+interpolation filter that is 18 taps-long can be questioned, because even in
+0th order case such interpolation filter requires 18 multiply-add operations.
+Comparatively, an optimal Hermit or cubic interpolation spline requires 8
+multiply and 11 add operations.
+
+One of the reasons 18-tap filter is preferred, is because due to memory
+bandwidth limitations using a lower-order filter does not provide any
+significant performance increase (e.g. 14-tap filter is less than 5% more
+efficient). At the same time, in comparison to cubic spline, 18-tap filter
+embeds a low-pass filter that rejects signal above 0.5*pi (provides additional
+anti-aliasing filtering), and this filter has a consistent shape at all
+fractional positions. Splines have a varying low-pass filter shape at
+different fractional positions (e.g. no low-pass filtering at 0.0 position,
+and maximal low-pass filtering at 0.5 position). 18-tap filter also offers a
+superior stop-band attenuation which almost guarantees absence of artifacts if
+the image is considerably sharpened afterwards.
 
 ## Users ##
 This library is used by:
