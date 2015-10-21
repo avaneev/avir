@@ -34,9 +34,9 @@ is a single front-end class for the whole library. You do not basically need
 to use nor understand any other classes beside this class.
 
 The code of the library resides in the "avir" C++ namespace, effectively
-isolating it from all other code. The code is thread-safe. You need just a
-single resizer object per running application, at any time, even when resizing
-images concurrently.
+isolating it from all other code. The code is thread-safe. You need just
+a single resizer object per running application, at any time, even when
+resizing images concurrently.
 
 To resize images in your application, simply add 3 lines of code:
 * # include "avir.h"
