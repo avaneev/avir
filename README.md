@@ -135,6 +135,33 @@ and maximal low-pass filtering at 0.5 offset). 18-tap filter also offers a
 superior stop-band attenuation which almost guarantees absence of artifacts if
 the image is considerably sharpened afterwards.
 
+## Why Peaked Cosine in AVIR? ##
+First of all, AVIR is a general solution to image resizing problem. That is
+why it should not be directly compared to "spline interpolation" or "Lanczos
+resampling", because the latter two are only means to design interpolation
+filters, and they can be implemented in a variety of ways, even in sub-optimal
+ways. Secondly, with only a minimal effort AVIR can be changed to use any
+existing interpolation formula and any window function, but this is just not
+needed.
+
+An effort was made to compare Peaked Cosine to Lanczos window function. Peaked
+Cosine has two degrees of freedom whereas Lanczos has only one degree of
+freedom. While both window functions can be used with acceptable results,
+Peaked Cosine window function used in automatic parameter optimization really
+pushes the limits of frequency response linearity, anti-aliasing strength and
+low-ringing performance which Lanczos cannot achieve. This is true at least
+when using a general-purpose downhill simplex optimization method.
+
+Among other window functions (Kaiser, Gaussian, Cauchy, Poisson, generalized
+cosine windows) there are no better candidates than Peaked Cosine as well.
+It looks like Peaked Cosine function's ability to create "desirable" pass-band
+ripples in the frequency response near the cutoff point contributes to its
+better overall quality. Somehow Peaked Cosine window function optimization
+manages to converge to reasonable states in most cases (that is why AVIR
+library comes with a set of equally robust, but distinctive parameter sets)
+whereas all other window functions tend to produce unpredictable optimization
+results.
+
 ## Users ##
 This library is used by:
 
