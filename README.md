@@ -145,22 +145,31 @@ existing interpolation formula and any window function, but this is just not
 needed.
 
 An effort was made to compare Peaked Cosine to Lanczos window function. Peaked
-Cosine has two degrees of freedom whereas Lanczos has only one degree of
-freedom. While both window functions can be used with acceptable results,
-Peaked Cosine window function used in automatic parameter optimization really
-pushes the limits of frequency response linearity, anti-aliasing strength and
-low-ringing performance which Lanczos cannot achieve. This is true at least
-when using a general-purpose downhill simplex optimization method.
+Cosine has two degrees of freedom whereas Lanczos has one degree of freedom.
+While both functions can be used with acceptable results, Peaked Cosine window
+function used in automatic parameter optimization really pushes the limits of
+frequency response linearity, anti-aliasing strength (stop-band attenuation)
+and low-ringing performance which Lanczos cannot usually achieve. This is true
+at least when using a general-purpose downhill simplex optimization method.
+Lanczos window has good (but not better) characteristics in several special
+cases which makes it of limited use in a general solution such as AVIR.
 
 Among other window functions (Kaiser, Gaussian, Cauchy, Poisson, generalized
-cosine windows) there are no better candidates than Peaked Cosine as well.
-It looks like Peaked Cosine function's ability to create "desirable" pass-band
-ripples in the frequency response near the cutoff point contributes to its
-better overall quality. Somehow Peaked Cosine window function optimization
-manages to converge to reasonable states in most cases (that is why AVIR
-library comes with a set of equally robust, but distinctive parameter sets)
-whereas all other window functions tend to produce unpredictable optimization
-results.
+cosine windows) there are no better candidates as well. It looks like Peaked
+Cosine function's scalability (it retains stable, almost continously-variable
+spectral characteristics at any window parameter values), and its ability to
+create "desirable" pass-band ripples in the frequency response near the cutoff
+point contribute to its better overall quality. Somehow Peaked Cosine window
+function optimization manages to converge to reasonable states in most cases
+(that is why AVIR library comes with a set of equally robust, but distinctive
+parameter sets) whereas all other window functions tend to produce
+unpredictable optimization results.
+
+The only disadvantage of Peaked Cosine window function is that usable filters
+windowed by this function tend to be longer than "usual" (with Kaiser window
+being the "golden standard" for filter length per decibel of stop-band
+attenuation). This is a price that should be paid for stable spectral
+characteristics.
 
 ## Users ##
 This library is used by:

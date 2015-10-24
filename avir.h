@@ -4289,13 +4289,11 @@ public:
 			}
 		}
 
+		Vars.k = ky;
+		Vars.o = oy;
+
 		if( UseBuildMode == PrevUseBuildMode && ky == kx )
 		{
-			if( oy != ox )
-			{
-				Vars.o = oy * Vars.k / ky;
-			}
-
 			if( OutMul != 1.0 )
 			{
 				modifyCorrFilterDCGain( FltSteps, 1.0 / OutMul );
@@ -4303,8 +4301,6 @@ public:
 		}
 		else
 		{
-			Vars.k = ky;
-			Vars.o = oy;
 			buildFilterSteps( FltSteps, Vars, FltBank, 1.0, UseBuildMode,
 				false );
 		}
@@ -4569,24 +4565,17 @@ private:
 	 * ResampleFactor if IsUpsample equals "true". If zero value was
 	 * specified, the "half-band" predefined filter will be created. In this
 	 * case the ResampleFactor will modify the filter cutoff point.
-	 * @param k Resizing coefficient at the previous processing step, may be
-	 * adjusted on return.
-	 * @param o Starting pixel offset inside the source image, may be adjusted
-	 * on return.
 	 * @param DCGain DC gain to apply to the filter. Assigned to filtering
 	 * step's DCGain variable.
 	 * @param UseFltOrig "True" if the originally-designed filter should be
-	 * left in filtering step's FltOrig buffer. Otherwise it will be freed. If
-	 * this parameter is equal to "true" and IsUpsample=false, the "k" and "o"
-	 * parameters will not be adjusted.
+	 * left in filtering step's FltOrig buffer. Otherwise it will be freed.
 	 * @param IsModel "True" if filtering steps modeling is performed without
 	 * actual filter building.
 	 */
 
 	void assignFilterParams( CFilterStep& fs, const bool IsUpsample,
-		const int ResampleFactor, const double FltCutoff, double& k,
-		double& o, const double DCGain, const bool UseFltOrig,
-		const bool IsModel ) const
+		const int ResampleFactor, const double FltCutoff, const double DCGain,
+		const bool UseFltOrig, const bool IsModel ) const
 	{
 		double FltAlpha;
 		double Len2;
@@ -4665,9 +4654,6 @@ private:
 
 		if( IsUpsample )
 		{
-			k *= ResampleFactor;
-			o *= ResampleFactor;
-
 			int l = fs.Flt.getCapacity() - fs.FltLatency - ResampleFactor -
 				FltExt;
 
@@ -4717,14 +4703,7 @@ private:
 		else
 		if( !UseFltOrig )
 		{
-			if( ResampleFactor > 1 )
-			{
-				k /= ResampleFactor;
-				o /= ResampleFactor;
-			}
-
 			fs.EdgePixelCount = fs.EdgePixelCountDef;
-			o += fs.EdgePixelCount;
 		}
 	}
 
@@ -4965,8 +4944,7 @@ private:
 	 * step then (possibly) the correction step.
 	 *
 	 * @param Steps Array that receives filtering steps.
-	 * @param[out] Vars Variables object, "k" and "o" will be updated to
-	 * reflect the actually used step during resizing.
+	 * @param[out] Vars Variables object.
 	 * @param FltBank Filter bank to initialize and use.
 	 * @param DCGain The overall DC gain to apply. This DC gain is applied to
 	 * the first filtering step only (upsampling or filtering step).
@@ -5008,11 +4986,10 @@ private:
 		{
 			IsPreCorrection = true;
 			Steps.add();
-			Vars.o += CFilterStep :: EdgePixelCountDef;
 
 			CFilterStep& fs = Steps.add();
-			assignFilterParams( fs, true, UpsampleFactor, FltCutoff,
-				Vars.k, Vars.o, DCGain, DoFltAndIntCombo, IsModel );
+			assignFilterParams( fs, true, UpsampleFactor, FltCutoff, DCGain,
+				DoFltAndIntCombo, IsModel );
 
 			IntCutoffMult = 2.0 / UpsampleFactor;
 			ReuseStep = NULL;
@@ -5045,7 +5022,7 @@ private:
 				if( DoHBFltAdd )
 				{
 					assignFilterParams( Steps.add(), false, DownsampleFactor,
-						0.0, Vars.k, Vars.o, 1.0, false, IsModel );
+						0.0, 1.0, false, IsModel );
 
 					FltCutoff *= DownsampleFactor;
 				}
@@ -5062,7 +5039,7 @@ private:
 
 			CFilterStep& fs = Steps.add();
 			assignFilterParams( fs, false, DownsampleFactor, FltCutoff,
-				Vars.k, Vars.o, DCGain, DoFltAndIntCombo, IsModel );
+				DCGain, DoFltAndIntCombo, IsModel );
 
 			IntCutoffMult = FltCutoff / 0.5;
 
@@ -5180,8 +5157,8 @@ private:
 	 *
 	 * @param Steps Array that receives filtering steps.
 	 * @param[out] Vars Variables object, will receive buffer size and length.
-	 * This function expects valid "k" and "o" variable values adjusted by the
-	 * buildFilterSteps() function.
+	 * This function expects "k" and "o" variable values that will be
+	 * adjusted by this function.
 	 * @param RPosBufArray Resizing position buffers array, used to obtain
 	 * buffer to initialize and use (will be reused if it is already fully or
 	 * partially filled).
@@ -5190,7 +5167,7 @@ private:
 	 */
 
 	static void updateFilterStepBuffers( CFilterSteps& Steps,
-		const CImageResizerVars& Vars,
+		CImageResizerVars& Vars,
 		typename CFilterStep :: CRPosBufArray& RPosBufArray, int SrcLen,
 		const int NewLen )
 	{
@@ -5210,6 +5187,8 @@ private:
 			if( fs.IsUpsample )
 			{
 				upstep = i;
+				Vars.k *= fs.ResampleFactor;
+				Vars.o *= fs.ResampleFactor;
 				fs.InPrefix = 0;
 				fs.InSuffix = 0;
 				fs.OutLen = fs.InLen * fs.ResampleFactor;
@@ -5255,6 +5234,10 @@ private:
 			}
 			else
 			{
+				Vars.k /= fs.ResampleFactor;
+				Vars.o /= fs.ResampleFactor;
+				Vars.o += fs.EdgePixelCount;
+
 				fs.InPrefix = fs.FltLatency;
 				fs.InSuffix = fs.Flt.getCapacity() - fs.FltLatency - 1;
 
