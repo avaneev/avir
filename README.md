@@ -135,6 +135,32 @@ and maximal low-pass filtering at 0.5 offset). 18-tap filter also offers a
 superior stop-band attenuation which almost guarantees absence of artifacts if
 the image is considerably sharpened afterwards.
 
+## Why 2X upsizing in AVIR? ##
+Classic approaches to image resizing do not perform an additional 2X upsizing.
+So, why such upsizing is needed at all in AVIR? Indeed, image resizing can be
+implemented using a single interpolation filter which is applied to the source
+image directly. However, such approach has limitations:
+
+First of all, interpolation filter (during upsizing) has to be tuned to a
+frequency close to pi (Nyquist) in order to reduce high-frequency smoothing,
+so there is not much space left for filter optimization. Beside that, filters
+with a corner frequency tuned to Nyquist frequency may become distorted in
+comparison to lower-frequency tuning (during downsizing). It's usually a good
+idea to have filter's stop-band start below Nyquist so that the transition
+band's shape remains stable at any setting.
+
+Secondly, filter has to be very short (5-7 taps) or otherwise the ringing
+artifacts will be very strong: it is a general rule that the steeper the
+filter is around signal being removed the higher the ringing artifacts. That
+is why it is preferred to move steep transitions into the spectral area with a
+quieter signal. A short filter also means it cannot provide a strong stop-band
+attenuation, so an interpolated image will look a bit edgy or not very clean
+due to stop-band artifacts.
+
+To sum up, only additional controlled 2X upsizing provides enough spectral
+space to design interpolation filter without visible ringing artifacts yet
+providing a strong stop-band attenuation and stable spectral characteristics.
+
 ## Why Peaked Cosine in AVIR? ##
 First of all, AVIR is a general solution to image resizing problem. That is
 why it should not be directly compared to "spline interpolation" or "Lanczos
