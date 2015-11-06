@@ -142,20 +142,22 @@ implemented using a single interpolation filter which is applied to the source
 image directly. However, such approach has limitations:
 
 First of all, interpolation filter (during upsizing) has to be tuned to a
-frequency close to pi (Nyquist) in order to reduce high-frequency smoothing,
-so there is not much space left for filter optimization. Beside that, filters
+frequency close to pi (Nyquist) in order to reduce high-frequency smoothing:
+this reduces the space left for filter optimization. Beside that, filters
 with a corner frequency tuned to Nyquist frequency may become distorted in
 comparison to lower-frequency tuning (during downsizing). It's usually a good
-idea to have filter's stop-band start below Nyquist so that the transition
-band's shape remains stable at any setting.
+idea to have filter's stop-band begin below Nyquist so that the transition
+band's shape remains stable at any setting. At the same time this complicates
+a further correction filtering, because correction filter may become too
+steep at the point where the stop-band beings.
 
 Secondly, filter has to be very short (5-7 taps) or otherwise the ringing
 artifacts will be very strong: it is a general rule that the steeper the
-filter is around signal being removed the higher the ringing artifacts. That
-is why it is preferred to move steep transitions into the spectral area with a
-quieter signal. A short filter also means it cannot provide a strong stop-band
-attenuation, so an interpolated image will look a bit edgy or not very clean
-due to stop-band artifacts.
+filter is around signal frequencies being removed the higher the ringing
+artifacts. That is why it is preferred to move steep transitions into the
+spectral area with a quieter signal. A short filter also means it cannot
+provide a strong stop-band attenuation, so an interpolated image will look a
+bit edgy or not very clean due to stop-band artifacts.
 
 To sum up, only additional controlled 2X upsizing provides enough spectral
 space to design interpolation filter without visible ringing artifacts yet
@@ -170,15 +172,16 @@ ways. Secondly, with only a minimal effort AVIR can be changed to use any
 existing interpolation formula and any window function, but this is just not
 needed.
 
-An effort was made to compare Peaked Cosine to Lanczos window function. Peaked
-Cosine has two degrees of freedom whereas Lanczos has one degree of freedom.
-While both functions can be used with acceptable results, Peaked Cosine window
-function used in automatic parameter optimization really pushes the limits of
-frequency response linearity, anti-aliasing strength (stop-band attenuation)
-and low-ringing performance which Lanczos cannot usually achieve. This is true
-at least when using a general-purpose downhill simplex optimization method.
-Lanczos window has good (but not better) characteristics in several special
-cases which makes it of limited use in a general solution such as AVIR.
+An effort was made to compare Peaked Cosine to Lanczos window function, and
+here is the author's opinion. Peaked Cosine has two degrees of freedom whereas
+Lanczos has one degree of freedom. While both functions can be used with
+acceptable results, Peaked Cosine window function used in automatic parameter
+optimization really pushes the limits of frequency response linearity,
+anti-aliasing strength (stop-band attenuation) and low-ringing performance
+which Lanczos cannot usually achieve. This is true at least when using a
+general-purpose downhill simplex optimization method. Lanczos window has good
+(but not better) characteristics in several special cases which makes it of
+limited use in a general solution such as AVIR.
 
 Among other window functions (Kaiser, Gaussian, Cauchy, Poisson, generalized
 cosine windows) there are no better candidates as well. It looks like Peaked
