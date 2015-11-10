@@ -1,4 +1,16 @@
+//$ nobt
 //$ nocpp
+
+/**
+ * @file avir_float4_sse.h
+ *
+ * @brief Inclusion file for the "float4" type.
+ *
+ * This file includes the "float4" SSE-based type used for SIMD variable
+ * storage and processing.
+ *
+ * AVIR Copyright (c) 2015 Aleksey Vaneev
+ */
 
 #ifndef AVIR_FLOAT4_SSE_INCLUDED
 #define AVIR_FLOAT4_SSE_INCLUDED
@@ -12,7 +24,7 @@ namespace avir {
  *
  * This class implements a packed 4-float type that can be used to perform
  * parallel computation using SIMD instructions on SSE-enabled processors.
- * This class can be used as the "fptype" argument of the avir::CImageResizer
+ * This class can be used as the "fptype" argument of the avir::fpclass_def
  * class.
  */
 
@@ -38,37 +50,6 @@ public:
 	{
 	}
 
-/*	float4( const float* const p )
-		: value( _mm_loadu_ps( p ))
-	{
-	}
-
-	float4( const float* const p, int lim )
-	{
-		if( lim > 2 )
-		{
-			if( lim > 3 )
-			{
-				value = _mm_loadu_ps( p );
-			}
-			else
-			{
-				value = _mm_set_ps( 0.0f, p[ 2 ], p[ 1 ], p[ 0 ]);
-			}
-		}
-		else
-		{
-			if( lim == 2 )
-			{
-				value = _mm_set_ps( 0.0f, 0.0f, p[ 1 ], p[ 0 ]);
-			}
-			else
-			{
-				value = _mm_load_ss( p );
-			}
-		}
-	}
-*/
 	float4& operator = ( const float4& s )
 	{
 		value = s.value;
@@ -92,10 +73,80 @@ public:
 		return( _mm_cvtss_f32( value ));
 	}
 
-/*	void storeu( float* const p ) const
+	/**
+	 * @param p Pointer to memory from where the value should be loaded,
+	 * should be 8-byte aligned.
+	 * @return float4 value loaded from the specified memory location.
+	 */
+
+	static float4 load( const float* const p )
+	{
+		return( _mm_load_ps( p ));
+	}
+
+	/**
+	 * @param p Pointer to memory from where the value should be loaded,
+	 * may have any alignment.
+	 * @return float4 value loaded from the specified memory location.
+	 */
+
+	static float4 loadu( const float* const p )
+	{
+		return( _mm_loadu_ps( p ));
+	}
+
+	/**
+	 * @param p Pointer to memory from where the value should be loaded,
+	 * may have any alignment.
+	 * @param lim The maximum number of elements to load, >0.
+	 * @return float4 value loaded from the specified memory location, with
+	 * elements beyond "lim" set to 0.
+	 */
+
+	static float4 loadu( const float* const p, int lim )
+	{
+		if( lim > 2 )
+		{
+			if( lim > 3 )
+			{
+				return( _mm_loadu_ps( p ));
+			}
+			else
+			{
+				return( _mm_set_ps( 0.0f, p[ 2 ], p[ 1 ], p[ 0 ]));
+			}
+		}
+		else
+		{
+			if( lim == 2 )
+			{
+				return( _mm_set_ps( 0.0f, 0.0f, p[ 1 ], p[ 0 ]));
+			}
+			else
+			{
+				return( _mm_load_ss( p ));
+			}
+		}
+	}
+
+	/**
+	 * Function stores *this value to the specified memory location.
+	 *
+	 * @param[out] p Output memory location, may have any alignment.
+	 */
+
+	void storeu( float* const p ) const
 	{
 		_mm_storeu_ps( p, value );
 	}
+
+	/**
+	 * Function stores "lim" lower elements of *this value to the specified
+	 * memory location.
+	 *
+	 * @param[out] p Output memory location, may have any alignment.
+	 * @param lim The number of lower elements to store, >0.
+	 */
 
 	void storeu( float* const p, int lim ) const
 	{
@@ -123,7 +174,7 @@ public:
 			}
 		}
 	}
-*/
+
 	float4& operator += ( const float4& s )
 	{
 		value = _mm_add_ps( value, s.value );
@@ -168,6 +219,44 @@ public:
 		return( _mm_div_ps( value, s.value ));
 	}
 
+	/**
+	 * @return Horizontal sum of elements.
+	 */
+
+	float hadd() const
+	{
+		const __m128 v = _mm_add_ps( value, _mm_movehl_ps( value, value ));
+		const __m128 res = _mm_add_ss( v, _mm_shuffle_ps( v, v, 1 ));
+		return( _mm_cvtss_f32( res ));
+	}
+
+	/**
+	 * Function performs in-place addition of a value located in memory and
+	 * the specified value.
+	 *
+	 * @param p Pointer to value where addition happens. May be unaligned.
+	 * @param v Value to add.
+	 */
+
+	static void addu( float* const p, const float4& v )
+	{
+		( loadu( p ) + v ).storeu( p );
+	}
+
+	/**
+	 * Function performs in-place addition of a value located in memory and
+	 * the specified value. Limited to the specfied number of elements.
+	 *
+	 * @param p Pointer to value where addition happens. May be unaligned.
+	 * @param v Value to add.
+	 * @param lim The element number limit, >0.
+	 */
+
+	static void addu( float* const p, const float4& v, const int lim )
+	{
+		( loadu( p, lim ) + v ).storeu( p, lim );
+	}
+
 	__m128 value; ///< Packed value of 4 floats.
 		///<
 };
@@ -207,6 +296,24 @@ inline float4 clamp( const float4& Value, const float4 minv,
 {
 	return( _mm_min_ps( _mm_max_ps( Value.value, minv.value ), maxv.value ));
 }
+
+template<>
+struct fpclass_reset< float4 >
+{
+	static void reset()
+	{
+		_mm_empty();
+	}
+};
+
+template<>
+struct fpclass_reset< const float4 >
+{
+	static void reset()
+	{
+		_mm_empty();
+	}
+};
 
 typedef fpclass_def< avir :: float4, float > fpclass_float4; ///<
 	///< Class that can be used as the "fpclass" template parameter of the

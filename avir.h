@@ -4,8 +4,7 @@
 /**
  * @file avir.h
  *
- * @brief The "main" and only inclusion file with all required classes and
- * functions.
+ * @brief The "main" inclusion file with all required classes and functions.
  *
  * This is the "main" inclusion file for the "AVIR" image resizer. This
  * inclusion file contains implementation of the AVIR image resizing algorithm
@@ -114,7 +113,7 @@
  * Please credit the author of this library in your documentation in the
  * following way: "AVIR image resizing algorithm designed by Aleksey Vaneev"
  *
- * @version 1.4
+ * @version 1.5
  */
 
 #ifndef AVIR_CIMAGERESIZER_INCLUDED
@@ -1156,7 +1155,7 @@ public:
 private:
 	double FilterLength; ///< Length of filter.
 		///<
-	int z; ///< Equals (int) floor( FilterLength * 0.5 ).
+	int z; ///< Equals (int) ceil( FilterLength * 0.5 ).
 		///<
 	int zi; ///< Equals "z" if z is even, or z + 1 if z is odd. Used as a
 		///< Kernels1 and Kernels2 size multiplier and kernel buffer increment
@@ -1853,12 +1852,12 @@ private:
 
 		for( i = 0; i < ResOffs; i++ )
 		{
-			op[ i ] = (fptype) 0.0;
+			op[ i ] = 0.0;
 		}
 
 		for( i = ResOffs + ResLen; i < FilterLen; i++ )
 		{
-			op[ i ] = (fptype) 0.0;
+			op[ i ] = 0.0;
 		}
 
 		op += ResOffs;
@@ -2638,7 +2637,7 @@ public:
 			while( l > 0 )
 			{
 				fptypeatom* v = (fptypeatom*) op + ElCountIO;
-				v[ 0 ] = (fptype) 0.0;
+				v[ 0 ] = 0.0;
 				op += ElCount;
 				l--;
 			}
@@ -2649,8 +2648,8 @@ public:
 			while( l > 0 )
 			{
 				fptypeatom* v = (fptypeatom*) op + ElCountIO;
-				v[ 0 ] = (fptype) 0.0;
-				v[ 1 ] = (fptype) 0.0;
+				v[ 0 ] = 0.0;
+				v[ 1 ] = 0.0;
 				op += ElCount;
 				l--;
 			}
@@ -2661,9 +2660,9 @@ public:
 			while( l > 0 )
 			{
 				fptypeatom* v = (fptypeatom*) op + ElCountIO;
-				v[ 0 ] = (fptype) 0.0;
-				v[ 1 ] = (fptype) 0.0;
-				v[ 2 ] = (fptype) 0.0;
+				v[ 0 ] = 0.0;
+				v[ 1 ] = 0.0;
+				v[ 2 ] = 0.0;
 				op += ElCount;
 				l--;
 			}
@@ -3808,7 +3807,7 @@ protected:
 };
 
 /**
- * @brief Image resizer's quasi-random dithering class.
+ * @brief Image resizer's quasi-random dithering class, interleaved mode.
  *
  * This ditherer implements a classic quasi-random dithering which looks OK
  * and whose results are compressed by PNG well.
@@ -3818,7 +3817,7 @@ protected:
  */
 
 template< class fptype >
-class CImageResizerDithererQRnd : public CImageResizerDithererDef< fptype >
+class CImageResizerDithererQRndINL : public CImageResizerDithererDef< fptype >
 {
 public:
 	/**
@@ -3905,6 +3904,28 @@ protected:
 };
 
 /**
+ * @brief Floating-point processing state reset class.
+ *
+ * This class implements type-dependent floating-point processing reset
+ * function which gets called at the end of the image resizing function. Such
+ * reset is usually required to switch from SSE to FPU mode, or otherwise to
+ * switch to a mode most probably expected by the caller. Default
+ * implementation does nothing.
+ */
+
+template< class fptype >
+struct fpclass_reset
+{
+	/**
+	 * Function performs floating-point processing state reset.
+	 */
+
+	static void reset()
+	{
+	}
+};
+
+/**
  * @brief Floating-point processing definition and abstraction class.
  *
  * This class defines several constants and typedefs that point to classes
@@ -3960,8 +3981,11 @@ public:
 	typedef CImageResizerFilterStepINL< fptype, fptypeatom > CFilterStep; ///<
 		///< Filtering step class to use during processing.
 		///<
-	typedef CImageResizerDithererQRnd< fptype > CDitherer; ///<
+	typedef CImageResizerDithererQRndINL< fptype > CDitherer; ///<
 		///< Ditherer class to use during processing.
+		///<
+	typedef fpclass_reset< fptype > CReset; ///< Floating-point processing
+		///< reset implementation class.
 		///<
 };
 
@@ -4334,6 +4358,7 @@ public:
 			ThreadPool.waitAllWorkloadsToFinish();
 			ThreadPool.removeAllWorkloads();
 
+			fpclass :: CReset :: reset();
 			return;
 		}
 
@@ -4378,6 +4403,8 @@ public:
 			td[ 0 ].processScanlineQueue();
 			ThreadPool.waitAllWorkloadsToFinish();
 			ThreadPool.removeAllWorkloads();
+
+			fpclass :: CReset :: reset();
 			return;
 		}
 
@@ -4436,6 +4463,8 @@ public:
 		}
 
 		ThreadPool.removeAllWorkloads();
+
+		fpclass :: CReset :: reset();
 	}
 
 private:
@@ -4552,7 +4581,7 @@ private:
 		while( Ext > 0 )
 		{
 			Ext--;
-			Flt[ ReqCapacity + Ext ] = (fptype) 0.0;
+			Flt[ ReqCapacity + Ext ] = 0.0;
 		}
 	}
 

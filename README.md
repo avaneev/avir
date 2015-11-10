@@ -74,10 +74,21 @@ This library is capable of using SIMD floating point types for internal
 variables. This means that up to 4 color channels can be processed in
 parallel. For example, this gives 40% performance boost when resizing
 3-channel images. Since the processing algorithm itself remains non-SIMD, the
-use of SIMD types is not practical for 1-channel image resizing (due to
-overhead). SIMD type can be used this way:
+use of SIMD internal types is not practical for 1-channel image resizing (due
+to overhead). SIMD internal type can be used this way:
 * # include "avir_float4_sse.h"
 * avir :: CImageResizer< avir :: fpclass_float4 > ImageResizer( 8 );
+
+For 1-channel and 2-channel image resizing when AVX instructions are allowed
+it is reasonable to utilize de-interleaved SIMD processing algorithm. While it
+gives no performance benefit if the "float4" SSE processing type is used, it
+offers around 35% performance boost if the "float8" AVX processing type is
+used (given dithering is not performed, or otherwise performance is reduced at
+dithering stage since recursive dithering cannot be parallelized). The
+internal type remains non-SIMD "float". De-interleaved algorithm can be used
+this way:
+* # include "avir_float8_avx.h"
+* avir :: CImageResizer< avir :: fpclass_float8_dil > ImageResizer( 8 );
 
 ## Notes ##
 This library was tested for compatibility with [GNU C++](http://gcc.gnu.org/),
@@ -126,10 +137,10 @@ interpolation spline requires 8 multiply and 11 add operations.
 One of the reasons 18-tap filter is preferred, is because due to memory
 bandwidth limitations using a lower-order filter does not provide any
 significant performance increase (e.g. 14-tap filter is less than 5% more
-efficient). At the same time, in comparison to cubic spline, 18-tap filter
-embeds a low-pass filter that rejects signal above 0.5*pi (provides additional
-anti-aliasing filtering), and this filter has a consistent shape at all
-fractional offsets. Splines have a varying low-pass filter shape at
+efficient overall). At the same time, in comparison to cubic spline, 18-tap
+filter embeds a low-pass filter that rejects signal above 0.5*pi (provides
+additional anti-aliasing filtering), and this filter has a consistent shape at
+all fractional offsets. Splines have a varying low-pass filter shape at
 different fractional offsets (e.g. no low-pass filtering at 0.0 offset,
 and maximal low-pass filtering at 0.5 offset). 18-tap filter also offers a
 superior stop-band attenuation which almost guarantees absence of artifacts if
@@ -187,7 +198,7 @@ Among other window functions (Kaiser, Gaussian, Cauchy, Poisson, generalized
 cosine windows) there are no better candidates as well. It looks like Peaked
 Cosine function's scalability (it retains stable, almost continously-variable
 spectral characteristics at any window parameter values), and its ability to
-create "desirable" pass-band ripples in the frequency response near the cutoff
+create "desirable" pass-band ripple in the frequency response near the cutoff
 point contribute to its better overall quality. Somehow Peaked Cosine window
 function optimization manages to converge to reasonable states in most cases
 (that is why AVIR library comes with a set of equally robust, but distinctive
