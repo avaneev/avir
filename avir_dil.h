@@ -711,13 +711,13 @@ public:
 	 */
 
 	void init( const int aLen, const CImageResizerVars& aVars,
-		const fptype aTrMul, const fptype aPkOut )
+		const double aTrMul, const double aPkOut )
 	{
 		Len = aLen;
 		Vars = &aVars;
 		LenE = aLen * Vars -> ElCount;
-		TrMul = aTrMul;
-		PkOut = aPkOut;
+		TrMul0 = aTrMul;
+		PkOut0 = aPkOut;
 	}
 
 	/**
@@ -740,6 +740,8 @@ public:
 	{
 		const int elalign = Vars -> elalign;
 		const fptypesimd c0 = 0.0;
+		const fptypesimd TrMul = (fptypesimd) TrMul0;
+		const fptypesimd PkOut = (fptypesimd) PkOut0;
 		int j;
 
 		for( j = 0; j < LenE - elalign; j += elalign )
@@ -764,9 +766,9 @@ protected:
 		///<
 	int LenE; ///< = LenE * ElCount.
 		///<
-	fptypesimd TrMul; ///< Bit-depth truncation multiplier.
+	double TrMul0; ///< Bit-depth truncation multiplier.
 		///<
-	fptypesimd PkOut; ///< Peak output value allowed.
+	double PkOut0; ///< Peak output value allowed.
 		///<
 };
 
@@ -795,13 +797,13 @@ public:
 	 */
 
 	void init( const int aLen, const CImageResizerVars& aVars,
-		const fptype aTrMul, const fptype aPkOut )
+		const double aTrMul, const double aPkOut )
 	{
 		Len = aLen;
 		Vars = &aVars;
 		LenE = aLen * Vars -> ElCount;
-		TrMul = aTrMul;
-		PkOut = aPkOut;
+		TrMul0 = aTrMul;
+		PkOut0 = aPkOut;
 
 		ResScanlineDith0.alloc( LenE + Vars -> ElCount, sizeof( fptype ));
 		ResScanlineDith = ResScanlineDith0 + Vars -> ElCount;
@@ -822,6 +824,8 @@ public:
 	{
 		const int ea = Vars -> elalign;
 		const fptypesimd c0 = 0.0;
+		const fptypesimd TrMul = (fptypesimd) TrMul0;
+		const fptypesimd PkOut = (fptypesimd) PkOut0;
 		int j;
 
 		for( j = 0; j < LenE - ea; j += ea )
@@ -882,9 +886,9 @@ protected:
 		///<
 	int LenE; ///< = LenE * ElCount.
 		///<
-	fptypesimd TrMul; ///< Bit-depth truncation multiplier.
+	double TrMul0; ///< Bit-depth truncation multiplier.
 		///<
-	fptypesimd PkOut; ///< Peak output value allowed.
+	double PkOut0; ///< Peak output value allowed.
 		///<
 	CBuffer< fptype > ResScanlineDith0; ///< Error propagation buffer for
 		///< dithering, first pixel unused.

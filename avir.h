@@ -113,7 +113,7 @@
  * Please credit the author of this library in your documentation in the
  * following way: "AVIR image resizing algorithm designed by Aleksey Vaneev"
  *
- * @version 1.5
+ * @version 1.6
  */
 
 #ifndef AVIR_CIMAGERESIZER_INCLUDED
@@ -3757,13 +3757,13 @@ public:
 	 */
 
 	void init( const int aLen, const CImageResizerVars& aVars,
-		const fptype aTrMul, const fptype aPkOut )
+		const double aTrMul, const double aPkOut )
 	{
 		Len = aLen;
 		Vars = &aVars;
 		LenE = aLen * Vars -> ElCount;
-		TrMul = aTrMul;
-		PkOut = aPkOut;
+		TrMul0 = aTrMul;
+		PkOut0 = aPkOut;
 	}
 
 	/**
@@ -3784,12 +3784,15 @@ public:
 
 	void dither( fptype* const ResScanline ) const
 	{
+		const fptype c0 = 0.0;
+		const fptype TrMul = (fptype) TrMul0;
+		const fptype PkOut = (fptype) PkOut0;
 		int j;
 
 		for( j = 0; j < LenE; j++ )
 		{
 			const fptype z0 = round( ResScanline[ j ] / TrMul ) * TrMul;
-			ResScanline[ j ] = clamp( z0, (fptype) 0.0, PkOut );
+			ResScanline[ j ] = clamp( z0, c0, PkOut );
 		}
 	}
 
@@ -3800,9 +3803,9 @@ protected:
 		///<
 	int LenE; ///< = LenE * ElCount.
 		///<
-	fptype TrMul; ///< Bit-depth truncation multiplier.
+	double TrMul0; ///< Bit-depth truncation multiplier.
 		///<
-	fptype PkOut; ///< Peak output value allowed.
+	double PkOut0; ///< Peak output value allowed.
 		///<
 };
 
@@ -3831,7 +3834,7 @@ public:
 	 */
 
 	void init( const int aLen, const CImageResizerVars& aVars,
-		const fptype aTrMul, const fptype aPkOut )
+		const double aTrMul, const double aPkOut )
 	{
 		CImageResizerDithererDef< fptype > :: init( aLen, aVars, aTrMul,
 			aPkOut );
@@ -3854,6 +3857,9 @@ public:
 	void dither( fptype* const ResScanline )
 	{
 		const int ElCount = Vars -> ElCount;
+		const fptype c0 = 0.0;
+		const fptype TrMul = (fptype) TrMul0;
+		const fptype PkOut = (fptype) PkOut0;
 		int j;
 
 		for( j = 0; j < LenE; j++ )
@@ -3868,7 +3874,7 @@ public:
 
 			const fptype z0 = round( ResScanline[ j ] / TrMul ) * TrMul;
 			const fptype Noise = ResScanline[ j ] - z0;
-			ResScanline[ j ] = clamp( z0, (fptype) 0.0, PkOut );
+			ResScanline[ j ] = clamp( z0, c0, PkOut );
 
 			ResScanline[ j + ElCount ] += Noise * (fptype) 0.4375;
 			ResScanlineDith[ j + ElCount ] += Noise * (fptype) 0.0625;
@@ -3880,7 +3886,7 @@ public:
 		{
 			const fptype z0 = round( ResScanline[ j ] / TrMul ) * TrMul;
 			const fptype Noise = ResScanline[ j ] - z0;
-			ResScanline[ j ] = clamp( z0, (fptype) 0.0, PkOut );
+			ResScanline[ j ] = clamp( z0, c0, PkOut );
 
 			ResScanlineDith[ j ] += Noise * (fptype) 0.3125;
 			ResScanlineDith[ j - ElCount ] += Noise * (fptype) 0.1875;
@@ -3892,8 +3898,8 @@ protected:
 	using CImageResizerDithererDef< fptype > :: Len;
 	using CImageResizerDithererDef< fptype > :: Vars;
 	using CImageResizerDithererDef< fptype > :: LenE;
-	using CImageResizerDithererDef< fptype > :: TrMul;
-	using CImageResizerDithererDef< fptype > :: PkOut;
+	using CImageResizerDithererDef< fptype > :: TrMul0;
+	using CImageResizerDithererDef< fptype > :: PkOut0;
 
 	CBuffer< fptype > ResScanlineDith0; ///< Error propagation buffer for
 		///< dithering, first pixel unused.
@@ -4150,7 +4156,7 @@ public:
 
 		const bool IsInFloat = ( (Tin) 0.4 != 0 );
 		const bool IsOutFloat = ( (Tout) 0.4 != 0 );
-		fptype OutMul; // Output multiplier.
+		double OutMul; // Output multiplier.
 
 		if( IsOutFloat )
 		{
@@ -4411,7 +4417,7 @@ public:
 		// Perform output with dithering (for integer output only).
 
 		int TruncBits; // The number of lower bits to truncate and dither.
-		fptype PkOut;
+		double PkOut;
 
 		if( sizeof( Tout ) == 1 )
 		{
@@ -4424,7 +4430,7 @@ public:
 			PkOut = 65535.0;
 		}
 
-		const fptype TrMul = (fptype) ( TruncBits > 0 ? 1 << TruncBits : 1 );
+		const double TrMul = (fptype) ( TruncBits > 0 ? 1 << TruncBits : 1 );
 
 		if( CDitherer :: isRecursive() )
 		{
