@@ -11,7 +11,7 @@
  * in its entirety. Also includes several classes and functions that can be
  * useful elsewhere.
  *
- * AVIR Copyright (c) 2015 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2016 Aleksey Vaneev
  *
  * @mainpage
  *
@@ -113,7 +113,7 @@
  * Please credit the author of this library in your documentation in the
  * following way: "AVIR image resizing algorithm designed by Aleksey Vaneev"
  *
- * @version 1.6
+ * @version 1.7
  */
 
 #ifndef AVIR_CIMAGERESIZER_INCLUDED
@@ -5007,36 +5007,45 @@ private:
 			// filter.
 
 		const double bw = 1.0 / Vars.k; // Resulting bandwidth.
-		bool IsPreCorrection; // "True" if the correction filter is applied
-			// first.
-		double FltCutoff = ( Vars.k <= 1.0 ? 1.0 : 1.0 / Vars.k ); // Cutoff
-			// frequency of the first filtering step.
 		const int UpsampleFactor = ( (int) floor( Vars.k ) < 2 ? 2 : 1 );
-
 		double IntCutoffMult; // Interpolation filter cutoff multiplier.
 		CFilterStep* ReuseStep; // If not NULL, resizing step should use
 			// this step object instead of creating a new one.
 		CFilterStep* ExtFltStep; // Use FltOrig of this step as the external
 			// filter to applied to the interpolator.
+		bool IsPreCorrection; // "True" if the correction filter is applied
+			// first.
+		double FltCutoff; // Cutoff frequency of the first filtering step.
+		double corrbw; ///< Bandwidth at the correction step.
+
+		if( Vars.k <= 1.0 )
+		{
+			IsPreCorrection = true;
+			FltCutoff = 1.0;
+			corrbw = 1.0;
+			Steps.add();
+		}
+		else
+		{
+			IsPreCorrection = false;
+			FltCutoff = bw;
+			corrbw = bw;
+		}
 
 		// Add 1 upsampling or several downsampling filters.
 
 		if( UpsampleFactor > 1 )
 		{
-			IsPreCorrection = true;
-			Steps.add();
-
 			CFilterStep& fs = Steps.add();
 			assignFilterParams( fs, true, UpsampleFactor, FltCutoff, DCGain,
 				DoFltAndIntCombo, IsModel );
 
-			IntCutoffMult = 2.0 / UpsampleFactor;
+			IntCutoffMult = FltCutoff * 2.0 / UpsampleFactor;
 			ReuseStep = NULL;
 			ExtFltStep = ( DoFltAndIntCombo ? &fs : NULL );
 		}
 		else
 		{
-			IsPreCorrection = false;
 			int DownsampleFactor;
 
 			while( true )
@@ -5116,8 +5125,7 @@ private:
 			fs.FltBank = &FltBank;
 		}
 
-		addCorrectionFilter( Steps, ( bw >= 1.0 ? 1.0 : bw ), IsPreCorrection,
-			IsModel );
+		addCorrectionFilter( Steps, corrbw, IsPreCorrection, IsModel );
 
 		//addSharpenTest( Steps, bw, IsModel );
 	}
