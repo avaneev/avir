@@ -13,6 +13,16 @@ performed) and then performs interpolation using a bank of sinc function-based
 fractional delay filters. On the last stage a correction filter is applied
 which fixes smoothing introduced on previous steps.
 
+The resizing algorithm was designed to provide the best visual quality. The
+author even believes this algorithm provides the "ultimate" level of
+quality which cannot be increased further: no math exists to provide a
+better frequency response, better anti-aliasing quality and at the same
+time having less ringing artifacts: these are 3 elements that define any
+resizing algorithm's quality; in AVIR practice these elements have 0.95
+correlation to each other, so they can be represented by any single
+element. Algorithm's time performance turned out to be very good as well
+(for the "ultimate" image quality).
+
 An important element utilized by this algorithm is the so called Peaked Cosine
 window function, which is applied over sinc function in all filters. Please
 consult the documentation for more details.
