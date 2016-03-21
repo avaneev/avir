@@ -1,11 +1,12 @@
 # AVIR #
 ## Introduction ##
-Me, Aleksey Vaneev, is happy to offer you an open source image resizing
-library which has reached a production level of quality, and is ready to be
-incorporated into any project. This library features routines for both down-
-and upsizing of 8- and 16-bit, 1 to 4-channel images. Image resizing routines
-were implemented in multi-platform C++ code, and have a high level of
-optimality. Beside resizing, this library offers a sub-pixel shift operation.
+Me, Aleksey Vaneev, is happy to offer you an open source image resizing /
+scaling library which has reached a production level of quality, and is
+ready to be incorporated into any project. This library features routines
+for both down- and upsizing of 8- and 16-bit, 1 to 4-channel images. Image
+resizing routines were implemented in multi-platform C++ code, and have a
+high level of optimality. Beside resizing, this library offers a sub-pixel
+shift operation.
 
 The resizing algorithm at first produces 2X upsized image (relative to the
 source image size, or relative to the destination image size if downsizing is
@@ -20,8 +21,9 @@ better frequency response, better anti-aliasing quality and at the same
 time having less ringing artifacts: these are 3 elements that define any
 resizing algorithm's quality; in AVIR practice these elements have 0.95
 correlation to each other, so they can be represented by any single
-element. Algorithm's time performance turned out to be very good as well
-(for the "ultimate" image quality).
+element (AVIR offers several parameter sets with varying quality).
+Algorithm's time performance turned out to be very good as well (for the
+"ultimate" image quality).
 
 An important element utilized by this algorithm is the so called Peaked Cosine
 window function, which is applied over sinc function in all filters. Please
@@ -66,17 +68,17 @@ the code was suitably documented allowing you to make modifications, and to
 gain full understanding of the algorithm.
 
 Preliminary tests show that this library can resize 8-bit RGB 5184x3456
-(17.9 Mpixel) image down to 1037x691 (0.7 Mpixel) image in 355 milliseconds,
+(17.9 Mpixel) image down to 1920x1280 (2.5 Mpixel) image in 566 milliseconds,
 utilizing a single thread, on a typical Intel Core i7-4770K processor-based
-system without overclocking. This scales down to 110 milliseconds if 4 threads
-are utilized. This time can be reduced further down to 80 milliseconds by
+system without overclocking. This scales down to 195 milliseconds if 4 threads
+are utilized. This time can be reduced further down to 148 milliseconds by
 utilizing SIMD floating point processing. This library's performance has a big
 potential to grow together with evolving processor architectures as currently
 performance is clearly limited by memory bandwidth, not by algorithm's
 mathematical operations and overhead.
 
 Multi-threaded operation is not provided by this library "out of the box".
-The multi-threaded infrastructure is fully available, but requires additional
+The multi-threaded infrastructure is available, but requires additional
 system-specific interfacing code for engagement.
 
 ## SIMD Usage Information ##
