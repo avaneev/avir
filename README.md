@@ -85,9 +85,10 @@ system-specific interfacing code for engagement.
 This library is capable of using SIMD floating point types for internal
 variables. This means that up to 4 color channels can be processed in
 parallel. For example, this gives 40% performance boost when resizing
-3-channel images. Since the processing algorithm itself remains non-SIMD, the
-use of SIMD internal types is not practical for 1-channel image resizing (due
-to overhead). SIMD internal type can be used this way:
+3-channel images. Since the default interleaved processing algorithm itself
+remains non-SIMD, the use of SIMD internal types is not practical for
+1-channel image resizing (due to overhead). SIMD internal type can be used
+this way:
 * # include "avir_float4_sse.h"
 * avir :: CImageResizer< avir :: fpclass_float4 > ImageResizer( 8 );
 
@@ -117,10 +118,10 @@ is proportionally large.
 
 The "heart" of resizing algorithm's quality resides in the parameters defined
 via the **avir::CImageResizerParams** structure. While the default set of
-parameters that offers a good quality was already provided, there is still a
-place for improvement exists, and the default parameters may change in a
-future update. If you need to recall an exact set of parameters, simply save
-them locally for a later use.
+parameters that offers a good quality was already provided, there is
+(probably) still a place for improvement exists, and the default parameters
+may change in a future update. If you need to recall an exact set of
+parameters, simply save them locally for a later use.
 
 When the algorithm is run with no resizing applied (k=1), the result of
 resizing will not be an exact, but a very close copy of the source image. The
@@ -141,10 +142,11 @@ internal type during processing. This tool uses the following libraries:
 The use of certain low-pass filters and 2X upsampling in this library is
 hardly debatable, because they are needed to attain a certain anti-aliasing
 effect and keep ringing artifacts low. But the use of sinc function-based
-interpolation filter that is 18 taps-long (may be higher in practice) can be
-questioned, because even in 0th order case such interpolation filter requires
-18 multiply-add operations. Comparatively, an optimal Hermit or cubic
-interpolation spline requires 8 multiply and 11 add operations.
+interpolation filter that is 18 taps-long (may be higher, up to 36 taps in
+practice) can be questioned, because even in 0th order case such
+interpolation filter requires 18 multiply-add operations. Comparatively, an
+optimal Hermit or cubic interpolation spline requires 8 multiply and 11 add
+operations.
 
 One of the reasons 18-tap filter is preferred, is because due to memory
 bandwidth limitations using a lower-order filter does not provide any
@@ -164,27 +166,36 @@ So, why such upsizing is needed at all in AVIR? Indeed, image resizing can be
 implemented using a single interpolation filter which is applied to the source
 image directly. However, such approach has limitations:
 
-First of all, interpolation filter (during upsizing) has to be tuned to a
-frequency close to pi (Nyquist) in order to reduce high-frequency smoothing:
-this reduces the space left for filter optimization. Beside that, filters
-with a corner frequency tuned to Nyquist frequency may become distorted in
-comparison to lower-frequency tuning (during downsizing). It's usually a good
-idea to have filter's stop-band begin below Nyquist so that the transition
-band's shape remains stable at any setting. At the same time this complicates
-a further correction filtering, because correction filter may become too
-steep at the point where the stop-band beings.
+First of all, speaking about non-2X-upsized resizing, during upsizing the
+interpolation filter has to be tuned to a frequency close to pi (Nyquist) in
+order to reduce high-frequency smoothing: this reduces the space left for
+filter optimization. Beside that, during downsizing, a filter that performs
+well and predictable when tuned to frequencies close to the Nyquist frequency,
+may become distorted in its spectral shape when it is tuned to lower
+frequencies. That is why it is usually a good idea to have filter's stop-band
+begin below Nyquist so that the transition band's shape remains stable at any
+lower-frequency setting. At the same time, this requirement complicates a
+further corrective filtering, because correction filter may become too steep
+at the point where the stop-band beings.
 
-Secondly, filter has to be very short (5-7 taps) or otherwise the ringing
-artifacts will be very strong: it is a general rule that the steeper the
-filter is around signal frequencies being removed the higher the ringing
-artifacts. That is why it is preferred to move steep transitions into the
-spectral area with a quieter signal. A short filter also means it cannot
-provide a strong stop-band attenuation, so an interpolated image will look a
-bit edgy or not very clean due to stop-band artifacts.
+Secondly, speaking about non-2X-upsized resizing, filter has to be very short
+(with a base length of 5-7 taps, further multiplied by the resizing factor) or
+otherwise the ringing artifacts will be very strong: it is a general rule that
+the steeper the filter is around signal frequencies being removed the higher
+the ringing artifacts. That is why it is preferred to move steep transitions
+into the spectral area with a quieter signal. A short filter also means it
+cannot provide a strong "beyond-Nyquist" stop-band attenuation, so an
+interpolated image will look a bit edgy or not very clean due to stop-band
+artifacts.
 
 To sum up, only additional controlled 2X upsizing provides enough spectral
 space to design interpolation filter without visible ringing artifacts yet
-providing a strong stop-band attenuation and stable spectral characteristics.
+providing a strong stop-band attenuation and stable spectral characteristics
+(good at any resizing "k" factor). Moreover, 2X upsizing becomes very
+important in maintaining a good resizing quality when downsizing and upsizing
+by small "k" factors, in the range 0.5 to 2: resizing approaches that do not
+perform 2X upsizing usually cannot design a good interpolation filter for such
+factors just because there is not enough spectral space available.
 
 ## Why Peaked Cosine in AVIR? ##
 First of all, AVIR is a general solution to image resizing problem. That is
