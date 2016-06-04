@@ -53,8 +53,11 @@ resizing images concurrently.
 To resize images in your application, simply add 3 lines of code:
 * # include "avir.h"
 * avir :: CImageResizer<> ImageResizer( 8 );
-* ImageResizer.resizeImage( ... );
+* ImageResizer.resizeImage( InBuf, 640, 480, 0, OutBuf, 1024, 768, 3, 0 );
 (multi-threaded operation requires additional coding, see the documentation)
+
+For low-ringing performance:
+* avir :: CImageResizer<> ImageResizer( 8, 0, avir :: CImageResizerParamsLR() );
 
 The library is able to process images of any bit depth: this includes 8-bit,
 16-bit, float and double types. Larger integer and signed integer types are
