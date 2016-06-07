@@ -9,7 +9,7 @@
  * This file includes the "CImageResizerFilterStepDIL" class which implements
  * image resizing functions in de-interleaved mode.
  *
- * AVIR Copyright (c) 2015 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2016 Aleksey Vaneev
  */
 
 namespace avir {
@@ -909,9 +909,11 @@ protected:
  * @tparam afptype Floating point type to use for storing intermediate data
  * and variables. SIMD types should not be used.
  * @tparam afptypesimd SIMD type used to perform processing.
+ * @tparam adith Ditherer class to use during processing.
  */
 
-template< class afptype, class afptypesimd >
+template< class afptype, class afptypesimd,
+	class adith = CImageResizerDithererDefDIL< afptype, afptypesimd > >
 class fpclass_def_dil
 {
 public:
@@ -938,8 +940,7 @@ public:
 	typedef CImageResizerFilterStepDIL< fptype, afptypesimd > CFilterStep; ///<
 		///< Filtering step class to use during processing.
 		///<
-	typedef CImageResizerDithererQRndDIL< fptype,
-		afptypesimd > CDitherer; ///< Ditherer class to use during processing.
+	typedef adith CDitherer; ///< Ditherer class to use during processing.
 		///<
 	typedef fpclass_reset< afptypesimd > CReset; ///< Floating-point
 		///< processing reset implementation class.

@@ -17,19 +17,30 @@
  *
  * @section intro_sec Introduction
  *
- * Me, Aleksey Vaneev, is happy to offer you an open source image resizing
- * library which has reached a production level of quality, and is ready to be
- * incorporated into any project. This library features routines for both
- * down- and upsizing of 8- and 16-bit, 1 to 4-channel images. Image resizing
- * routines were implemented in multi-platform C++ code, and have a high level
- * of optimality. Beside resizing, this library offers a sub-pixel shift
- * operation.
+ * Me, Aleksey Vaneev, is happy to offer you an open source image resizing /
+ * scaling library which has reached a production level of quality, and is
+ * ready to be incorporated into any project. This library features routines
+ * for both down- and upsizing of 8- and 16-bit, 1 to 4-channel images. Image
+ * resizing routines were implemented in multi-platform C++ code, and have a
+ * high level of optimality. Beside resizing, this library offers a sub-pixel
+ * shift operation.
  *
  * The resizing algorithm at first produces 2X upsized image (relative to the
  * source image size, or relative to the destination image size if downsizing
  * is performed) and then performs interpolation using a bank of sinc
  * function-based fractional delay filters. On the last stage a correction
  * filter is applied which fixes smoothing introduced on previous steps.
+ *
+ * The resizing algorithm was designed to provide the best visual quality. The
+ * author even believes this algorithm provides the "ultimate" level of
+ * quality which cannot be increased further: no math exists to provide a
+ * better frequency response, better anti-aliasing quality and at the same
+ * time having less ringing artifacts: these are 3 elements that define any
+ * resizing algorithm's quality; in AVIR practice these elements have 0.95
+ * correlation to each other, so they can be represented by any single
+ * element (AVIR offers several parameter sets with varying quality).
+ * Algorithm's time performance turned out to be very good as well (for the
+ * "ultimate" image quality).
  *
  * An important element utilized by this algorithm is the so called Peaked
  * Cosine window function, which is applied over sinc function in all filters.
@@ -41,7 +52,7 @@
  *
  * AVIR License Agreement
  *
- * AVIR Copyright (c) 2015 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2016 Aleksey Vaneev
  *
  * 1. AVIR image resizing software library and its parts and associated
  * documentation files (collectively, "AVIR") is licensed, not sold. AVIR and
@@ -113,7 +124,7 @@
  * Please credit the author of this library in your documentation in the
  * following way: "AVIR image resizing algorithm designed by Aleksey Vaneev"
  *
- * @version 1.7
+ * @version 1.8
  */
 
 #ifndef AVIR_CIMAGERESIZER_INCLUDED
@@ -3743,7 +3754,7 @@ public:
  */
 
 template< class fptype >
-class CImageResizerDithererDef
+class CImageResizerDithererDefINL
 {
 public:
 	/**
@@ -3820,7 +3831,8 @@ protected:
  */
 
 template< class fptype >
-class CImageResizerDithererQRndINL : public CImageResizerDithererDef< fptype >
+class CImageResizerDithererQRndINL :
+	public CImageResizerDithererDefINL< fptype >
 {
 public:
 	/**
@@ -3836,7 +3848,7 @@ public:
 	void init( const int aLen, const CImageResizerVars& aVars,
 		const double aTrMul, const double aPkOut )
 	{
-		CImageResizerDithererDef< fptype > :: init( aLen, aVars, aTrMul,
+		CImageResizerDithererDefINL< fptype > :: init( aLen, aVars, aTrMul,
 			aPkOut );
 
 		ResScanlineDith0.alloc( LenE + Vars -> ElCount, sizeof( fptype ));
@@ -3895,11 +3907,11 @@ public:
 	}
 
 protected:
-	using CImageResizerDithererDef< fptype > :: Len;
-	using CImageResizerDithererDef< fptype > :: Vars;
-	using CImageResizerDithererDef< fptype > :: LenE;
-	using CImageResizerDithererDef< fptype > :: TrMul0;
-	using CImageResizerDithererDef< fptype > :: PkOut0;
+	using CImageResizerDithererDefINL< fptype > :: Len;
+	using CImageResizerDithererDefINL< fptype > :: Vars;
+	using CImageResizerDithererDefINL< fptype > :: LenE;
+	using CImageResizerDithererDefINL< fptype > :: TrMul0;
+	using CImageResizerDithererDefINL< fptype > :: PkOut0;
 
 	CBuffer< fptype > ResScanlineDith0; ///< Error propagation buffer for
 		///< dithering, first pixel unused.
@@ -3958,9 +3970,11 @@ struct fpclass_reset
  * number (e.g. 16 for float4), without modification of the image resizing
  * algorithm required.
  * @tparam afptypeatom The atomic type the "afptype" consists of.
+ * @tparam adith Ditherer class to use during processing.
  */
 
-template< class afptype, class afptypeatom = afptype >
+template< class afptype, class afptypeatom = afptype,
+	class adith = CImageResizerDithererDefINL< afptype > >
 class fpclass_def
 {
 public:
@@ -3987,8 +4001,7 @@ public:
 	typedef CImageResizerFilterStepINL< fptype, fptypeatom > CFilterStep; ///<
 		///< Filtering step class to use during processing.
 		///<
-	typedef CImageResizerDithererQRndINL< fptype > CDitherer; ///<
-		///< Ditherer class to use during processing.
+	typedef adith CDitherer; ///< Ditherer class to use during processing.
 		///<
 	typedef fpclass_reset< fptype > CReset; ///< Floating-point processing
 		///< reset implementation class.
