@@ -6,7 +6,7 @@ ready to be incorporated into any project. This library features routines
 for both down- and upsizing of 8- and 16-bit, 1 to 4-channel images. Image
 resizing routines were implemented in multi-platform C++ code, and have a
 high level of optimality. Beside resizing, this library offers a sub-pixel
-shift operation.
+shift operation. Built-in sRGB gamma correction is available.
 
 The resizing algorithm at first produces 2X upsized image (relative to the
 source image size, or relative to the destination image size if downsizing is

@@ -52,7 +52,7 @@ public:
 
 	/**
 	 * Function performs "packing" (de-interleaving) of a scanline and type
-	 * conversion.
+	 * conversion. If required, the sRGB gamma correction is applied.
 	 *
 	 * @param ip0 Input scanline, pixel elements interleaved.
 	 * @param op0 Output scanline, pixel elements are grouped, "l" elements
@@ -67,16 +67,64 @@ public:
 		const int ElCount = Vars -> ElCount;
 		int j;
 
+		if( !Vars -> UseSRGBGamma )
+		{
+			for( j = 0; j < ElCount; j++ )
+			{
+				const Tin* ip = ip0 + j;
+				fptype* const op = op0 + j * InElIncr;
+				int i;
+
+				for( i = 0; i < l; i++ )
+				{
+					op[ i ] = (fptype) *ip;
+					ip += ElCount;
+				}
+			}
+		}
+		else
+		{
+			const fptype gm = (fptype) Vars -> InGammaMult;
+
+			for( j = 0; j < ElCount; j++ )
+			{
+				const Tin* ip = ip0 + j;
+				fptype* const op = op0 + j * InElIncr;
+				int i;
+
+				for( i = 0; i < l; i++ )
+				{
+					op[ i ] = convertSRGB2Lin( (fptype) *ip * gm );
+					ip += ElCount;
+				}
+			}
+		}
+	}
+
+	/**
+	 * Function applies Linear to sRGB gamma correction to the specified
+	 * scanline.
+	 *
+	 * @param p Scanline.
+	 * @param l The number of pixels to de-linearize.
+	 * @param Vars0 Image resizing-related variables.
+	 */
+
+	static void applySRGBGamma( fptype* const p0, const int l,
+		const CImageResizerVars& Vars0 )
+	{
+		const int ElCount = Vars0.ElCount;
+		const fptype gm = (fptype) Vars0.OutGammaMult;
+		int j;
+
 		for( j = 0; j < ElCount; j++ )
 		{
-			const Tin* ip = ip0 + j;
-			fptype* const op = op0 + j * InElIncr;
+			fptype* const p = p0 + j * l;
 			int i;
 
 			for( i = 0; i < l; i++ )
 			{
-				op[ i ] = (fptype) *ip;
-				ip += ElCount;
+				p[ i ] = convertLin2SRGB( p[ i ]) * gm;
 			}
 		}
 	}

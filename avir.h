@@ -124,7 +124,7 @@
  * Please credit the author of this library in your documentation in the
  * following way: "AVIR image resizing algorithm designed by Aleksey Vaneev"
  *
- * @version 1.8
+ * @version 1.9
  */
 
 #ifndef AVIR_CIMAGERESIZER_INCLUDED
@@ -194,6 +194,85 @@ inline T clamp( const T& Value, const T minv, const T maxv )
 	{
 		return( Value );
 	}
+}
+
+/**
+ * Power 2.4 approximation function, designed for sRGB gamma correction.
+ *
+ * @param x Argument, in the range 0.09 to 1.
+ * @return Value raised into power 2.4, approximate.
+ */
+
+template< class T >
+inline T pow24_sRGB( const T x )
+{
+	const double x2 = x * x;
+	const double x3 = x2 * x;
+	const double x4 = x2 * x2;
+
+	return( (T) ( 0.0985766365536824 + 0.839474952656502 * x2 +
+		0.363287814061725 * x3 - 0.0125559718896615 /
+		( 0.12758338921578 + 0.290283465468235 * x ) -
+		0.231757513261358 * x - 0.0395365717969074 * x4 ));
+}
+
+/**
+ * Power 1/2.4 approximation function, designed for sRGB gamma correction.
+ *
+ * @param x Argument, in the range 0.003 to 1.
+ * @return Value raised into power 1/2.4, approximate.
+ */
+
+template< class T >
+inline T pow24i_sRGB( const T x )
+{
+	const double sx = sqrt( x );
+	const double ssx = sqrt( sx );
+	const double sssx = sqrt( ssx );
+
+	return( (T) ( 0.000213364515060263 + 0.0149409239419218 * x +
+		0.433973412731747 * sx + ssx * ( 0.659628181609715 * sssx -
+		0.0380957908841466 - 0.0706476137208521 * sx )));
+}
+
+/**
+ * Function approximately linearizes the sRGB gamma value.
+ *
+ * @param s sRGB gamma value, in the range 0 to 1.
+ * @return Linearized sRGB gamma value, approximated.
+ */
+
+template< class T >
+inline T convertSRGB2Lin( const T s )
+{
+	const T a = 0.055;
+
+	if( s <= (T) 0.04045 )
+	{
+		return( s / (T) 12.92 );
+	}
+
+	return( pow24_sRGB(( s + a ) / ( (T) 1 + a )));
+}
+
+/**
+ * Function approximately de-linearizes the linear gamma value.
+ *
+ * @param s Linear gamma value, in the range 0 to 1.
+ * @return sRGB gamma value, approximated.
+ */
+
+template< class T >
+inline T convertLin2SRGB( const T s )
+{
+	const T a = 0.055;
+
+	if( s <= (T) 0.0031308 )
+	{
+		return( (T) 12.92 * s );
+	}
+
+	return(( (T) 1 + a ) * pow24i_sRGB( s ) - a );
 }
 
 /**
@@ -2289,6 +2368,7 @@ public:
 		///< and scanlines to have a length which is a multiple of this value,
 		///< for more efficient SIMD implementation. Value different to 1
 		///< also means image pixels are de-interleaved during processing.
+		///<
 	int BufLen[ 2 ]; ///< Intermediate buffers' lengths in "fptype" elements.
 	int BufOffs[ 2 ]; ///< Offsets into the intermediate buffers, used to
 		///< provide prefix elements required during processing so that no
@@ -2304,6 +2384,12 @@ public:
 	int ResizeStep; ///< Index of the resizing step in the latest filtering
 		///< steps array.
 		///<
+	double InGammaMult; ///< Input gamma multiplier, used to convert input
+		///< data to 0 to 1 range. 0.0 if no gamma is in use.
+		///<
+	double OutGammaMult; ///< Output gamma multiplier, used to convert data to
+		///< 0 to 255/65535 range. 0.0 if no gamma is in use.
+		///<
 
 	double ox; ///< Start X pixel offset within source image (can be
 		///< negative). Positive offset moves image to the left.
@@ -2314,6 +2400,8 @@ public:
 	CImageResizerThreadPool* ThreadPool; ///< Thread pool to be used by the
 		///< image resizing function. Set to NULL to use single-threaded
 		///< processing.
+		///<
+	bool UseSRGBGamma; ///< Perform sRGB gamma linearization (correction).
 		///<
 	int BuildMode; ///< The build mode to use, for debugging purposes. Set to
 		///< -1 to select a minimal-complexity mode automatically. All build
@@ -2328,6 +2416,7 @@ public:
 		: ox( 0.0 )
 		, oy( 0.0 )
 		, ThreadPool( NULL )
+		, UseSRGBGamma( false )
 		, BuildMode( -1 )
 		, RndSeed( 0 )
 	{
@@ -2570,7 +2659,8 @@ public:
 	/**
 	 * Function performs "packing" of a scanline and type conversion.
 	 * Scanline, depending on the "fptype" can be potentially stored as a
-	 * packed SIMD values having a certain atomic type.
+	 * packed SIMD values having a certain atomic type. If required, the sRGB
+	 * gamma correction is applied.
 	 *
 	 * @param ip Input scanline.
 	 * @param op0 Output scanline.
@@ -2585,57 +2675,118 @@ public:
 		fptype* op = op0;
 		int l = l0;
 
-		if( ElCountIO == 1 )
+		if( !Vars -> UseSRGBGamma )
 		{
-			while( l > 0 )
+			if( ElCountIO == 1 )
 			{
-				fptypeatom* v = (fptypeatom*) op;
-				v[ 0 ] = (fptype) ip[ 0 ];
-				op += ElCount;
-				ip++;
-				l--;
+				while( l > 0 )
+				{
+					fptypeatom* v = (fptypeatom*) op;
+					v[ 0 ] = (fptypeatom) ip[ 0 ];
+					op += ElCount;
+					ip++;
+					l--;
+				}
+			}
+			else
+			if( ElCountIO == 4 )
+			{
+				while( l > 0 )
+				{
+					fptypeatom* v = (fptypeatom*) op;
+					v[ 0 ] = (fptypeatom) ip[ 0 ];
+					v[ 1 ] = (fptypeatom) ip[ 1 ];
+					v[ 2 ] = (fptypeatom) ip[ 2 ];
+					v[ 3 ] = (fptypeatom) ip[ 3 ];
+					op += ElCount;
+					ip += 4;
+					l--;
+				}
+			}
+			else
+			if( ElCountIO == 3 )
+			{
+				while( l > 0 )
+				{
+					fptypeatom* v = (fptypeatom*) op;
+					v[ 0 ] = (fptypeatom) ip[ 0 ];
+					v[ 1 ] = (fptypeatom) ip[ 1 ];
+					v[ 2 ] = (fptypeatom) ip[ 2 ];
+					op += ElCount;
+					ip += 3;
+					l--;
+				}
+			}
+			else
+			if( ElCountIO == 2 )
+			{
+				while( l > 0 )
+				{
+					fptypeatom* v = (fptypeatom*) op;
+					v[ 0 ] = (fptypeatom) ip[ 0 ];
+					v[ 1 ] = (fptypeatom) ip[ 1 ];
+					op += ElCount;
+					ip += 2;
+					l--;
+				}
 			}
 		}
 		else
-		if( ElCountIO == 4 )
 		{
-			while( l > 0 )
+			const fptypeatom gm = (fptypeatom) Vars -> InGammaMult;
+
+			if( ElCountIO == 1 )
 			{
-				fptypeatom* v = (fptypeatom*) op;
-				v[ 0 ] = (fptype) ip[ 0 ];
-				v[ 1 ] = (fptype) ip[ 1 ];
-				v[ 2 ] = (fptype) ip[ 2 ];
-				v[ 3 ] = (fptype) ip[ 3 ];
-				op += ElCount;
-				ip += 4;
-				l--;
+				while( l > 0 )
+				{
+					fptypeatom* v = (fptypeatom*) op;
+					v[ 0 ] = convertSRGB2Lin( (fptypeatom) ip[ 0 ] * gm );
+					op += ElCount;
+					ip++;
+					l--;
+				}
 			}
-		}
-		else
-		if( ElCountIO == 3 )
-		{
-			while( l > 0 )
+			else
+			if( ElCountIO == 4 )
 			{
-				fptypeatom* v = (fptypeatom*) op;
-				v[ 0 ] = (fptype) ip[ 0 ];
-				v[ 1 ] = (fptype) ip[ 1 ];
-				v[ 2 ] = (fptype) ip[ 2 ];
-				op += ElCount;
-				ip += 3;
-				l--;
+				while( l > 0 )
+				{
+					fptypeatom* v = (fptypeatom*) op;
+					v[ 0 ] = convertSRGB2Lin( (fptypeatom) ip[ 0 ] * gm );
+					v[ 1 ] = convertSRGB2Lin( (fptypeatom) ip[ 1 ] * gm );
+					v[ 2 ] = convertSRGB2Lin( (fptypeatom) ip[ 2 ] * gm );
+					v[ 3 ] = convertSRGB2Lin( (fptypeatom) ip[ 3 ] * gm );
+					op += ElCount;
+					ip += 4;
+					l--;
+				}
 			}
-		}
-		else
-		if( ElCountIO == 2 )
-		{
-			while( l > 0 )
+			else
+			if( ElCountIO == 3 )
 			{
-				fptypeatom* v = (fptypeatom*) op;
-				v[ 0 ] = (fptype) ip[ 0 ];
-				v[ 1 ] = (fptype) ip[ 1 ];
-				op += ElCount;
-				ip += 2;
-				l--;
+				while( l > 0 )
+				{
+					fptypeatom* v = (fptypeatom*) op;
+					v[ 0 ] = convertSRGB2Lin( (fptypeatom) ip[ 0 ] * gm );
+					v[ 1 ] = convertSRGB2Lin( (fptypeatom) ip[ 1 ] * gm );
+					v[ 2 ] = convertSRGB2Lin( (fptypeatom) ip[ 2 ] * gm );
+					op += ElCount;
+					ip += 3;
+					l--;
+				}
+			}
+			else
+			if( ElCountIO == 2 )
+			{
+				while( l > 0 )
+				{
+					fptypeatom* v = (fptypeatom*) op;
+					v[ 0 ] = convertSRGB2Lin( (fptypeatom) ip[ 0 ] * gm );
+					v[ 1 ] = convertSRGB2Lin( (fptypeatom) ip[ 1 ] * gm );
+					op += ElCount;
+					ip += 2;
+					l--;
+				}
 			}
 		}
 
@@ -2648,7 +2799,7 @@ public:
 			while( l > 0 )
 			{
 				fptypeatom* v = (fptypeatom*) op + ElCountIO;
-				v[ 0 ] = 0.0;
+				v[ 0 ] = (fptypeatom) 0;
 				op += ElCount;
 				l--;
 			}
@@ -2659,8 +2810,8 @@ public:
 			while( l > 0 )
 			{
 				fptypeatom* v = (fptypeatom*) op + ElCountIO;
-				v[ 0 ] = 0.0;
-				v[ 1 ] = 0.0;
+				v[ 0 ] = (fptypeatom) 0;
+				v[ 1 ] = (fptypeatom) 0;
 				op += ElCount;
 				l--;
 			}
@@ -2671,10 +2822,77 @@ public:
 			while( l > 0 )
 			{
 				fptypeatom* v = (fptypeatom*) op + ElCountIO;
-				v[ 0 ] = 0.0;
-				v[ 1 ] = 0.0;
-				v[ 2 ] = 0.0;
+				v[ 0 ] = (fptypeatom) 0;
+				v[ 1 ] = (fptypeatom) 0;
+				v[ 2 ] = (fptypeatom) 0;
 				op += ElCount;
+				l--;
+			}
+		}
+	}
+
+	/**
+	 * Function applies Linear to sRGB gamma correction to the specified
+	 * scanline.
+	 *
+	 * @param p Scanline.
+	 * @param l The number of pixels to de-linearize.
+	 * @param Vars0 Image resizing-related variables.
+	 */
+
+	static void applySRGBGamma( fptype* p, int l,
+		const CImageResizerVars& Vars0 )
+	{
+		const int ElCount = Vars0.ElCount;
+		const int ElCountIO = Vars0.ElCountIO;
+		const fptypeatom gm = (fptypeatom) Vars0.OutGammaMult;
+
+		if( ElCountIO == 1 )
+		{
+			while( l > 0 )
+			{
+				fptypeatom* v = (fptypeatom*) p;
+				v[ 0 ] = convertLin2SRGB( v[ 0 ]) * gm;
+				p += ElCount;
+				l--;
+			}
+		}
+		else
+		if( ElCountIO == 4 )
+		{
+			while( l > 0 )
+			{
+				fptypeatom* v = (fptypeatom*) p;
+				v[ 0 ] = convertLin2SRGB( v[ 0 ]) * gm;
+				v[ 1 ] = convertLin2SRGB( v[ 1 ]) * gm;
+				v[ 2 ] = convertLin2SRGB( v[ 2 ]) * gm;
+				v[ 3 ] = convertLin2SRGB( v[ 3 ]) * gm;
+				p += ElCount;
+				l--;
+			}
+		}
+		else
+		if( ElCountIO == 3 )
+		{
+			while( l > 0 )
+			{
+				fptypeatom* v = (fptypeatom*) p;
+				v[ 0 ] = convertLin2SRGB( v[ 0 ]) * gm;
+				v[ 1 ] = convertLin2SRGB( v[ 1 ]) * gm;
+				v[ 2 ] = convertLin2SRGB( v[ 2 ]) * gm;
+				p += ElCount;
+				l--;
+			}
+		}
+		else
+		if( ElCountIO == 2 )
+		{
+			while( l > 0 )
+			{
+				fptypeatom* v = (fptypeatom*) p;
+				v[ 0 ] = convertLin2SRGB( v[ 0 ]) * gm;
+				v[ 1 ] = convertLin2SRGB( v[ 1 ]) * gm;
+				p += ElCount;
 				l--;
 			}
 		}
@@ -4171,18 +4389,44 @@ public:
 		const bool IsOutFloat = ( (Tout) 0.4 != 0 );
 		double OutMul; // Output multiplier.
 
-		if( IsOutFloat )
+		if( Vars.UseSRGBGamma )
 		{
+			if( IsInFloat )
+			{
+				Vars.InGammaMult = 1.0;
+			}
+			else
+			{
+				Vars.InGammaMult =
+					1.0 / ( sizeof( Tin ) == 1 ? 255.0 : 65535.0 );
+			}
+
+			if( IsOutFloat )
+			{
+				Vars.OutGammaMult = 1.0;
+			}
+			else
+			{
+				Vars.OutGammaMult = ( sizeof( Tout ) == 1 ? 255.0 : 65535.0 );
+			}
+
 			OutMul = 1.0;
 		}
 		else
 		{
-			OutMul = ( sizeof( Tout ) == 1 ? 255.0 : 65535.0 );
-		}
+			if( IsOutFloat )
+			{
+				OutMul = 1.0;
+			}
+			else
+			{
+				OutMul = ( sizeof( Tout ) == 1 ? 255.0 : 65535.0 );
+			}
 
-		if( !IsInFloat )
-		{
-			OutMul /= ( sizeof( Tin ) == 1 ? 255.0 : 65535.0 );
+			if( !IsInFloat )
+			{
+				OutMul /= ( sizeof( Tin ) == 1 ? 255.0 : 65535.0 );
+			}
 		}
 
 		// Fill widely-used variables.
@@ -4449,14 +4693,32 @@ public:
 		{
 			td[ 0 ].getDitherer().init( NewWidth, Vars, TrMul, PkOut );
 
-			for( i = 0; i < NewHeight; i++ )
+			if( Vars.UseSRGBGamma )
 			{
-				fptype* const ResScanline = &ResBuf[ i * NewWidthE ];
+				for( i = 0; i < NewHeight; i++ )
+				{
+					fptype* const ResScanline = &ResBuf[ i * NewWidthE ];
 
-				td[ 0 ].getDitherer().dither( ResScanline );
+					CFilterStep :: applySRGBGamma( ResScanline, NewWidth,
+						Vars );
 
-				CFilterStep :: unpackScanline( ResScanline,
-					&NewBuf[ i * NewWidth * ElCountIO ], NewWidth, Vars );
+					td[ 0 ].getDitherer().dither( ResScanline );
+
+					CFilterStep :: unpackScanline( ResScanline,
+						&NewBuf[ i * NewWidth * ElCountIO ], NewWidth, Vars );
+				}
+			}
+			else
+			{
+				for( i = 0; i < NewHeight; i++ )
+				{
+					fptype* const ResScanline = &ResBuf[ i * NewWidthE ];
+
+					td[ 0 ].getDitherer().dither( ResScanline );
+
+					CFilterStep :: unpackScanline( ResScanline,
+						&NewBuf[ i * NewWidth * ElCountIO ], NewWidth, Vars );
+				}
 			}
 		}
 		else
@@ -5741,13 +6003,30 @@ private:
 
 				case sopDitherAndUnpackH:
 				{
-					for( i = 0; i < QueueLen; i++ )
+					if( Vars -> UseSRGBGamma )
 					{
-						Ditherer.dither( (fptype*) Queue[ i ].SrcBuf );
+						for( i = 0; i < QueueLen; i++ )
+						{
+							CFilterStep :: applySRGBGamma(
+								(fptype*) Queue[ i ].SrcBuf, SrcLen, *Vars );
 
-						CFilterStep :: unpackScanline(
-							(fptype*) Queue[ i ].SrcBuf,
-							(Tout*) Queue[ i ].ResBuf, SrcLen, *Vars );
+							Ditherer.dither( (fptype*) Queue[ i ].SrcBuf );
+
+							CFilterStep :: unpackScanline(
+								(fptype*) Queue[ i ].SrcBuf,
+								(Tout*) Queue[ i ].ResBuf, SrcLen, *Vars );
+						}
+					}
+					else
+					{
+						for( i = 0; i < QueueLen; i++ )
+						{
+							Ditherer.dither( (fptype*) Queue[ i ].SrcBuf );
+
+							CFilterStep :: unpackScanline(
+								(fptype*) Queue[ i ].SrcBuf,
+								(Tout*) Queue[ i ].ResBuf, SrcLen, *Vars );
+						}
 					}
 
 					break;
@@ -5755,11 +6034,26 @@ private:
 
 				case sopUnpackH:
 				{
-					for( i = 0; i < QueueLen; i++ )
+					if( Vars -> UseSRGBGamma )
 					{
-						CFilterStep :: unpackScanline(
-							(fptype*) Queue[ i ].SrcBuf,
-							(Tout*) Queue[ i ].ResBuf, SrcLen, *Vars );
+						for( i = 0; i < QueueLen; i++ )
+						{
+							CFilterStep :: applySRGBGamma(
+								(fptype*) Queue[ i ].SrcBuf, SrcLen, *Vars );
+
+							CFilterStep :: unpackScanline(
+								(fptype*) Queue[ i ].SrcBuf,
+								(Tout*) Queue[ i ].ResBuf, SrcLen, *Vars );
+						}
+					}
+					else
+					{
+						for( i = 0; i < QueueLen; i++ )
+						{
+							CFilterStep :: unpackScanline(
+								(fptype*) Queue[ i ].SrcBuf,
+								(Tout*) Queue[ i ].ResBuf, SrcLen, *Vars );
+						}
 					}
 
 					break;
