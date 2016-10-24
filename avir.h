@@ -884,6 +884,36 @@ public:
 	}
 
 	/**
+	 * Function changes number of allocated items. New items are created with
+	 * the default constructor. If NewCount is below the current item count,
+	 * items that are above NewCount range will be destructed.
+	 *
+	 * @param NewCount New requested item count.
+	 */
+
+	void setItemCount( const int NewCount )
+	{
+		if( NewCount > ItemCount )
+		{
+			Items.increaseCapacity( NewCount );
+
+			while( ItemCount < NewCount )
+			{
+				Items[ ItemCount ] = new T();
+				ItemCount++;
+			}
+		}
+		else
+		{
+			while( ItemCount > NewCount )
+			{
+				ItemCount--;
+				delete Items[ ItemCount ];
+			}
+		}
+	}
+
+	/**
 	 * Function erases all items of *this array.
 	 */
 
@@ -4508,7 +4538,8 @@ public:
 		const int ThreadCount = ThreadPool.getSuggestedWorkloadCount();
 			// Includes the current thread.
 
-		CThreadData< Tin, Tout > td[ ThreadCount ];
+		CStructArray< CThreadData< Tin, Tout > > td;
+		td.setItemCount( ThreadCount );
 		int i;
 
 		for( i = 0; i < ThreadCount; i++ )
