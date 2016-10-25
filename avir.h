@@ -245,7 +245,7 @@ inline T pow24i_sRGB( const T x )
 template< class T >
 inline T convertSRGB2Lin( const T s )
 {
-	const T a = 0.055;
+	const T a = (T) 0.055;
 
 	if( s <= (T) 0.04045 )
 	{
@@ -265,7 +265,7 @@ inline T convertSRGB2Lin( const T s )
 template< class T >
 inline T convertLin2SRGB( const T s )
 {
-	const T a = 0.055;
+	const T a = (T) 0.055;
 
 	if( s <= (T) 0.0031308 )
 	{
@@ -3741,10 +3741,12 @@ public:
 	 * @param DstLine Destination (resized) scanline buffer.
 	 * @param DstLineIncr Destination scanline position increment, used for
 	 * horizontal or vertical scanline stepping.
+	 * @param xx Temporary buffer, of size FltBank -> getFilterLen(), must be
+	 * aligned by fpclass :: fpalign.
 	 */
 
 	void doResize( const fptype* SrcLine, fptype* DstLine,
-		const int DstLineIncr ) const
+		const int DstLineIncr, fptype* const ) const
 	{
 		const int IntFltLen = FltBank -> getFilterLen();
 		const int ElCount = Vars -> ElCount;
@@ -5974,6 +5976,21 @@ private:
 			BufPtrs[ 0 ] = Bufs + Vars -> BufOffs[ 0 ];
 			BufPtrs[ 1 ] = Bufs + Vars -> BufLen[ 0 ] + Vars -> BufOffs[ 1 ];
 
+			int j;
+			int ml = 0;
+
+			for( j = 0; j < Steps -> getItemCount(); j++ )
+			{
+				const CFilterStep& fs = (*Steps)[ j ];
+
+				if( fs.ResampleFactor == 0 &&
+					ml < fs.FltBank -> getFilterLen() )
+				{
+					ml = fs.FltBank -> getFilterLen();
+				}
+			}
+
+			TmpFltBuf.alloc( ml, fpclass :: fpalign );
 			ScanlineOp = aOp;
 			SrcLen = aSrcLen;
 			SrcIncr = aSrcIncr;
@@ -6116,6 +6133,9 @@ private:
 		fptype* BufPtrs[ 3 ]; ///< Flip-flop buffer pointers (referenced by
 			///< filtering step's InBuf and OutBuf indices).
 			///<
+		CBuffer< fptype > TmpFltBuf; ///< Temporary buffer used in the
+			///< doResize() function, aligned by fpclass :: fpalign.
+			///<
 		EScanlineOperation ScanlineOp; ///< Operation to perform over
 			///< scanline.
 			///<
@@ -6187,7 +6207,7 @@ private:
 				else
 				{
 					fs.doResize( BufPtrs[ fs.InBuf ], BufPtrs[ fs.OutBuf ],
-						DstIncr );
+						DstIncr, TmpFltBuf );
 				}
 			}
 		}
@@ -6232,7 +6252,7 @@ private:
 				else
 				{
 					fs.doResize( BufPtrs[ fs.InBuf ], BufPtrs[ fs.OutBuf ],
-						DstIncr );
+						DstIncr, TmpFltBuf );
 				}
 			}
 		}

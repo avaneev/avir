@@ -9,7 +9,7 @@
  * This file includes the "float8" AVX-based type used for SIMD variable
  * storage and processing.
  *
- * AVIR Copyright (c) 2015 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2016 Aleksey Vaneev
  */
 
 #ifndef AVIR_FLOAT8_AVX_INCLUDED
@@ -121,6 +121,17 @@ public:
 		}
 
 		return( _mm256_insertf128_ps( _mm256_castps128_ps256( lo ), hi, 1 ));
+	}
+
+	/**
+	 * Function stores *this value to the specified memory location.
+	 *
+	 * @param[out] p Output memory location, should be aligned.
+	 */
+
+	void store( float* const p ) const
+	{
+		_mm256_store_ps( p, value );
 	}
 
 	/**
@@ -322,8 +333,8 @@ inline float8 round( const float8& v )
  * @return The clamped value.
  */
 
-inline float8 clamp( const float8& Value, const float8 minv,
-	const float8 maxv )
+inline float8 clamp( const float8& Value, const float8& minv,
+	const float8& maxv )
 {
 	return( _mm256_min_ps( _mm256_max_ps( Value.value, minv.value ),
 		maxv.value ));

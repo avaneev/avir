@@ -522,10 +522,12 @@ public:
 	 * @param DstLine Destination (resized) scanline buffer.
 	 * @param DstLineIncr Destination scanline position increment, used for
 	 * horizontal or vertical scanline stepping.
+	 * @param xx Temporary buffer, of size FltBank -> getFilterLen(), must be
+	 * aligned by fpclass :: fpalign.
 	 */
 
 	void doResize( const fptype* SrcLine, fptype* DstLine,
-		int DstLineIncr ) const
+		int DstLineIncr, fptype* const xx ) const
 	{
 		const int IntFltLen = FltBank -> getFilterLen();
 		const int ElCount = Vars -> ElCount;
@@ -610,21 +612,19 @@ public:
 				{
 					AVIR_RESIZE_PART1
 
-					fptype xx[ IntFltLen ];
-
 					for( i = 0; i < IntFltLen; i += elalign )
 					{
 						( fptypesimd :: load( ftp + i ) +
-							fptypesimd :: load( ftp2 + i ) * x ).storeu(
+							fptypesimd :: load( ftp2 + i ) * x ).store(
 							xx + i );
 					}
 
-					fptypesimd sum = fptypesimd :: loadu( xx ) *
+					fptypesimd sum = fptypesimd :: load( xx ) *
 						fptypesimd :: loadu( Src );
 
 					for( i = elalign; i < IntFltLen; i += elalign )
 					{
-						sum += fptypesimd :: loadu( xx + i ) *
+						sum += fptypesimd :: load( xx + i ) *
 							fptypesimd :: loadu( Src + i );
 					}
 
@@ -674,22 +674,20 @@ public:
 			{
 				AVIR_RESIZE_PART1
 
-				fptype xx[ IntFltLen ];
-
 				for( i = 0; i < IntFltLen; i += elalign )
 				{
 					( fptypesimd :: load( ftp + i ) +
-						fptypesimd :: load( ftp2 + i ) * x ).storeu( xx + i );
+						fptypesimd :: load( ftp2 + i ) * x ).store( xx + i );
 				}
 
 				for( j = 0; j < ElCount; j++ )
 				{
-					fptypesimd sum = fptypesimd :: loadu( xx ) *
+					fptypesimd sum = fptypesimd :: load( xx ) *
 						fptypesimd :: loadu( Src );
 
 					for( i = elalign; i < IntFltLen; i += elalign )
 					{
-						sum += fptypesimd :: loadu( xx + i ) *
+						sum += fptypesimd :: load( xx + i ) *
 							fptypesimd :: loadu( Src + i );
 					}
 

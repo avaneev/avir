@@ -9,7 +9,7 @@
  * This file includes the "float4" SSE-based type used for SIMD variable
  * storage and processing.
  *
- * AVIR Copyright (c) 2015 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2016 Aleksey Vaneev
  */
 
 #ifndef AVIR_FLOAT4_SSE_INCLUDED
@@ -127,6 +127,17 @@ public:
 				return( _mm_load_ss( p ));
 			}
 		}
+	}
+
+	/**
+	 * Function stores *this value to the specified memory location.
+	 *
+	 * @param[out] p Output memory location, should be aligned.
+	 */
+
+	void store( float* const p ) const
+	{
+		_mm_store_ps( p, value );
 	}
 
 	/**
@@ -291,8 +302,8 @@ inline float4 round( const float4& v )
  * @return The clamped value.
  */
 
-inline float4 clamp( const float4& Value, const float4 minv,
-	const float4 maxv )
+inline float4 clamp( const float4& Value, const float4& minv,
+	const float4& maxv )
 {
 	return( _mm_min_ps( _mm_max_ps( Value.value, minv.value ), maxv.value ));
 }
