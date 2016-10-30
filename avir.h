@@ -4405,9 +4405,13 @@ public:
 		{
 			kx = k;
 			ky = k;
-			const double ko = ( k >= 1.0 ? ( k - 1.0 ) : k ) * 0.5;
-			ox += ko;
-			oy += ko;
+
+			if( k > 1.0 )
+			{
+				const double ko = ( k - 1.0 ) * 0.5;
+				ox += ko;
+				oy += ko;
+			}
 		}
 		else
 		{
