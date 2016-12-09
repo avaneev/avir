@@ -59,6 +59,11 @@ To resize images in your application, simply add 3 lines of code:
 For low-ringing performance:
 * avir :: CImageResizer<> ImageResizer( 8, 0, avir :: CImageResizerParamsLR() );
 
+To use the built-in gamma correction, an object of the avir::CImageResizerVars
+class with its variable UseSRGBGamma set to "true" should be supplied to the
+resizeImage() function. Note that the gamma correction is applied to all
+channels (e.g. alpha-channel) in the current implementation.
+
 The library is able to process images of any bit depth: this includes 8-bit,
 16-bit, float and double types. Larger integer and signed integer types are
 not supported. Supported source and destination image sizes are up to 2.1
@@ -239,6 +244,8 @@ characteristics.
 
 ## Users ##
 This library is used by:
+
+  * [Contaware.com](http://www.contaware.com/)
 
 Please drop me a note at aleksey.vaneev@gmail.com and I will include a link to
 your software product to the list of users. This list is important at
