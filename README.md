@@ -153,6 +153,12 @@ internal type during processing. This tool uses the following libraries:
 * libpng Copyright (c) 1998-2013 Glenn Randers-Pehrson
 * zlib Copyright (c) 1995-2013 Jean-loup Gailly and Mark Adler
 
+Note that you can disable gamma-correction with the `--gamma=false` switch.
+Sometimes gamma-correction produces "greenish/reddish/bluish haze" since
+low-amplitude oscillations produced by resizing on object boundaries are
+amplified by gamma correction. This can also have an effect of reduced
+contrast.
+
 ## Interpolation Discussion ##
 The use of certain low-pass filters and 2X upsampling in this library is
 hardly debatable, because they are needed to attain a certain anti-aliasing
