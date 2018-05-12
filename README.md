@@ -51,18 +51,23 @@ a single resizer object per running application, at any time, even when
 resizing images concurrently.
 
 To resize images in your application, simply add 3 lines of code:
-* # include "avir.h"
-* avir :: CImageResizer<> ImageResizer( 8 );
-* ImageResizer.resizeImage( InBuf, 640, 480, 0, OutBuf, 1024, 768, 3, 0 );
-(multi-threaded operation requires additional coding, see the documentation)
+
+    #include "avir.h"
+    avir :: CImageResizer<> ImageResizer( 8 );
+    ImageResizer.resizeImage( InBuf, 640, 480, 0, OutBuf, 1024, 768, 3, 0 );
+    (multi-threaded operation requires additional coding, see the documentation)
 
 For low-ringing performance:
-* avir :: CImageResizer<> ImageResizer( 8, 0, avir :: CImageResizerParamsLR() );
+
+    avir :: CImageResizer<> ImageResizer( 8, 0, avir :: CImageResizerParamsLR() );
 
 To use the built-in gamma correction, an object of the avir::CImageResizerVars
 class with its variable UseSRGBGamma set to "true" should be supplied to the
 resizeImage() function. Note that the gamma correction is applied to all
 channels (e.g. alpha-channel) in the current implementation.
+
+    avir :: CImageResizerVars Vars;
+    Vars.UseSRGBGamma = true;
 
 The library is able to process images of any bit depth: this includes 8-bit,
 16-bit, float and double types. Larger integer and signed integer types are
@@ -97,8 +102,9 @@ parallel. For example, this gives 40% performance boost when resizing
 remains non-SIMD, the use of SIMD internal types is not practical for
 1-channel image resizing (due to overhead). SIMD internal type can be used
 this way:
-* # include "avir_float4_sse.h"
-* avir :: CImageResizer< avir :: fpclass_float4 > ImageResizer( 8 );
+
+    #include "avir_float4_sse.h"
+    avir :: CImageResizer< avir :: fpclass_float4 > ImageResizer( 8 );
 
 For 1-channel and 2-channel image resizing when AVX instructions are allowed
 it is reasonable to utilize de-interleaved SIMD processing algorithm. While it
@@ -108,8 +114,9 @@ used (given dithering is not performed, or otherwise performance is reduced at
 dithering stage since recursive dithering cannot be parallelized). The
 internal type remains non-SIMD "float". De-interleaved algorithm can be used
 this way:
-* # include "avir_float8_avx.h"
-* avir :: CImageResizer< avir :: fpclass_float8_dil > ImageResizer( 8 );
+
+    #include "avir_float8_avx.h"
+    avir :: CImageResizer< avir :: fpclass_float8_dil > ImageResizer( 8 );
 
 ## Notes ##
 This library was tested for compatibility with [GNU C++](http://gcc.gnu.org/),
@@ -160,7 +167,7 @@ One of the reasons 18-tap filter is preferred, is because due to memory
 bandwidth limitations using a lower-order filter does not provide any
 significant performance increase (e.g. 14-tap filter is less than 5% more
 efficient overall). At the same time, in comparison to cubic spline, 18-tap
-filter embeds a low-pass filter that rejects signal above 0.5*pi (provides
+filter embeds a low-pass filter that rejects signal above 0.5\*pi (provides
 additional anti-aliasing filtering), and this filter has a consistent shape at
 all fractional offsets. Splines have a varying low-pass filter shape at
 different fractional offsets (e.g. no low-pass filtering at 0.0 offset,
