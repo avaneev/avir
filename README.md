@@ -16,12 +16,12 @@ which fixes smoothing introduced on previous steps.
 
 The resizing algorithm was designed to provide the best visual quality. The
 author even believes this algorithm provides the "ultimate" level of
-quality which cannot be increased further: no math exists to provide a
-better frequency response, better anti-aliasing quality and at the same
-time having less ringing artifacts: these are 3 elements that define any
-resizing algorithm's quality; in AVIR practice these elements have 0.95
-correlation to each other, so they can be represented by any single
-element (AVIR offers several parameter sets with varying quality).
+quality (for an orthogonal resizing) which cannot be increased further: no
+math exists to provide a better frequency response, better anti-aliasing
+quality and at the same time having less ringing artifacts: these are 3
+elements that define any resizing algorithm's quality; in AVIR practice these
+elements have 0.95 correlation to each other, so they can be represented by
+any single element (AVIR offers several parameter sets with varying quality).
 Algorithm's time performance turned out to be very good as well (for the
 "ultimate" image quality).
 
