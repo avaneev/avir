@@ -25,6 +25,12 @@ any single element (AVIR offers several parameter sets with varying quality).
 Algorithm's time performance turned out to be very good as well (for the
 "ultimate" image quality).
 
+Note that since AVIR implements orthogonal resizing, it may exhibit diagonal
+aliasing artifacts. These artifacts are usually suppressed by EWA or radial
+filtering techniques. EWA-like technique is not implemented in AVIR, because
+it requires considerably more computing resources and may produce a blurred
+image.
+
 An important element utilized by this algorithm is the so called Peaked Cosine
 window function, which is applied over sinc function in all filters. Please
 consult the documentation for more details.
