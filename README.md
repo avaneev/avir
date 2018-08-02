@@ -39,14 +39,16 @@ AVIR does not offer affine and non-linear image transformations "out of the
 box". Since upsizing is a relatively fast operation in AVIR (required time
 scales linearly with the output image area), affine and non-linear
 transformations can be implemented in steps: 4- to 8-times upsizing,
-transformation via bilinear interpolation, downsizing (linear affine
-transformations can probably skip the downsizing step). This should not
+transformation via bilinear interpolation, downsizing (linear proportional
+affine transformations can probably skip the downsizing step). This should not
 compromise the transformation quality much as bilinear interpolation's
 problems will mostly reside in spectral area without useful signal, with a
 maximum of 0.7 dB high-frequency attenuation for 4-times upsizing, and 0.17 dB
 attenuation for 8-times upsizing. This approach is probably as time efficient
 as performing a high-quality transform over the input image directly (the only
-serious drawback is the increased memory requirements).
+serious drawback is the increased memory requirements). Note that affine
+transformations that change image proportions should first apply proportion
+change during upsizing.
 
 *AVIR is devoted to women. Your digital photos can look good at any size!*
 
