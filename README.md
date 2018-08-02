@@ -36,9 +36,10 @@ it requires considerably more computing resources and may produce a blurred
 image.
 
 AVIR does not offer affine and non-linear image transformations "out of the
-box". Since upsizing is a relatively fast operation in AVIR, affine and
-non-linear transformations can be implemented in steps: 4- to 8-times
-upsizing, transformation via bilinear interpolation, downsizing (linear affine
+box". Since upsizing is a relatively fast operation in AVIR (required time
+scales linearly with the output image area), affine and non-linear
+transformations can be implemented in steps: 4- to 8-times upsizing,
+transformation via bilinear interpolation, downsizing (linear affine
 transformations can probably skip the downsizing step). This should not
 compromise the transformation quality much as bilinear interpolation's
 problems will mostly reside in spectral area without useful signal, with a
