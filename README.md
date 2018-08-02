@@ -25,15 +25,26 @@ any single element (AVIR offers several parameter sets with varying quality).
 Algorithm's time performance turned out to be very good as well (for the
 "ultimate" image quality).
 
+An important element utilized by this algorithm is the so called Peaked Cosine
+window function, which is applied over sinc function in all filters. Please
+consult the documentation for more details.
+
 Note that since AVIR implements orthogonal resizing, it may exhibit diagonal
 aliasing artifacts. These artifacts are usually suppressed by EWA or radial
 filtering techniques. EWA-like technique is not implemented in AVIR, because
 it requires considerably more computing resources and may produce a blurred
 image.
 
-An important element utilized by this algorithm is the so called Peaked Cosine
-window function, which is applied over sinc function in all filters. Please
-consult the documentation for more details.
+AVIR does not offer affine and non-linear image transformations "out of the
+box". Since upsizing is a relatively fast operation in AVIR, affine and
+non-linear transformations can be implemented in steps: 4- to 8-times
+upsizing, transformation via bilinear interpolation, downsizing (linear affine
+transformations can probably skip the downsizing step). This should not
+compromise the transformation quality much as bilinear interpolation's
+problems will mostly reside in spectral area without useful signal, with a
+maximum of 0.7 dB high-frequency attenuation for 4-times upsizing, and 0.17 dB
+attenuation for 8-times upsizing. This approach is probably as time efficient
+as performing the transform over the input image directly.
 
 *AVIR is devoted to women. Your digital photos can look good at any size!*
 
@@ -203,15 +214,15 @@ frequencies. That is why it is usually a good idea to have filter's stop-band
 begin below Nyquist so that the transition band's shape remains stable at any
 lower-frequency setting. At the same time, this requirement complicates a
 further corrective filtering, because correction filter may become too steep
-at the point where the stop-band beings.
+at the point where the stop-band begins.
 
 Secondly, speaking about non-2X-upsized resizing, filter has to be very short
 (with a base length of 5-7 taps, further multiplied by the resizing factor) or
 otherwise the ringing artifacts will be very strong: it is a general rule that
 the steeper the filter is around signal frequencies being removed the higher
-the ringing artifacts. That is why it is preferred to move steep transitions
-into the spectral area with a quieter signal. A short filter also means it
-cannot provide a strong "beyond-Nyquist" stop-band attenuation, so an
+the ringing artifacts are. That is why it is preferred to move steep
+transitions into the spectral area with a quieter signal. A short filter also
+means it cannot provide a strong "beyond-Nyquist" stop-band attenuation, so an
 interpolated image will look a bit edgy or not very clean due to stop-band
 artifacts.
 
@@ -241,8 +252,8 @@ optimization really pushes the limits of frequency response linearity,
 anti-aliasing strength (stop-band attenuation) and low-ringing performance
 which Lanczos cannot usually achieve. This is true at least when using a
 general-purpose downhill simplex optimization method. Lanczos window has good
-(but not better) characteristics in several special cases which makes it of
-limited use in a general solution such as AVIR.
+(but not better) characteristics in several special cases (certain "k"
+factors) which makes it of limited use in a general solution such as AVIR.
 
 Among other window functions (Kaiser, Gaussian, Cauchy, Poisson, generalized
 cosine windows) there are no better candidates as well. It looks like Peaked
