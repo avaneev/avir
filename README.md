@@ -44,7 +44,8 @@ compromise the transformation quality much as bilinear interpolation's
 problems will mostly reside in spectral area without useful signal, with a
 maximum of 0.7 dB high-frequency attenuation for 4-times upsizing, and 0.17 dB
 attenuation for 8-times upsizing. This approach is probably as time efficient
-as performing the transform over the input image directly.
+as performing a high-quality transform over the input image directly (the only
+serious drawback is the increased memory requirements).
 
 *AVIR is devoted to women. Your digital photos can look good at any size!*
 
