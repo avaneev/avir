@@ -9,7 +9,7 @@
  * This file includes the "float4" SSE-based type used for SIMD variable
  * storage and processing.
  *
- * AVIR Copyright (c) 2015-2016 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2018 Aleksey Vaneev
  */
 
 #ifndef AVIR_FLOAT4_SSE_INCLUDED
@@ -75,7 +75,7 @@ public:
 
 	/**
 	 * @param p Pointer to memory from where the value should be loaded,
-	 * should be 8-byte aligned.
+	 * should be 16-byte aligned.
 	 * @return float4 value loaded from the specified memory location.
 	 */
 
@@ -132,7 +132,7 @@ public:
 	/**
 	 * Function stores *this value to the specified memory location.
 	 *
-	 * @param[out] p Output memory location, should be aligned.
+	 * @param[out] p Output memory location, should be 16-byte aligned.
 	 */
 
 	void store( float* const p ) const

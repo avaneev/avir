@@ -9,7 +9,7 @@
  * This file includes the "CImageResizerFilterStepDIL" class which implements
  * image resizing functions in de-interleaved mode.
  *
- * AVIR Copyright (c) 2015-2016 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2018 Aleksey Vaneev
  */
 
 namespace avir {
@@ -57,7 +57,7 @@ public:
 	 * @param ip0 Input scanline, pixel elements interleaved.
 	 * @param op0 Output scanline, pixel elements are grouped, "l" elements
 	 * apart.
-	 * @param l The number of pixels to "unpack".
+	 * @param l The number of pixels to "pack".
 	 */
 
 	template< class Tin >
@@ -612,19 +612,12 @@ public:
 				{
 					AVIR_RESIZE_PART1
 
+					fptypesimd sum = 0.0;
+
 					for( i = 0; i < IntFltLen; i += elalign )
 					{
-						( fptypesimd :: load( ftp + i ) +
-							fptypesimd :: load( ftp2 + i ) * x ).store(
-							xx + i );
-					}
-
-					fptypesimd sum = fptypesimd :: load( xx ) *
-						fptypesimd :: loadu( Src );
-
-					for( i = elalign; i < IntFltLen; i += elalign )
-					{
-						sum += fptypesimd :: load( xx + i ) *
+						sum += ( fptypesimd :: load( ftp + i ) +
+							fptypesimd :: load( ftp2 + i ) * x ) *
 							fptypesimd :: loadu( Src + i );
 					}
 
@@ -735,7 +728,7 @@ public:
  * operations over horizontal scanline pixels before scanline is stored in the
  * output buffer.
  *
- * This ditherer implementation uses de-interlaved SIMD algorithm.
+ * This ditherer implementation uses de-interleaved SIMD algorithm.
  *
  * @tparam fptype Floating point type to use for storing pixel data. SIMD
  * types cannot be used.
@@ -786,23 +779,45 @@ public:
 	{
 		const int elalign = Vars -> elalign;
 		const fptypesimd c0 = 0.0;
-		const fptypesimd TrMul = (fptypesimd) TrMul0;
 		const fptypesimd PkOut = (fptypesimd) PkOut0;
 		int j;
 
-		for( j = 0; j < LenE - elalign; j += elalign )
+		if( TrMul0 == 1.0 )
 		{
+			// Optimization - do not perform bit truncation.
+
+			for( j = 0; j < LenE - elalign; j += elalign )
+			{
+				const fptypesimd z0 = round(
+					fptypesimd :: loadu( ResScanline + j ));
+
+				clamp( z0, c0, PkOut ).storeu( ResScanline + j );
+			}
+
+			const int lim = LenE - j;
 			const fptypesimd z0 = round(
-				fptypesimd :: loadu( ResScanline + j ) / TrMul ) * TrMul;
+				fptypesimd :: loadu( ResScanline + j, lim ));
 
-			clamp( z0, c0, PkOut ).storeu( ResScanline + j );
+			clamp( z0, c0, PkOut ).storeu( ResScanline + j, lim );
 		}
+		else
+		{
+			const fptypesimd TrMul = (fptypesimd) TrMul0;
 
-		const int lim = LenE - j;
-		const fptypesimd z0 = round(
-			fptypesimd :: loadu( ResScanline + j, lim ) / TrMul ) * TrMul;
+			for( j = 0; j < LenE - elalign; j += elalign )
+			{
+				const fptypesimd z0 = round(
+					fptypesimd :: loadu( ResScanline + j ) / TrMul ) * TrMul;
 
-		clamp( z0, c0, PkOut ).storeu( ResScanline + j, lim );
+				clamp( z0, c0, PkOut ).storeu( ResScanline + j );
+			}
+
+			const int lim = LenE - j;
+			const fptypesimd z0 = round(
+				fptypesimd :: loadu( ResScanline + j, lim ) / TrMul ) * TrMul;
+
+			clamp( z0, c0, PkOut ).storeu( ResScanline + j, lim );
+		}
 	}
 
 protected:
@@ -821,8 +836,9 @@ protected:
 /**
  * @brief Image resizer's quasi-random dithering class, de-interleaved mode.
  *
- * This ditherer implements a classic quasi-random dithering which looks OK
- * and whose results are compressed by PNG well.
+ * This ditherer implements a classic quasi-random error-propagation dithering
+ * which looks nice, much better than noise dithering, and whose results are
+ * compressed by PNG well.
  *
  * @tparam fptype Floating point type to use for storing pixel data. SIMD
  * types can be used.
@@ -905,10 +921,10 @@ public:
 				rsj[ 0 ] = clamp( z0, (fptype) 0.0, PkOut );
 
 				fptype* const rsdj = rsd + j;
-				rsj[ 1 ] += Noise * (fptype) 0.4375;
-				rsdj[ 1 ] += Noise * (fptype) 0.0625;
-				rsdj[ 0 ] += Noise * (fptype) 0.3125;
-				rsdj[ -1 ] += Noise * (fptype) 0.1875;
+				rsj[ 1 ] += Noise * (fptype) 0.608456;
+				rsdj[ -1 ] += Noise * (fptype) 0.151956;
+				rsdj[ 0 ] += Noise * (fptype) 0.544240;
+				rsdj[ 1 ] += Noise * (fptype) -0.304652;
 			}
 
 			// Process the last pixel element in scanline.
@@ -917,8 +933,8 @@ public:
 			const fptype Noise2 = rs[ Len1 ] - z1;
 			rs[ Len1 ] = clamp( z1, c0, PkOut );
 
-			rsd[ Len1 ] += Noise2 * (fptype) 0.3125;
-			rsd[ Len1 - 1 ] += Noise2 * (fptype) 0.1875;
+			rsd[ Len1 - 1 ] += Noise2 * (fptype) 0.151956;
+			rsd[ Len1 ] += Noise2 * (fptype) 0.544240;
 
 			rs += Len;
 			rsd += Len;
@@ -973,15 +989,17 @@ public:
 	static const int fpalign = sizeof( afptypesimd ); ///< Suggested alignment
 		///< size in bytes. This is not a required alignment, because image
 		///< resizing algorithm cannot be made to have a strictly aligned data
-		///< access in all cases (e.g. de-interlaved interpolation cannot
+		///< access in all cases (e.g. de-interleaved interpolation cannot
 		///< perform aligned accesses).
 		///<
 	static const int elalign = sizeof( afptypesimd ) / sizeof( afptype ); ///<
 		///< Length alignment of arrays of elements. This applies to filters
 		///< and intermediate buffers: this constant forces filters and
 		///< scanlines to have a length which is a multiple of this value, for
-		///< more efficient SIMD implementation. Value different to 1 also
-		///< means image pixels are de-interleaved during processing.
+		///< more efficient SIMD implementation.
+		///<
+	static const int packmode = 1; ///< 0 if interleaved packing, 1 if
+		///< de-interleaved.
 		///<
 	typedef CImageResizerFilterStepDIL< fptype, afptypesimd > CFilterStep; ///<
 		///< Filtering step class to use during processing.

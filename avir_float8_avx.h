@@ -9,7 +9,7 @@
  * This file includes the "float8" AVX-based type used for SIMD variable
  * storage and processing.
  *
- * AVIR Copyright (c) 2015-2016 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2018 Aleksey Vaneev
  */
 
 #ifndef AVIR_FLOAT8_AVX_INCLUDED
@@ -76,7 +76,7 @@ public:
 
 	/**
 	 * @param p Pointer to memory from where the value should be loaded,
-	 * should be 16-byte aligned.
+	 * should be 32-byte aligned.
 	 * @return float8 value loaded from the specified memory location.
 	 */
 
@@ -126,7 +126,7 @@ public:
 	/**
 	 * Function stores *this value to the specified memory location.
 	 *
-	 * @param[out] p Output memory location, should be aligned.
+	 * @param[out] p Output memory location, should be 32-byte aligned.
 	 */
 
 	void store( float* const p ) const
@@ -283,6 +283,14 @@ public:
 		///<
 
 private:
+	/**
+	 * @param p Pointer to memory from where the value should be loaded,
+	 * may have any alignment.
+	 * @param lim The maximum number of elements to load, >0.
+	 * @return __m128 value loaded from the specified memory location, with
+	 * elements beyond "lim" set to 0.
+	 */
+
 	static __m128 loadu4( const float* const p, const int lim )
 	{
 		if( lim > 2 )

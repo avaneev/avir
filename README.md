@@ -11,8 +11,8 @@ shift operation. Built-in sRGB gamma correction is available.
 The resizing algorithm at first produces 2X upsized image (relative to the
 source image size, or relative to the destination image size if downsizing is
 performed) and then performs interpolation using a bank of sinc function-based
-fractional delay filters. On the last stage a correction filter is applied
-which fixes smoothing introduced on previous steps.
+fractional delay filters. At the last stage a correction filter is applied
+which fixes smoothing introduced at previous steps.
 
 The resizing algorithm was designed to provide the best visual quality. The
 author even believes this algorithm provides the "ultimate" level of
@@ -20,8 +20,8 @@ quality (for an orthogonal resizing) which cannot be increased further: no
 math exists to provide a better frequency response, better anti-aliasing
 quality and at the same time having less ringing artifacts: these are 3
 elements that define any resizing algorithm's quality; in AVIR practice these
-elements have 0.95 correlation to each other, so they can be represented by
-any single element (AVIR offers several parameter sets with varying quality).
+elements have a high correlation to each other, so they can be represented by
+a single parameter (AVIR offers several parameter sets with varying quality).
 Algorithm's time performance turned out to be very good as well (for the
 "ultimate" image quality).
 
@@ -46,7 +46,7 @@ problems will mostly reside in spectral area without useful signal, with a
 maximum of 0.7 dB high-frequency attenuation for 4-times upsizing, and 0.17 dB
 attenuation for 8-times upsizing. This approach is probably as time efficient
 as performing a high-quality transform over the input image directly (the only
-serious drawback is the increased memory requirements). Note that affine
+serious drawback is the increased memory requirement). Note that affine
 transformations that change image proportions should first apply proportion
 change during upsizing.
 
@@ -59,11 +59,11 @@ SIMD floating point types during resizing if needed. This library does not
 have dependencies beside the standard C library.
 
 ## Links ##
-* [Documentation](http://avaneev.atspace.cc/avir/Documentation/)
+* [Documentation](https://voxb.powweb.com/avir/Documentation/)
 
 ## Usage Information ##
-The image resizer is represented by the **avir::CImageResizer<>** class, which
-is a single front-end class for the whole library. You do not basically need
+The image resizer is represented by the `avir::CImageResizer<>` class, which
+is a single front-end class for the whole library. Basically, you do not need
 to use nor understand any other classes beside this class.
 
 The code of the library resides in the "avir" C++ namespace, effectively
@@ -82,68 +82,81 @@ For low-ringing performance:
 
     avir :: CImageResizer<> ImageResizer( 8, 0, avir :: CImageResizerParamsLR() );
 
-To use the built-in gamma correction, an object of the avir::CImageResizerVars
-class with its variable UseSRGBGamma set to "true" should be supplied to the
-resizeImage() function. Note that the gamma correction is applied to all
-channels (e.g. alpha-channel) in the current implementation.
+To use the built-in gamma correction, an object of the
+`avir::CImageResizerVars` class with its variable `UseSRGBGamma` set to "true"
+should be supplied to the `resizeImage()` function. Note that the gamma
+correction is applied to all channels (e.g. alpha-channel) in the current
+implementation.
 
     avir :: CImageResizerVars Vars;
     Vars.UseSRGBGamma = true;
 
+Dithering (classic quasi-random error-propagating dither which is perceptually
+better than plain noise-adding dithering) can be enabled this way:
+
+    typedef avir :: fpclass_def< float, float,
+        avir :: CImageResizerDithererQRndINL< float > > fpclass_dith;
+    avir :: CImageResizer< fpclass_dith > ImageResizer( 8 );
+
 The library is able to process images of any bit depth: this includes 8-bit,
 16-bit, float and double types. Larger integer and signed integer types are
-not supported. Supported source and destination image sizes are up to 2.1
-gigapixels (46300x46300 or equivalent dimensions, e.g. 53467x40100).
+not supported. Supported source and destination image sizes are only limited
+by the available system memory.
 
 The code of this library was commented in the [Doxygen](http://www.doxygen.org/)
 style. To generate the documentation locally you may run the
-"doxygen ./other/avirdoxy.txt" command from the library's directory. Note that
+`doxygen ./other/avirdoxy.txt` command from the library's directory. Note that
 the code was suitably documented allowing you to make modifications, and to
 gain full understanding of the algorithm.
 
-Preliminary tests show that this library can resize 8-bit RGB 5184x3456
-(17.9 Mpixel) image down to 1920x1280 (2.5 Mpixel) image in 566 milliseconds,
-utilizing a single thread, on a typical Intel Core i7-4770K processor-based
-system without overclocking. This scales down to 195 milliseconds if 4 threads
-are utilized. This time can be reduced further down to 148 milliseconds by
-utilizing SIMD floating point processing. This library's performance has a big
-potential to grow together with evolving processor architectures as currently
-performance is clearly limited by memory bandwidth, not by algorithm's
-mathematical operations and overhead.
+Preliminary tests show that this library (compiled with Intel C++ Compiler
+18.2 with AVX2 instructions enabled, without explicit SIMD resizing code) can
+resize 8-bit RGB 5184x3456 (17.9 Mpixel) 3-channel image down to 1920x1280
+(2.5 Mpixel) image in 245 milliseconds, utilizing a single thread, on Intel
+Core i7-7700K processor-based system without overclocking. This scales down to
+74 milliseconds if 8 threads are utilized.
 
 Multi-threaded operation is not provided by this library "out of the box".
-The multi-threaded infrastructure is available, but requires additional
-system-specific interfacing code for engagement.
+The multi-threaded (horizontally-threaded) infrastructure is available, but
+requires additional system-specific interfacing code for engagement.
 
 ## SIMD Usage Information ##
 This library is capable of using SIMD floating point types for internal
 variables. This means that up to 4 color channels can be processed in
-parallel. For example, this gives 40% performance boost when resizing
-3-channel images. Since the default interleaved processing algorithm itself
-remains non-SIMD, the use of SIMD internal types is not practical for
-1-channel image resizing (due to overhead). SIMD internal type can be used
-this way:
+parallel. Since the default interleaved processing algorithm itself remains
+non-SIMD, the use of SIMD internal types is not practical for 1- and 2-channel
+image resizing (due to overhead). SIMD internal type can be used this way:
 
     #include "avir_float4_sse.h"
     avir :: CImageResizer< avir :: fpclass_float4 > ImageResizer( 8 );
 
 For 1-channel and 2-channel image resizing when AVX instructions are allowed
-it is reasonable to utilize de-interleaved SIMD processing algorithm. While it
-gives no performance benefit if the "float4" SSE processing type is used, it
-offers around 35% performance boost if the "float8" AVX processing type is
+it may be reasonable to utilize de-interleaved SIMD processing algorithm.
+While it gives no performance benefit if the "float4" SSE processing type is
+used, it offers some performance boost if the "float8" AVX processing type is
 used (given dithering is not performed, or otherwise performance is reduced at
-dithering stage since recursive dithering cannot be parallelized). The
+the dithering stage since recursive dithering cannot be parallelized). The
 internal type remains non-SIMD "float". De-interleaved algorithm can be used
 this way:
 
     #include "avir_float8_avx.h"
     avir :: CImageResizer< avir :: fpclass_float8_dil > ImageResizer( 8 );
 
+It's important to note that on the latest Intel processors (i7-7700K and
+probably later) the use of the aforementioned SIMD-specific resizing code may
+not be justifiable, or may be even counter-productive due to many factors:
+memory bandwidth bottleneck, increased efficiency of processor's circuitry
+utilization and out-of-order execution, automatic SIMD optimizations performed
+by the compiler. This is at least true when compiling 64-bit code with Intel
+C++ Compiler 18.2 with /QxSSE4.2, or especially with the /QxCORE-AVX2 option.
+SSE-specific resizing code may still be a little bit more efficient for
+4-channel image resizing.
+
 ## Notes ##
 This library was tested for compatibility with [GNU C++](http://gcc.gnu.org/),
 [Microsoft Visual C++](http://www.microsoft.com/visualstudio/eng/products/visual-studio-express-products)
 and [Intel C++](http://software.intel.com/en-us/c-compilers) compilers, on 32-
-and 64-bit Windows, Mac OS X and CentOS Linux. The code was also tested with
+and 64-bit Windows, macOS and CentOS Linux. The code was also tested with
 Dr.Memory/Win32 for the absence of uninitialized or unaddressable memory
 accesses.
 
@@ -153,7 +166,7 @@ the temporary image buffers depends on the input and output image sizes, and
 is proportionally large.
 
 The "heart" of resizing algorithm's quality resides in the parameters defined
-via the **avir::CImageResizerParams** structure. While the default set of
+via the `avir::CImageResizerParams` structure. While the default set of
 parameters that offers a good quality was already provided, there is
 (probably) still a place for improvement exists, and the default parameters
 may change in a future update. If you need to recall an exact set of
@@ -168,15 +181,19 @@ of quality regardless of the resizing "k" factor used.
 
 This library includes a binary command line tool "imageresize" for major
 desktop platforms. This tool was designed to be used as a demonstration of
-library's performance and as a reference, it uses 4 threads and float4 SIMD
-internal type during processing. This tool uses the following libraries:
+library's performance, and as a reference, it is multi-threaded (the `-t`
+switch can be used to control the number of threads utilized). This tool uses
+plain "float" processing (no explicit SIMD) and relies on automatic compiler
+optimization (with Win64 binary being the "main" binary as it was compiled
+with the best ICC optimization options for the time being). This tool uses the
+following libraries:
 * turbojpeg Copyright (c) 2009-2013 D. R. Commander
 * libpng Copyright (c) 1998-2013 Glenn Randers-Pehrson
 * zlib Copyright (c) 1995-2013 Jean-loup Gailly and Mark Adler
 
-Note that you can disable gamma-correction with the `--gamma=false` switch.
-Sometimes gamma-correction produces "greenish/reddish/bluish haze" since
-low-amplitude oscillations produced by resizing on object boundaries are
+Note that you can enable gamma-correction with the `-g` switch. However,
+sometimes gamma-correction produces "greenish/reddish/bluish haze" since
+low-amplitude oscillations produced by resizing at object boundaries are
 amplified by gamma correction. This can also have an effect of reduced
 contrast.
 
@@ -187,7 +204,7 @@ effect and keep ringing artifacts low. But the use of sinc function-based
 interpolation filter that is 18 taps-long (may be higher, up to 36 taps in
 practice) can be questioned, because even in 0th order case such
 interpolation filter requires 18 multiply-add operations. Comparatively, an
-optimal Hermit or cubic interpolation spline requires 8 multiply and 11 add
+optimal Hermite or cubic interpolation spline requires 8 multiply and 11 add
 operations.
 
 One of the reasons 18-tap filter is preferred, is because due to memory
@@ -275,6 +292,18 @@ windowed by this function tend to be longer than "usual" (with Kaiser window
 being the "golden standard" for filter length per decibel of stop-band
 attenuation). This is a price that should be paid for stable spectral
 characteristics.
+
+## Change log ##
+Version 2.0:
+
+* Minor inner loop optimizations.
+* Lifted the supported image size constraint by switching buffer addressing to
+`size_t` from `int`, now image size is limited by the available system memory.
+* Added several useful switches to the `imageresize` utility.
+* Now `imageresize` does not apply gamma-correction by default.
+* Fixed scaling of bit depth-reduction operation.
+* Improved quasi-random error-propagating dither's signal-to-noise ratio.
+* Compiled binaries with AVX2 instruction set (SSE4 for macOS).
 
 ## Users ##
 This library is used by:
