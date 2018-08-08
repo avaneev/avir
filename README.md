@@ -91,11 +91,11 @@ implementation.
     avir :: CImageResizerVars Vars;
     Vars.UseSRGBGamma = true;
 
-Dithering (classic quasi-random error-propagating dither which is perceptually
-better than plain noise-adding dithering) can be enabled this way:
+Dithering (error-diffusion dither which is perceptually good) can be enabled
+this way:
 
     typedef avir :: fpclass_def< float, float,
-        avir :: CImageResizerDithererQRndINL< float > > fpclass_dith;
+        avir :: CImageResizerDithererErrdINL< float > > fpclass_dith;
     avir :: CImageResizer< fpclass_dith > ImageResizer( 8 );
 
 The library is able to process images of any bit depth: this includes 8-bit,
@@ -294,6 +294,17 @@ attenuation). This is a price that should be paid for stable spectral
 characteristics.
 
 ## Change log ##
+Version 2.1:
+
+* Fixed error-diffusion dither problems introduced in the previous version.
+* Added the `-1` switch to the `imageresize` to enable 1-bit output for
+dither's quality evaluation (use together with the `-d` switch).
+* Added the `--algparams=` switch to the `imageresize` to control resizing
+quality (replaces the `--low-ring` switch).
+* Added `avir :: CImageResizerParamsULR` parameter set for lowest-ringing
+performance possible (not considerably different to
+`avir :: CImageResizerParamsLR`, but a bit lower ringing).
+
 Version 2.0:
 
 * Minor inner loop optimizations.
@@ -302,7 +313,7 @@ Version 2.0:
 * Added several useful switches to the `imageresize` utility.
 * Now `imageresize` does not apply gamma-correction by default.
 * Fixed scaling of bit depth-reduction operation.
-* Improved quasi-random error-propagating dither's signal-to-noise ratio.
+* Improved error-diffusion dither's signal-to-noise ratio.
 * Compiled binaries with AVX2 instruction set (SSE4 for macOS).
 
 ## Users ##

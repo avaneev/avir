@@ -2266,26 +2266,27 @@ struct CImageResizerParamsDef : public CImageResizerParams
 };
 
 /**
- * @brief Set of resizing algorithm parameters for lower-ringing performance
- * (8.86/1.046/0.010168).
+ * @brief Set of resizing algorithm parameters for ultra-low-ringing
+ * performance (7.69/1.069/0.000245).
  *
- * This set of resizing algorithm parameters offers a lower-ringing
- * performance in comparison to the default setting, at the expense of higher
- * aliasing artifacts and a slightly reduced contrast.
+ * This set of resizing algorithm parameters offers the lowest amount of
+ * ringing this library is capable of providing while still offering a decent
+ * quality. Low ringing is attained at the expense of higher aliasing
+ * artifacts and a slightly reduced contrast.
  */
 
-struct CImageResizerParamsLow : public CImageResizerParams
+struct CImageResizerParamsULR : public CImageResizerParams
 {
-	CImageResizerParamsLow()
+	CImageResizerParamsULR()
 	{
-		CorrFltAlpha = 1.0;//8.86/1.92/1.046(871.54)/0.010168:258647,442252
-		CorrFltLen = 6.09757;
-		IntFltAlpha = 2.36704;
-		IntFltCutoff = 0.74674;
+		CorrFltAlpha = 1.0;//7.69/1.97/1.069(31445.45)/0.000245:258627,436845
+		CorrFltLen = 5.83280;
+		IntFltAlpha = 2.11453;
+		IntFltCutoff = 0.73986;
 		IntFltLen = 18.0;
-		LPFltAlpha = 2.19427;
-		LPFltBaseLen = 7.66;
-		LPFltCutoffMult = 0.75380;
+		LPFltAlpha = 1.73455;
+		LPFltBaseLen = 6.40;
+		LPFltCutoffMult = 0.61314;
 	}
 };
 
@@ -2310,6 +2311,30 @@ struct CImageResizerParamsLR : public CImageResizerParams
 		LPFltAlpha = 1.79306;
 		LPFltBaseLen = 7.00;
 		LPFltCutoffMult = 0.68881;
+	}
+};
+
+/**
+ * @brief Set of resizing algorithm parameters for lower-ringing performance
+ * (8.86/1.046/0.010168).
+ *
+ * This set of resizing algorithm parameters offers a lower-ringing
+ * performance in comparison to the default setting, at the expense of higher
+ * aliasing artifacts and a slightly reduced contrast.
+ */
+
+struct CImageResizerParamsLow : public CImageResizerParams
+{
+	CImageResizerParamsLow()
+	{
+		CorrFltAlpha = 1.0;//8.86/1.92/1.046(871.54)/0.010168:258647,442252
+		CorrFltLen = 6.09757;
+		IntFltAlpha = 2.36704;
+		IntFltCutoff = 0.74674;
+		IntFltLen = 18.0;
+		LPFltAlpha = 2.19427;
+		LPFltBaseLen = 7.66;
+		LPFltCutoffMult = 0.75380;
 	}
 };
 
@@ -4056,18 +4081,19 @@ protected:
 };
 
 /**
- * @brief Image resizer's quasi-random dithering class, interleaved mode.
+ * @brief Image resizer's error-diffusion dithering class, interleaved mode.
  *
- * This ditherer implements a classic quasi-random error-propagation dithering
- * which looks nice, much better than noise dithering, and whose results are
- * compressed by PNG well.
+ * This ditherer implements error-diffusion dithering which looks good, and
+ * whose results are compressed by PNG well. This implementation uses
+ * weighting coefficients obtained via machine optimization and visual
+ * evaluation.
  *
  * @tparam fptype Floating point type to use for storing pixel data. SIMD
  * types can be used.
  */
 
 template< class fptype >
-class CImageResizerDithererQRndINL :
+class CImageResizerDithererErrdINL :
 	public CImageResizerDithererDefINL< fptype >
 {
 public:
@@ -4124,10 +4150,10 @@ public:
 			const fptype Noise = ResScanline[ j ] - z0;
 			ResScanline[ j ] = clamp( z0, c0, PkOut );
 
-			ResScanline[ j + ElCount ] += Noise * (fptype) 0.608456;
-			ResScanlineDith[ j - ElCount ] += Noise * (fptype) 0.151956;
-			ResScanlineDith[ j ] += Noise * (fptype) 0.544240;
-			ResScanlineDith[ j + ElCount ] += Noise * (fptype) -0.304652;
+			ResScanline[ j + ElCount ] += Noise * (fptype) 0.364842;
+			ResScanlineDith[ j - ElCount ] += Noise * (fptype) 0.207305;
+			ResScanlineDith[ j ] += Noise * (fptype) 0.364842;
+			ResScanlineDith[ j + ElCount ] += Noise * (fptype) 0.063011;
 		}
 
 		while( j < LenE )
@@ -4136,8 +4162,8 @@ public:
 			const fptype Noise = ResScanline[ j ] - z0;
 			ResScanline[ j ] = clamp( z0, c0, PkOut );
 
-			ResScanlineDith[ j - ElCount ] += Noise * (fptype) 0.151956;
-			ResScanlineDith[ j ] += Noise * (fptype) 0.544240;
+			ResScanlineDith[ j - ElCount ] += Noise * (fptype) 0.207305;
+			ResScanlineDith[ j ] += Noise * (fptype) 0.364842;
 			j++;
 		}
 	}
@@ -4149,10 +4175,9 @@ protected:
 	using CImageResizerDithererDefINL< fptype > :: TrMul0;
 	using CImageResizerDithererDefINL< fptype > :: PkOut0;
 
-	CBuffer< fptype > ResScanlineDith0; ///< Error propagation buffer for
-		///< dithering, first pixel unused.
+	CBuffer< fptype > ResScanlineDith0; ///< Error diffusion buffer.
 		///<
-	fptype* ResScanlineDith; ///< Error propagation buffer pointer which skips
+	fptype* ResScanlineDith; ///< Error diffusion buffer pointer which skips
 		///< the first ElCount elements.
 		///<
 };

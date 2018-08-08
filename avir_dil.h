@@ -834,18 +834,19 @@ protected:
 };
 
 /**
- * @brief Image resizer's quasi-random dithering class, de-interleaved mode.
+ * @brief Image resizer's error-diffusion dithering class, de-interleaved
+ * mode.
  *
- * This ditherer implements a classic quasi-random error-propagation dithering
- * which looks nice, much better than noise dithering, and whose results are
- * compressed by PNG well.
+ * This ditherer implements error-diffusion dithering which looks good, and
+ * whose results are compressed by PNG well.
  *
  * @tparam fptype Floating point type to use for storing pixel data. SIMD
- * types can be used.
+ * types cannot be used.
+ * @tparam fptypesimd Processing type, SIMD can be used.
  */
 
 template< class fptype, class fptypesimd >
-class CImageResizerDithererQRndDIL
+class CImageResizerDithererErrdDIL
 {
 public:
 	/**
@@ -921,10 +922,10 @@ public:
 				rsj[ 0 ] = clamp( z0, (fptype) 0.0, PkOut );
 
 				fptype* const rsdj = rsd + j;
-				rsj[ 1 ] += Noise * (fptype) 0.608456;
-				rsdj[ -1 ] += Noise * (fptype) 0.151956;
-				rsdj[ 0 ] += Noise * (fptype) 0.544240;
-				rsdj[ 1 ] += Noise * (fptype) -0.304652;
+				rsj[ 1 ] += Noise * (fptype) 0.364842;
+				rsdj[ -1 ] += Noise * (fptype) 0.207305;
+				rsdj[ 0 ] += Noise * (fptype) 0.364842;
+				rsdj[ 1 ] += Noise * (fptype) 0.063011;
 			}
 
 			// Process the last pixel element in scanline.
@@ -933,8 +934,8 @@ public:
 			const fptype Noise2 = rs[ Len1 ] - z1;
 			rs[ Len1 ] = clamp( z1, c0, PkOut );
 
-			rsd[ Len1 - 1 ] += Noise2 * (fptype) 0.151956;
-			rsd[ Len1 ] += Noise2 * (fptype) 0.544240;
+			rsd[ Len1 - 1 ] += Noise2 * (fptype) 0.207305;
+			rsd[ Len1 ] += Noise2 * (fptype) 0.364842;
 
 			rs += Len;
 			rsd += Len;
