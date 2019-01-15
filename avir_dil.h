@@ -9,7 +9,7 @@
  * This file includes the "CImageResizerFilterStepDIL" class which implements
  * image resizing functions in de-interleaved mode.
  *
- * AVIR Copyright (c) 2015-2018 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2019 Aleksey Vaneev
  */
 
 namespace avir {

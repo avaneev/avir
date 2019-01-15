@@ -11,36 +11,13 @@
  * in its entirety. Also includes several classes and functions that can be
  * useful elsewhere.
  *
- * AVIR Copyright (c) 2015-2018 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2019 Aleksey Vaneev
  *
  * @mainpage
  *
  * @section intro_sec Introduction
  *
- * Me, Aleksey Vaneev, is happy to offer you an open source image resizing /
- * scaling library which has reached a production level of quality, and is
- * ready to be incorporated into any project. This library features routines
- * for both down- and upsizing of 8- and 16-bit, 1 to 4-channel images. Image
- * resizing routines were implemented in multi-platform C++ code, and have a
- * high level of optimality. Beside resizing, this library offers a sub-pixel
- * shift operation. Built-in sRGB gamma correction is available.
- * 
- * The resizing algorithm at first produces 2X upsized image (relative to the
- * source image size, or relative to the destination image size if downsizing
- * is performed) and then performs interpolation using a bank of sinc
- * function-based fractional delay filters. At the last stage a correction
- * filter is applied which fixes smoothing introduced at previous steps.
- * 
- * The resizing algorithm was designed to provide the best visual quality. The
- * author even believes this algorithm provides the "ultimate" level of
- * quality (for an orthogonal resizing) which cannot be increased further: no
- * math exists to provide a better frequency response, better anti-aliasing
- * quality and at the same time having less ringing artifacts: these are 3
- * elements that define any resizing algorithm's quality; in AVIR practice
- * these elements have a high correlation to each other, so they can be
- * represented by a single parameter (AVIR offers several parameter sets with
- * varying quality). Algorithm's time performance turned out to be very good
- * as well (for the "ultimate" image quality).
+ * Description is available at https://github.com/avaneev/avir
  *
  * AVIR is devoted to women. Your digital photos can look good at any size!
  *
@@ -48,79 +25,32 @@
  *
  * AVIR License Agreement
  *
- * AVIR Copyright (c) 2015-2018 Aleksey Vaneev
+ * The MIT License (MIT)
  *
- * 1. AVIR image resizing software library and its parts and associated
- * documentation files (collectively, "AVIR") is licensed, not sold. AVIR and
- * all rights are owned by AVIR copyright holder and are protected by
- * copyright law and international copyright treaties. You (individual person
- * or a company) acknowledge that no title to the intellectual property in
- * AVIR is transferred to you. You further acknowledge that title and full
- * ownership rights to AVIR will remain the exclusive property of AVIR
- * copyright holder and you will not acquire any rights to AVIR except as
- * expressly set forth in this License Agreement.
+ * Copyright (c) 2015-2019 Aleksey Vaneev
  *
- * 2. This License Agreement is only applicable to non-commercial and
- * low-income commercial use of AVIR. This means that you have to sign a
- * special license agreement with AVIR copyright holder if you or your
- * company sells and/or licenses (directly or via resellers) software products
- * and/or non-software products with firmware where AVIR is included or may be
- * included, and if or when the combined sales of such products reach at your
- * end a sum of more than 40000 (forty thousand) US dollars per year (or
- * equivalent value in your native currency). Sales also include subscriptions
- * where a subscribed end user may get a functioning, and/or feature-extended,
- * and/or advertisement-free product where AVIR is included or may be
- * included. Software products also include user-operated server-based image
- * and video editing applications where AVIR is included or may be included.
- * Donation-based, but otherwise free from fees, software products where AVIR
- * is included or may be included are treated herein as non-commercial.
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
  *
- * 3. The execution of AVIR image resizing function in non-commercial,
- * commercial and any other environments (operations) of any size and for any
- * purpose is allowed without a fee.
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
  *
- * 4. If you have a considerable development budget, and/or make a
- * considerable profit from donations (grants), and/or make advertising profit
- * associated with software where AVIR is included, or if AVIR image resizing
- * function is an important function (e.g. on a photo hosting, a social web
- * site) which is performed using proprietary software product where AVIR is
- * included, then consider voluntarily signing a special license agreement
- * with AVIR copyright holder.
- *
- * 5. If you sublicense to a non-end user third party, or transfer rights to
- * your software where AVIR or its parts are included, to a third party, this
- * third party should agree to this License Agreement or sign a special
- * license agreement with AVIR copyright holder, or remove AVIR dependence
- * from the received software.
- *
- * 6. Permission is hereby granted, free of charge, to any person or company
- * (subject to the restrictions outlined above) obtaining a copy of AVIR, to
- * deal in AVIR without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense (except as
- * noted above), and/or sell copies of AVIR, and to permit persons to whom
- * AVIR is furnished to do so, subject to the following conditions:
- * The above copyright notice and this License Agreement shall be included in
- * all copies or portions of AVIR.
- *
- * 7. AVIR IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH AVIR OR THE USE OR OTHER DEALINGS IN
- * AVIR.
- *
- * 8. AVIR copyright holder's e-mail: aleksey.vaneev@gmail.com
- * AVIR copyright holder's registered address:
- * Aleksey Vaneev
- * 6-54 Lenin Street,
- * Syktyvkar, Komi Republic 167000
- * Russia
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
  *
  * Please credit the author of this library in your documentation in the
  * following way: "AVIR image resizing algorithm designed by Aleksey Vaneev"
  *
- * @version 2.0
+ * @version 2.2
  */
 
 #ifndef AVIR_CIMAGERESIZER_INCLUDED

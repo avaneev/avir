@@ -59,7 +59,7 @@ SIMD floating point types during resizing if needed. This library does not
 have dependencies beside the standard C library.
 
 ## Links ##
-* [Documentation](https://voxb.powweb.com/avir/Documentation/)
+* [Documentation](https://www.voxengo.com/public/avir/Documentation/)
 
 ## Usage Information ##
 The image resizer is represented by the `avir::CImageResizer<>` class, which
@@ -294,6 +294,10 @@ attenuation). This is a price that should be paid for stable spectral
 characteristics.
 
 ## Change log ##
+Version 2.2:
+
+* Released AVIR under a permissive MIT license agreement.
+
 Version 2.1:
 
 * Fixed error-diffusion dither problems introduced in the previous version.
