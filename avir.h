@@ -64,6 +64,12 @@
 namespace avir {
 
 /**
+ * The macro defines AVIR version string.
+ */
+
+#define AVIR_VERSION "2.2"
+
+/**
  * The macro equals to "pi" constant, fills 53-bit floating point mantissa.
  * Undefined at the end of file.
  */
