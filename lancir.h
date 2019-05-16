@@ -6,9 +6,36 @@
  *
  * @brief The self-contained "lancir" inclusion file.
  *
- * This is the self-contained inclusion file for the "LANCIR" image resizer.
+ * This is the self-contained inclusion file for the "LANCIR" image resizer,
+ * part of the AVIR library.
  *
  * AVIR Copyright (c) 2015-2019 Aleksey Vaneev
+ *
+ * @section license License
+ *
+ * AVIR License Agreement
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2015-2019 Aleksey Vaneev
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
  */
 
 #ifndef AVIR_CLANCIR_INCLUDED
@@ -30,7 +57,9 @@ namespace avir {
  * @brief LANCIR image resizer class.
  *
  * The object of this class can be used to resize 1-4 channel images to any
- * required size. Resizing is performed by utilizing Lanczos filters.
+ * required size. Resizing is performed by utilizing Lanczos filters, with
+ * 8-bit precision. This class offers a kind of "optimal" Lanczos resampling
+ * implementation.
  *
  * Object of this class can be allocated on stack.
  *
@@ -176,7 +205,7 @@ public:
 		{
 			for( i = 0; i < SrcHeight; i++ )
 			{
-				copyScanline3( ips, rsh, SrcWidth, ElCount );
+				copyScanline3h( ips, rsh, SrcWidth );
 				resize3( op, NewWidth, rsh.pos, rfh.KernelLen );
 				ips += SrcScanlineSize;
 				op += NewWidthE;
@@ -187,7 +216,7 @@ public:
 		{
 			for( i = 0; i < SrcHeight; i++ )
 			{
-				copyScanline1( ips, rsh, SrcWidth, ElCount );
+				copyScanline1h( ips, rsh, SrcWidth );
 				resize1( op, NewWidth, rsh.pos, rfh.KernelLen );
 				ips += SrcScanlineSize;
 				op += NewWidthE;
@@ -198,7 +227,7 @@ public:
 		{
 			for( i = 0; i < SrcHeight; i++ )
 			{
-				copyScanline4( ips, rsh, SrcWidth, ElCount );
+				copyScanline4h( ips, rsh, SrcWidth );
 				resize4( op, NewWidth, rsh.pos, rfh.KernelLen );
 				ips += SrcScanlineSize;
 				op += NewWidthE;
@@ -209,7 +238,7 @@ public:
 		{
 			for( i = 0; i < SrcHeight; i++ )
 			{
-				copyScanline2( ips, rsh, SrcWidth, ElCount );
+				copyScanline2h( ips, rsh, SrcWidth );
 				resize2( op, NewWidth, rsh.pos, rfh.KernelLen );
 				ips += SrcScanlineSize;
 				op += NewWidthE;
@@ -236,7 +265,7 @@ public:
 		{
 			for( i = 0; i < NewWidth; i++ )
 			{
-				copyScanline3( ip, rsv, SrcHeight, NewWidthE );
+				copyScanline3v( ip, rsv, SrcHeight, NewWidthE );
 				resize3( spv, NewHeight, rsv.pos, rfv -> KernelLen );
 				copyOutput3( spv, opd, NewHeight, NewWidthE, IsIOFloat,
 					Clamp );
@@ -250,7 +279,7 @@ public:
 		{
 			for( i = 0; i < NewWidth; i++ )
 			{
-				copyScanline1( ip, rsv, SrcHeight, NewWidthE );
+				copyScanline1v( ip, rsv, SrcHeight, NewWidthE );
 				resize1( spv, NewHeight, rsv.pos, rfv -> KernelLen );
 				copyOutput1( spv, opd, NewHeight, NewWidthE, IsIOFloat,
 					Clamp );
@@ -264,7 +293,7 @@ public:
 		{
 			for( i = 0; i < NewWidth; i++ )
 			{
-				copyScanline4( ip, rsv, SrcHeight, NewWidthE );
+				copyScanline4v( ip, rsv, SrcHeight, NewWidthE );
 				resize4( spv, NewHeight, rsv.pos, rfv -> KernelLen );
 				copyOutput4( spv, opd, NewHeight, NewWidthE, IsIOFloat,
 					Clamp );
@@ -278,7 +307,7 @@ public:
 		{
 			for( i = 0; i < NewWidth; i++ )
 			{
-				copyScanline2( ip, rsv, SrcHeight, NewWidthE );
+				copyScanline2v( ip, rsv, SrcHeight, NewWidthE );
 				resize2( spv, NewHeight, rsv.pos, rfv -> KernelLen );
 				copyOutput2( spv, opd, NewHeight, NewWidthE, IsIOFloat,
 					Clamp );
@@ -472,12 +501,15 @@ protected:
 			, Filters( NULL )
 			, Prevla( -1.0 )
 			, Prevk( -1.0 )
+			, FilterBufLen( 0 )
+			, FiltersLen( 0 )
 		{
 		}
 
 		~CResizeFilters()
 		{
-			deleteFilterBuffers();
+			delete[] FilterBuf;
+			delete[] Filters;
 		}
 
 		/**
@@ -497,7 +529,6 @@ protected:
 				return( false );
 			}
 
-			deleteFilterBuffers();
 			Prevla = la;
 			Prevk = k;
 
@@ -510,8 +541,23 @@ protected:
 
 			FracCount = 607; // For 8-bit precision.
 			FracFill = 0;
-			FilterBuf = new float[ FracCount * KernelLen ];
-			Filters = new float*[ FracCount ];
+
+			const int FilterBufLenNew = FracCount * KernelLen;
+
+			if( FilterBufLenNew > FilterBufLen )
+			{
+				delete[] FilterBuf;
+				FilterBufLen = FilterBufLenNew;
+				FilterBuf = new float[ FilterBufLen ];
+			}
+
+			if( FracCount > FiltersLen )
+			{
+				delete[] Filters;
+				FiltersLen = FracCount;
+				Filters = new float*[ FiltersLen ];
+			}
+
 			memset( Filters, 0, FracCount * sizeof( float* ));
 
 			return( true );
@@ -565,16 +611,10 @@ protected:
 			///<
 		double Prevk; ///< Previous "k".
 			///<
-
-		/**
-		 * Function deletes previously allocated filter buffers.
-		 */
-
-		void deleteFilterBuffers()
-		{
-			delete[] FilterBuf;
-			delete[] Filters;
-		}
+		int FilterBufLen; ///< Allocated length of FilterBuf in elements.
+			///<
+		int FiltersLen; ///< Allocated length of Filters in elements.
+			///<
 
 		/**
 		 * @brief Sine signal generator class.
@@ -639,8 +679,7 @@ protected:
 		void makeFilter( const double FracDelay, T* op ) const
 		{
 			CSinGen f( Freq, Freq * ( FracDelay - fl2 ));
-			CSinGen fw( FreqA, FreqA * ( FracDelay - fl2 ),
-				Prevla / NormFreq );
+			CSinGen fw( FreqA, FreqA * ( FracDelay - fl2 ), Len2 );
 
 			int t = -fl2;
 
@@ -844,8 +883,8 @@ protected:
 
 	/**
 	 * Function copies scan-line from the source buffer in its native format
-	 * to internal scan-line buffer, in preparation for resizing. Variants
-	 * for 1-4-channel images.
+	 * to internal scan-line buffer, in preparation for horizontal resizing.
+	 * Variants for 1-4-channel images.
 	 *
 	 * @param ip Source scan-line buffer.
 	 * @param rs Scan-line resizing positions object.
@@ -854,13 +893,12 @@ protected:
 	 */
 
 	template< class T >
-	static void copyScanline1( const T* ip, CResizeScanline& rs, const int l,
-		const int ipinc )
+	static void copyScanline1h( const T* ip, CResizeScanline& rs, const int l )
 	{
 		float* op = rs.sp;
 		int i;
 
-		for( i = 0; i <= rs.padl; i++ )
+		for( i = 0; i < rs.padl; i++ )
 		{
 			op[ 0 ] = ip[ 0 ];
 			op++;
@@ -868,12 +906,12 @@ protected:
 
 		for( i = 0; i < l - 1; i++ )
 		{
-			ip += ipinc;
 			op[ 0 ] = ip[ 0 ];
+			ip++;
 			op++;
 		}
 
-		for( i = 0; i < rs.padr; i++ )
+		for( i = 0; i <= rs.padr; i++ )
 		{
 			op[ 0 ] = ip[ 0 ];
 			op++;
@@ -881,13 +919,12 @@ protected:
 	}
 
 	template< class T >
-	static void copyScanline2( const T* ip, CResizeScanline& rs, const int l,
-		const int ipinc )
+	static void copyScanline2h( const T* ip, CResizeScanline& rs, const int l )
 	{
 		float* op = rs.sp;
 		int i;
 
-		for( i = 0; i <= rs.padl; i++ )
+		for( i = 0; i < rs.padl; i++ )
 		{
 			op[ 0 ] = ip[ 0 ];
 			op[ 1 ] = ip[ 1 ];
@@ -896,13 +933,13 @@ protected:
 
 		for( i = 0; i < l - 1; i++ )
 		{
-			ip += ipinc;
 			op[ 0 ] = ip[ 0 ];
 			op[ 1 ] = ip[ 1 ];
+			ip += 2;
 			op += 2;
 		}
 
-		for( i = 0; i < rs.padr; i++ )
+		for( i = 0; i <= rs.padr; i++ )
 		{
 			op[ 0 ] = ip[ 0 ];
 			op[ 1 ] = ip[ 1 ];
@@ -911,13 +948,12 @@ protected:
 	}
 
 	template< class T >
-	static void copyScanline3( const T* ip, CResizeScanline& rs, const int l,
-		const int ipinc )
+	static void copyScanline3h( const T* ip, CResizeScanline& rs, const int l )
 	{
 		float* op = rs.sp;
 		int i;
 
-		for( i = 0; i <= rs.padl; i++ )
+		for( i = 0; i < rs.padl; i++ )
 		{
 			op[ 0 ] = ip[ 0 ];
 			op[ 1 ] = ip[ 1 ];
@@ -927,14 +963,14 @@ protected:
 
 		for( i = 0; i < l - 1; i++ )
 		{
-			ip += ipinc;
 			op[ 0 ] = ip[ 0 ];
 			op[ 1 ] = ip[ 1 ];
 			op[ 2 ] = ip[ 2 ];
+			ip += 3;
 			op += 3;
 		}
 
-		for( i = 0; i < rs.padr; i++ )
+		for( i = 0; i <= rs.padr; i++ )
 		{
 			op[ 0 ] = ip[ 0 ];
 			op[ 1 ] = ip[ 1 ];
@@ -944,13 +980,12 @@ protected:
 	}
 
 	template< class T >
-	static void copyScanline4( const T* ip, CResizeScanline& rs, const int l,
-		const int ipinc )
+	static void copyScanline4h( const T* ip, CResizeScanline& rs, const int l )
 	{
 		float* op = rs.sp;
 		int i;
 
-		for( i = 0; i <= rs.padl; i++ )
+		for( i = 0; i < rs.padl; i++ )
 		{
 			op[ 0 ] = ip[ 0 ];
 			op[ 1 ] = ip[ 1 ];
@@ -961,7 +996,134 @@ protected:
 
 		for( i = 0; i < l - 1; i++ )
 		{
+			op[ 0 ] = ip[ 0 ];
+			op[ 1 ] = ip[ 1 ];
+			op[ 2 ] = ip[ 2 ];
+			op[ 3 ] = ip[ 3 ];
+			ip += 4;
+			op += 4;
+		}
+
+		for( i = 0; i <= rs.padr; i++ )
+		{
+			op[ 0 ] = ip[ 0 ];
+			op[ 1 ] = ip[ 1 ];
+			op[ 2 ] = ip[ 2 ];
+			op[ 3 ] = ip[ 3 ];
+			op += 4;
+		}
+	}
+
+	/**
+	 * Function copies scan-line from the source buffer in its native format
+	 * to internal scan-line buffer, in preparation for vertical resizing.
+	 * Variants for 1-4-channel images.
+	 *
+	 * @param ip Source scan-line buffer.
+	 * @param rs Scan-line resizing positions object.
+	 * @param l Source scan-line length, in pixels.
+	 * @param ipinc "ip" increment per pixel.
+	 */
+
+	template< class T >
+	static void copyScanline1v( const T* ip, CResizeScanline& rs, const int l,
+		const int ipinc )
+	{
+		float* op = rs.sp;
+		int i;
+
+		for( i = 0; i < rs.padl; i++ )
+		{
+			op[ 0 ] = ip[ 0 ];
+			op++;
+		}
+
+		for( i = 0; i < l - 1; i++ )
+		{
+			op[ 0 ] = ip[ 0 ];
 			ip += ipinc;
+			op++;
+		}
+
+		for( i = 0; i <= rs.padr; i++ )
+		{
+			op[ 0 ] = ip[ 0 ];
+			op++;
+		}
+	}
+
+	template< class T >
+	static void copyScanline2v( const T* ip, CResizeScanline& rs, const int l,
+		const int ipinc )
+	{
+		float* op = rs.sp;
+		int i;
+
+		for( i = 0; i < rs.padl; i++ )
+		{
+			op[ 0 ] = ip[ 0 ];
+			op[ 1 ] = ip[ 1 ];
+			op += 2;
+		}
+
+		for( i = 0; i < l - 1; i++ )
+		{
+			op[ 0 ] = ip[ 0 ];
+			op[ 1 ] = ip[ 1 ];
+			ip += ipinc;
+			op += 2;
+		}
+
+		for( i = 0; i <= rs.padr; i++ )
+		{
+			op[ 0 ] = ip[ 0 ];
+			op[ 1 ] = ip[ 1 ];
+			op += 2;
+		}
+	}
+
+	template< class T >
+	static void copyScanline3v( const T* ip, CResizeScanline& rs, const int l,
+		const int ipinc )
+	{
+		float* op = rs.sp;
+		int i;
+
+		for( i = 0; i < rs.padl; i++ )
+		{
+			op[ 0 ] = ip[ 0 ];
+			op[ 1 ] = ip[ 1 ];
+			op[ 2 ] = ip[ 2 ];
+			op += 3;
+		}
+
+		for( i = 0; i < l - 1; i++ )
+		{
+			op[ 0 ] = ip[ 0 ];
+			op[ 1 ] = ip[ 1 ];
+			op[ 2 ] = ip[ 2 ];
+			ip += ipinc;
+			op += 3;
+		}
+
+		for( i = 0; i <= rs.padr; i++ )
+		{
+			op[ 0 ] = ip[ 0 ];
+			op[ 1 ] = ip[ 1 ];
+			op[ 2 ] = ip[ 2 ];
+			op += 3;
+		}
+	}
+
+	template< class T >
+	static void copyScanline4v( const T* ip, CResizeScanline& rs, const int l,
+		const int ipinc )
+	{
+		float* op = rs.sp;
+		int i;
+
+		for( i = 0; i < rs.padl; i++ )
+		{
 			op[ 0 ] = ip[ 0 ];
 			op[ 1 ] = ip[ 1 ];
 			op[ 2 ] = ip[ 2 ];
@@ -969,7 +1131,17 @@ protected:
 			op += 4;
 		}
 
-		for( i = 0; i < rs.padr; i++ )
+		for( i = 0; i < l - 1; i++ )
+		{
+			op[ 0 ] = ip[ 0 ];
+			op[ 1 ] = ip[ 1 ];
+			op[ 2 ] = ip[ 2 ];
+			op[ 3 ] = ip[ 3 ];
+			ip += ipinc;
+			op += 4;
+		}
+
+		for( i = 0; i <= rs.padr; i++ )
 		{
 			op[ 0 ] = ip[ 0 ];
 			op[ 1 ] = ip[ 1 ];
@@ -1000,7 +1172,7 @@ protected:
 	 * @param kl Filter kernel length, in taps.
 	 */
 
-	void resize1( float* op, int DstLen, CResizePos* rp, const int kl ) const
+	static void resize1( float* op, int DstLen, CResizePos* rp, const int kl )
 	{
 		if( kl == 6 )
 		{
@@ -1033,7 +1205,7 @@ protected:
 		}
 	}
 
-	void resize2( float* op, int DstLen, CResizePos* rp, const int kl ) const
+	static void resize2( float* op, int DstLen, CResizePos* rp, const int kl )
 	{
 		if( kl == 6 )
 		{
@@ -1080,7 +1252,7 @@ protected:
 		}
 	}
 
-	void resize3( float* op, int DstLen, CResizePos* rp, const int kl ) const
+	static void resize3( float* op, int DstLen, CResizePos* rp, const int kl )
 	{
 		if( kl == 6 )
 		{
@@ -1138,7 +1310,7 @@ protected:
 		}
 	}
 
-	void resize4( float* op, int DstLen, CResizePos* rp, const int kl ) const
+	static void resize4( float* op, int DstLen, CResizePos* rp, const int kl )
 	{
 		LANCIR_LF_PRE
 		float sum[ 4 ];
