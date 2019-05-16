@@ -50,7 +50,7 @@
  * Please credit the author of this library in your documentation in the
  * following way: "AVIR image resizing algorithm designed by Aleksey Vaneev"
  *
- * @version 2.2
+ * @version 2.3
  */
 
 #ifndef AVIR_CIMAGERESIZER_INCLUDED
@@ -67,7 +67,7 @@ namespace avir {
  * The macro defines AVIR version string.
  */
 
-#define AVIR_VERSION "2.2"
+#define AVIR_VERSION "2.3"
 
 /**
  * The macro equals to "pi" constant, fills 53-bit floating point mantissa.
@@ -4328,8 +4328,7 @@ public:
 		{
 			if( NewWidth > SrcWidth )
 			{
-				kx = (double) SrcWidth /
-					( NewWidth + ( (double) NewWidth / SrcWidth - 1.0 ));
+				kx = (double) ( SrcWidth - 1 ) / ( NewWidth - 1 );
 			}
 			else
 			{
@@ -4339,8 +4338,7 @@ public:
 
 			if( NewHeight > SrcHeight )
 			{
-				ky = (double) SrcHeight /
-					( NewHeight + ( (double) NewHeight / SrcHeight - 1.0 ));
+				ky = (double) ( SrcHeight - 1 ) / ( NewHeight - 1 );
 			}
 			else
 			{

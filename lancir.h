@@ -104,8 +104,7 @@ public:
 
 		if( NewWidth > SrcWidth )
 		{
-			kx = (double) SrcWidth /
-				( NewWidth + ( (double) NewWidth / SrcWidth - 1.0 ));
+			kx = (double) ( SrcWidth - 1 ) / ( NewWidth - 1 );
 		}
 		else
 		{
@@ -121,8 +120,7 @@ public:
 
 		if( NewHeight > SrcHeight )
 		{
-			ky = (double) SrcHeight /
-				( NewHeight + ( (double) NewHeight / SrcHeight - 1.0 ));
+			ky = (double) ( SrcHeight - 1 ) / ( NewHeight - 1 );
 		}
 		else
 		{

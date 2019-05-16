@@ -317,6 +317,7 @@ default setting.
 Version 2.3:
 
 * Implemented CLancIR image resizing algorithm.
+* Fixed a minor image offset on image upsizing.
 
 Version 2.2:
 
