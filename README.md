@@ -1,5 +1,8 @@
 # AVIR #
 ## Introduction ##
+Keywords: image resize, image resizer, image resizing, image scaling,
+image scaler, image resize c++, image resizer c++
+
 Me, Aleksey Vaneev, is happy to offer you an open source image resizing /
 scaling library which has reached a production level of quality, and is
 ready to be incorporated into any project. This library features routines
@@ -293,7 +296,28 @@ being the "golden standard" for filter length per decibel of stop-band
 attenuation). This is a price that should be paid for stable spectral
 characteristics.
 
+## LANCIR ##
+
+As a part of AVIR library, the `CLancIR` class is also offered which is an
+optimal implementation of *Lanczos* image resizing filter. This class has a
+similar programmatic interface to AVIR, but it is not thread-safe: each
+executing thread should have its own `CLancIR` object. This class was designed
+for cases of batch processing of same-sized frames like in video encoding.
+
+LANCIR offers up to 200% faster image resizing in comparison to AVIR. The
+quality difference is, however, debatable. Note that while LANCIR can take
+8- and 16-bit and float image buffers, its precision is limited to 8-bit
+resizing.
+
+LANCIR should be seen as a bonus and as some kind of quality comparison.
+LANCIR uses Lanczos filter "a" parameter equal to 3 which is similar to AVIR's
+default setting.
+
 ## Change log ##
+Version 2.3:
+
+* Implemented CLancIR image resizing algorithm.
+
 Version 2.2:
 
 * Released AVIR under a permissive MIT license agreement.
