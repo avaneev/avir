@@ -561,8 +561,7 @@ protected:
 		}
 
 		/**
-		 * Function updates resizing filters and positions, updates "padl",
-		 * "padr" and "pos" buffer.
+		 * Function updates resizing filter.
 		 *
 		 * @param la Lanczos "a" parameter value.
 		 * @param k Resizing step.
@@ -628,6 +627,7 @@ protected:
 				Filters[ Frac ] = FilterBuf + FracFill * KernelLen;
 				FracFill++;
 				makeFilter( 1.0 - (double) Frac / FracCount, Filters[ Frac ]);
+				normalizeFilter( Filters[ Frac ]);
 			}
 
 			return( Filters[ Frac ]);
@@ -787,6 +787,33 @@ protected:
 			{
 				ut *= LANCIR_PI;
 				*op = (T) ( f.generate() * fw.generate() / ( ut * ut ));
+			}
+		}
+
+		/**
+		 * Function normalizes the specified filter so that it has unity gain
+		 * at DC.
+		 *
+		 * @param p Filter buffer pointer.
+		 * @tparam T Filter buffer type.
+		 */
+
+		template< class T >
+		void normalizeFilter( T* const p ) const
+		{
+			double s = 0.0;
+			int i;
+
+			for( i = 0; i < KernelLen; i++ )
+			{
+				s += p[ i ];
+			}
+
+			s = 1.0 / s;
+
+			for( i = 0; i < KernelLen; i++ )
+			{
+				p[ i ] = (T) ( p[ i ] * s );
 			}
 		}
 	};
