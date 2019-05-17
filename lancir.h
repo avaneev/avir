@@ -11,6 +11,12 @@
  *
  * AVIR Copyright (c) 2015-2019 Aleksey Vaneev
  *
+ * @mainpage
+ *
+ * @section intro_sec Introduction
+ *
+ * Description is available at https://github.com/avaneev/avir
+ *
  * @section license License
  *
  * AVIR License Agreement
@@ -72,6 +78,18 @@ namespace avir {
 
 class CLancIR
 {
+private:
+	CLancIR( const CLancIR& )
+	{
+		// Unsupported.
+	}
+
+	CLancIR& operator = ( const CLancIR& )
+	{
+		// Unsupported.
+		return( *this );
+	}
+
 public:
 	CLancIR()
 		: FltBuf( NULL )
@@ -103,6 +121,16 @@ public:
 	 * @param NewHeight New image height.
 	 * @param ElCount The number of elements (channels) used to store each
 	 * source and destination pixel (1-4).
+	 * @param k Resizing step (one output pixel corresponds to "k" input
+	 * pixels). A downsizing factor if > 1.0; upsizing factor if <= 1.0.
+	 * Multiply by -1 if you would like to bypass "ox" and "oy" adjustment
+	 * which is done by default to produce a centered image. If step value
+	 * equals 0, the step value will be chosen automatically and independently
+	 * for horizontal and vertical resizing.
+	 * @param ox Start X pixel offset within source image (can be negative).
+	 * Positive offset moves the image to the left.
+	 * @param oy Start Y pixel offset within source image (can be negative).
+	 * Positive offset moves the image to the top.
 	 * @tparam T Input and output buffer element's type. Can be uint8_t
 	 * (0-255 value range), uint16_t (0-65535 value range), float
 	 * (any value range), double (any value range). Larger integer types are
@@ -112,7 +140,8 @@ public:
 	template< class T >
 	void resizeImage( const T* const SrcBuf, const int SrcWidth,
 		const int SrcHeight, int SrcScanlineSize, T* const NewBuf,
-		const int NewWidth, const int NewHeight, const int ElCount )
+		const int NewWidth, const int NewHeight, const int ElCount,
+		const double k = 0.0, double ox = 0.0, double oy = 0.0 )
 	{
 		if( SrcWidth == 0 || SrcHeight == 0 )
 		{
@@ -128,33 +157,52 @@ public:
 		const double la = 3.0; // Lanczos "a".
 		double kx;
 		double ky;
-		double ox = 0.0;
-		double oy = 0.0;
 
-		if( NewWidth > SrcWidth )
+		if( k == 0.0 )
 		{
-			kx = (double) ( SrcWidth - 1 ) / ( NewWidth - 1 );
+			if( NewWidth > SrcWidth )
+			{
+				kx = (double) ( SrcWidth - 1 ) / ( NewWidth - 1 );
+			}
+			else
+			{
+				kx = (double) SrcWidth / NewWidth;
+				ox += ( kx - 1.0 ) * 0.5;
+			}
+
+			if( NewHeight > SrcHeight )
+			{
+				ky = (double) ( SrcHeight - 1 ) / ( NewHeight - 1 );
+			}
+			else
+			{
+				ky = (double) SrcHeight / NewHeight;
+				oy += ( ky - 1.0 ) * 0.5;
+			}
+		}
+		else
+		if( k > 0.0 )
+		{
+			kx = k;
+			ky = k;
+
+			if( k > 1.0 )
+			{
+				const double ko = ( k - 1.0 ) * 0.5;
+				ox += ko;
+				oy += ko;
+			}
 		}
 		else
 		{
-			kx = (double) SrcWidth / NewWidth;
-			ox += ( kx - 1.0 ) * 0.5;
+			kx = -k;
+			ky = -k;
 		}
 
 		if( rfh.update( la, kx ))
 		{
 			rsh.reset();
 			rsv.reset();
-		}
-
-		if( NewHeight > SrcHeight )
-		{
-			ky = (double) ( SrcHeight - 1 ) / ( NewHeight - 1 );
-		}
-		else
-		{
-			ky = (double) SrcHeight / NewHeight;
-			oy += ( ky - 1.0 ) * 0.5;
 		}
 
 		CResizeFilters* rfv; // Pointer to resizing filters for vertical
@@ -270,8 +318,8 @@ public:
 				copyOutput3( spv, opd, NewHeight, NewWidthE, IsIOFloat,
 					Clamp );
 
-				ip += ElCount;
-				opd += ElCount;
+				ip += 3;
+				opd += 3;
 			}
 		}
 		else
@@ -284,8 +332,8 @@ public:
 				copyOutput1( spv, opd, NewHeight, NewWidthE, IsIOFloat,
 					Clamp );
 
-				ip += ElCount;
-				opd += ElCount;
+				ip++;
+				opd++;
 			}
 		}
 		else
@@ -298,8 +346,8 @@ public:
 				copyOutput4( spv, opd, NewHeight, NewWidthE, IsIOFloat,
 					Clamp );
 
-				ip += ElCount;
-				opd += ElCount;
+				ip += 4;
+				opd += 4;
 			}
 		}
 		else
@@ -312,8 +360,8 @@ public:
 				copyOutput2( spv, opd, NewHeight, NewWidthE, IsIOFloat,
 					Clamp );
 
-				ip += ElCount;
-				opd += ElCount;
+				ip += 2;
+				opd += 2;
 			}
 		}
 	}
@@ -750,7 +798,7 @@ protected:
 
 	struct CResizePos
 	{
-		float* ip; ///< Source image pixel pointer.
+		const float* ip; ///< Source image pixel pointer.
 			///<
 		float* flt; ///< Fractional delay filter.
 			///<
@@ -810,27 +858,42 @@ protected:
 		 * "pos" buffer.
 		 *
 		 * @param k Resizing step.
-		 * @param o Initial source image offset.
+		 * @param o0 Initial source image offset.
 		 * @param SrcLen Source image scanline length, used to create a
 		 * scan-line buffer without length pre-calculation.
 		 * @param DstLen Destination image scanline length.
 		 * @param rf Resizing filters object.
 		 */
 
-		void update( const double k, double o, const int ElCount,
+		void update( const double k, const double o0, const int ElCount,
 			const int SrcLen, const int DstLen, CResizeFilters& rf )
 		{
-			if( DstLen == PrevDstLen && o == Prevo && ElCount == PrevElCount )
+			if( DstLen == PrevDstLen && o0 == Prevo &&
+				ElCount == PrevElCount )
 			{
 				return;
 			}
 
 			PrevDstLen = DstLen;
-			Prevo = o;
+			Prevo = o0;
 			PrevElCount = ElCount;
 
-			padl = rf.fl2 - 1;
-			padr = rf.fl2;
+			const int fl2m1 = rf.fl2 - 1;
+			padl = fl2m1 - (int) floor( o0 );
+
+			if( padl < 0 )
+			{
+				padl = 0;
+			}
+
+			padr = (int) floor( o0 + k * ( DstLen - 1 )) + rf.fl2 + 1 -
+				SrcLen;
+
+			if( padr < 0 )
+			{
+				padr = 0;
+			}
+
 			const int splennew = ( padl + SrcLen + padr ) * ElCount;
 
 			if( splennew > splen )
@@ -847,14 +910,15 @@ protected:
 				pos = new CResizePos[ poslen ];
 			}
 
+			const float* const spo = sp + ( padl - fl2m1 ) * ElCount;
 			int i;
 
 			for( i = 0; i < DstLen; i++ )
 			{
+				const double o = o0 + k * i;
 				const int ix = (int) floor( o );
-				pos[ i ].ip = sp + ix * ElCount;
+				pos[ i ].ip = spo + ix * ElCount;
 				pos[ i ].flt = rf.getFilter( o - ix );
-				o += k;
 			}
 		}
 
@@ -1152,14 +1216,14 @@ protected:
 	}
 
 	#define LANCIR_LF_PRE \
-			while( DstLen > 0 ) \
+			CResizePos* const rpe = rp + DstLen; \
+			while( rp < rpe ) \
 			{ \
 				const float* ip = rp -> ip; \
 				const float* const flt = rp -> flt;
 
 	#define LANCIR_LF_POST \
 				rp++; \
-				DstLen--; \
 			}
 
 	/**
