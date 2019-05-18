@@ -369,7 +369,7 @@ public:
 protected:
 	float* FltBuf; ///< Intermediate resizing buffer.
 		///<
-	size_t FltBufLen; ///< Intermediate resizing buffer size.
+	size_t FltBufLen; ///< Intermediate resizing buffer length.
 		///<
 	float* spv; ///< Scanline buffer for vertical resizing.
 		///<
@@ -531,8 +531,7 @@ protected:
 	class CResizeScanline;
 
 	/**
-	 * Class implements fractional delay filter calculation and prepares
-	 * source scanline positions for resize filtering.
+	 * Class implements fractional delay filter bank calculation.
 	 */
 
 	class CResizeFilters
@@ -561,7 +560,7 @@ protected:
 		}
 
 		/**
-		 * Function updates resizing filter.
+		 * Function updates the resizing filter bank.
 		 *
 		 * @param la Lanczos "a" parameter value.
 		 * @param k Resizing step.
@@ -832,7 +831,8 @@ protected:
 	};
 
 	/**
-	 * Class contains resizing positioning and a temporary scanline buffer.
+	 * Class contains resizing positioning and a temporary scanline buffer,
+	 * prepares source scanline positions for resize filtering.
 	 */
 
 	class CResizeScanline
@@ -844,10 +844,10 @@ protected:
 		int padr; ///< Right-padding (in pixels) required for source scanline.
 			///< Available after the update() function call.
 			///<
-		float* sp; ///< Source scan-line buffer, with "padl" and "padr"
+		float* sp; ///< Source scanline buffer, with "padl" and "padr"
 			///< padding.
 			///<
-		CResizePos* pos; ///< Source scan-line pointers (point to "sp")
+		CResizePos* pos; ///< Source scanline pointers (point to "sp")
 			///< and filters for each destination pixel position. Available
 			///< after the update() function call.
 			///<
@@ -887,7 +887,7 @@ protected:
 		 * @param k Resizing step.
 		 * @param o0 Initial source image offset.
 		 * @param SrcLen Source image scanline length, used to create a
-		 * scan-line buffer without length pre-calculation.
+		 * scanline buffer without length pre-calculation.
 		 * @param DstLen Destination image scanline length.
 		 * @param rf Resizing filters object.
 		 */
@@ -973,13 +973,13 @@ protected:
 		///<
 
 	/**
-	 * Function copies scan-line from the source buffer in its native format
-	 * to internal scan-line buffer, in preparation for horizontal resizing.
+	 * Function copies scanline from the source buffer in its native format
+	 * to internal scanline buffer, in preparation for horizontal resizing.
 	 * Variants for 1-4-channel images.
 	 *
-	 * @param ip Source scan-line buffer.
-	 * @param rs Scan-line resizing positions object.
-	 * @param l Source scan-line length, in pixels.
+	 * @param ip Source scanline buffer.
+	 * @param rs Scanline resizing positions object.
+	 * @param l Source scanline length, in pixels.
 	 * @param ipinc "ip" increment per pixel.
 	 */
 
@@ -1106,13 +1106,13 @@ protected:
 	}
 
 	/**
-	 * Function copies scan-line from the source buffer in its native format
-	 * to internal scan-line buffer, in preparation for vertical resizing.
+	 * Function copies scanline from the source buffer in its native format
+	 * to internal scanline buffer, in preparation for vertical resizing.
 	 * Variants for 1-4-channel images.
 	 *
-	 * @param ip Source scan-line buffer.
-	 * @param rs Scan-line resizing positions object.
-	 * @param l Source scan-line length, in pixels.
+	 * @param ip Source scanline buffer.
+	 * @param rs Scanline resizing positions object.
+	 * @param l Source scanline length, in pixels.
 	 * @param ipinc "ip" increment per pixel.
 	 */
 
@@ -1254,7 +1254,7 @@ protected:
 			}
 
 	/**
-	 * Function performs internal scan-line resizing. Variants for 1-4-channel
+	 * Function performs internal scanline resizing. Variants for 1-4-channel
 	 * images.
 	 *
 	 * @param op Destination buffer.
