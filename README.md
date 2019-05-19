@@ -38,6 +38,10 @@ filtering techniques. EWA-like technique is not implemented in AVIR, because
 it requires considerably more computing resources and may produce a blurred
 image.
 
+As a bonus, a faster `LANCIR` image resizing algorithm is also offered as a
+part of this library. But the main focus of this documentation is the original
+AVIR image resizing algorithm.
+
 AVIR does not offer affine and non-linear image transformations "out of the
 box". Since upsizing is a relatively fast operation in AVIR (required time
 scales linearly with the output image area), affine and non-linear
