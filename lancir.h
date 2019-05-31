@@ -121,12 +121,12 @@ public:
 	 * @param NewHeight New image height.
 	 * @param ElCount The number of elements (channels) used to store each
 	 * source and destination pixel (1-4).
-	 * @param k Resizing step (one output pixel corresponds to "k" input
-	 * pixels). A downsizing factor if > 1.0; upsizing factor if <= 1.0.
-	 * Multiply by -1 if you would like to bypass "ox" and "oy" adjustment
-	 * which is done by default to produce a centered image. If step value
-	 * equals 0, the step value will be chosen automatically and independently
-	 * for horizontal and vertical resizing.
+	 * @param kx0 Resizing step - horizontal (one output pixel corresponds to
+	 * "k" input pixels). A downsizing factor if > 1.0; upsizing factor
+	 * if <= 1.0. Multiply by -1 if you would like to bypass "ox" and "oy"
+	 * adjustment which is done by default to produce a centered image. If
+	 * step value equals 0, the step value will be chosen automatically.
+	 * @param ky0 Resizing step - vertical. Same as "kx".
 	 * @param ox Start X pixel offset within source image (can be negative).
 	 * Positive offset moves the image to the left.
 	 * @param oy Start Y pixel offset within source image (can be negative).
@@ -141,7 +141,8 @@ public:
 	void resizeImage( const T* const SrcBuf, const int SrcWidth,
 		const int SrcHeight, int SrcScanlineSize, T* const NewBuf,
 		const int NewWidth, const int NewHeight, const int ElCount,
-		const double k = 0.0, double ox = 0.0, double oy = 0.0 )
+		const double kx0 = 0.0, const double ky0 = 0.0, double ox = 0.0,
+		double oy = 0.0 )
 	{
 		if( SrcWidth == 0 || SrcHeight == 0 )
 		{
@@ -158,7 +159,7 @@ public:
 		double kx;
 		double ky;
 
-		if( k == 0.0 )
+		if( kx0 == 0.0 )
 		{
 			if( NewWidth > SrcWidth )
 			{
@@ -169,7 +170,24 @@ public:
 				kx = (double) SrcWidth / NewWidth;
 				ox += ( kx - 1.0 ) * 0.5;
 			}
+		}
+		else
+		if( kx0 > 0.0 )
+		{
+			kx = kx0;
 
+			if( kx0 > 1.0 )
+			{
+				ox += ( kx0 - 1.0 ) * 0.5;
+			}
+		}
+		else
+		{
+			kx = -kx0;
+		}
+
+		if( ky0 == 0.0 )
+		{
 			if( NewHeight > SrcHeight )
 			{
 				ky = (double) ( SrcHeight - 1 ) / ( NewHeight - 1 );
@@ -181,22 +199,18 @@ public:
 			}
 		}
 		else
-		if( k > 0.0 )
+		if( ky0 > 0.0 )
 		{
-			kx = k;
-			ky = k;
+			ky = ky0;
 
-			if( k > 1.0 )
+			if( ky0 > 1.0 )
 			{
-				const double ko = ( k - 1.0 ) * 0.5;
-				ox += ko;
-				oy += ko;
+				oy += ( ky0 - 1.0 ) * 0.5;
 			}
 		}
 		else
 		{
-			kx = -k;
-			ky = -k;
+			ky = -ky0;
 		}
 
 		if( rfh.update( la, kx ))
@@ -234,7 +248,7 @@ public:
 
 		// Allocate/resize temporary buffer.
 
-		const size_t FltBufLenNew = (size_t) NewWidthE * SrcHeight;
+		const size_t FltBufLenNew = (size_t) NewWidthE * (size_t) SrcHeight;
 
 		if( FltBufLenNew > FltBufLen )
 		{
