@@ -144,14 +144,14 @@ public:
 		const double kx0 = 0.0, const double ky0 = 0.0, double ox = 0.0,
 		double oy = 0.0 )
 	{
-		if( SrcWidth == 0 || SrcHeight == 0 )
+		if( NewWidth <= 0 || NewHeight <= 0 )
 		{
-			memset( NewBuf, 0, (size_t) NewWidth * NewHeight * sizeof( T ));
 			return;
 		}
-		else
-		if( NewWidth == 0 || NewHeight == 0 )
+
+		if( SrcWidth <= 0 || SrcHeight <= 0 )
 		{
+			memset( NewBuf, 0, (size_t) NewWidth * NewHeight * sizeof( T ));
 			return;
 		}
 
@@ -594,6 +594,12 @@ protected:
 
 			NormFreq = ( k <= 1.0 ? 1.0 : 1.0 / k );
 			Freq = LANCIR_PI * NormFreq;
+
+			if( Freq > LANCIR_PI )
+			{
+				Freq = LANCIR_PI;
+			}
+
 			FreqA = LANCIR_PI * NormFreq / la;
 			Len2 = la / NormFreq;
 			fl2 = (int) ceil( Len2 );
@@ -869,7 +875,9 @@ protected:
 		CResizeScanline()
 			: sp( NULL )
 			, pos( NULL )
+			, PrevSrcLen( -1 )
 			, PrevDstLen( -1 )
+			, Prevk( 0.0 )
 			, Prevo( 0.0 )
 			, PrevElCount( 0 )
 			, splen( 0 )
@@ -891,7 +899,7 @@ protected:
 
 		void reset()
 		{
-			PrevDstLen = -1;
+			PrevSrcLen = -1;
 		}
 
 		/**
@@ -909,13 +917,15 @@ protected:
 		void update( const double k, const double o0, const int ElCount,
 			const int SrcLen, const int DstLen, CResizeFilters& rf )
 		{
-			if( DstLen == PrevDstLen && o0 == Prevo &&
-				ElCount == PrevElCount )
+			if( SrcLen == PrevSrcLen && DstLen == PrevDstLen &&
+				k == Prevk && o0 == Prevo && ElCount == PrevElCount )
 			{
 				return;
 			}
 
+			PrevSrcLen = SrcLen;
 			PrevDstLen = DstLen;
+			Prevk = k;
 			Prevo = o0;
 			PrevElCount = ElCount;
 
@@ -964,7 +974,11 @@ protected:
 		}
 
 	protected:
+		int PrevSrcLen; ///< Previous SrcLen.
+			///<
 		int PrevDstLen; ///< Previous DstLen.
+			///<
+		double Prevk; ///< Previous "k".
 			///<
 		double Prevo; ///< Previous "o".
 			///<
