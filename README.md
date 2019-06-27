@@ -3,6 +3,8 @@
 Keywords: image resize, image resizer, image resizing, image scaling,
 image scaler, image resize c++, image resizer c++
 
+Please consider supporting the author on [Patreon](https://www.patreon.com/aleksey_vaneev).
+
 Me, Aleksey Vaneev, is happy to offer you an open source image resizing /
 scaling library which has reached a production level of quality, and is
 ready to be incorporated into any project. This library features routines
