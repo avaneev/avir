@@ -50,7 +50,7 @@
  * Please credit the author of this library in your documentation in the
  * following way: "AVIR image resizing algorithm designed by Aleksey Vaneev"
  *
- * @version 2.3
+ * @version 2.4
  */
 
 #ifndef AVIR_CIMAGERESIZER_INCLUDED
@@ -67,7 +67,7 @@ namespace avir {
  * The macro defines AVIR version string.
  */
 
-#define AVIR_VERSION "2.3"
+#define AVIR_VERSION "2.4"
 
 /**
  * The macro equals to "pi" constant, fills 53-bit floating point mantissa.
@@ -4119,28 +4119,6 @@ protected:
 };
 
 /**
- * @brief Floating-point processing state reset class.
- *
- * This class implements type-dependent floating-point processing reset
- * function which gets called at the end of the image resizing function. Such
- * reset is usually required to switch from SSE to FPU mode, or otherwise to
- * switch to a mode most probably expected by the caller. Default
- * implementation does nothing.
- */
-
-template< class fptype >
-struct fpclass_reset
-{
-	/**
-	 * Function performs floating-point processing state reset.
-	 */
-
-	static void reset()
-	{
-	}
-};
-
-/**
  * @brief Floating-point processing definition and abstraction class.
  *
  * This class defines several constants and typedefs that point to classes
@@ -4200,9 +4178,6 @@ public:
 		///< Filtering step class to use during processing.
 		///<
 	typedef adith CDitherer; ///< Ditherer class to use during processing.
-		///<
-	typedef fpclass_reset< fptype > CReset; ///< Floating-point processing
-		///< reset implementation class.
 		///<
 };
 
@@ -4606,7 +4581,6 @@ public:
 			ThreadPool.waitAllWorkloadsToFinish();
 			ThreadPool.removeAllWorkloads();
 
-			fpclass :: CReset :: reset();
 			return;
 		}
 
@@ -4653,7 +4627,6 @@ public:
 			ThreadPool.waitAllWorkloadsToFinish();
 			ThreadPool.removeAllWorkloads();
 
-			fpclass :: CReset :: reset();
 			return;
 		}
 
@@ -4736,8 +4709,6 @@ public:
 		}
 
 		ThreadPool.removeAllWorkloads();
-
-		fpclass :: CReset :: reset();
 	}
 
 private:

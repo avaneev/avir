@@ -320,6 +320,12 @@ LANCIR uses Lanczos filter "a" parameter equal to 3 which is similar to AVIR's
 default setting.
 
 ## Change log ##
+Version 2.4:
+
+* Removed outdated `_mm_reset()` function calls from the SIMD code.
+* Changed `float4 round()` to use SSE2 rounding features, avoiding use of
+64-bit registers.
+
 Version 2.3:
 
 * Implemented CLancIR image resizing algorithm.

@@ -16,6 +16,7 @@
 #define AVIR_FLOAT4_SSE_INCLUDED
 
 #include <xmmintrin.h>
+#include <emmintrin.h>
 
 namespace avir {
 
@@ -284,8 +285,7 @@ inline float4 round( const float4& v )
 	unsigned int prevrm = _MM_GET_ROUNDING_MODE();
 	_MM_SET_ROUNDING_MODE( _MM_ROUND_NEAREST );
 
-	const __m128 res = _mm_cvtpi32x2_ps( _mm_cvtps_pi32( v.value ),
-		_mm_cvtps_pi32( _mm_movehl_ps( v.value, v.value )));
+	const __m128 res = _mm_cvtepi32_ps( _mm_cvtps_epi32( v.value ));
 
 	_MM_SET_ROUNDING_MODE( prevrm );
 
@@ -307,24 +307,6 @@ inline float4 clamp( const float4& Value, const float4& minv,
 {
 	return( _mm_min_ps( _mm_max_ps( Value.value, minv.value ), maxv.value ));
 }
-
-template<>
-struct fpclass_reset< float4 >
-{
-	static void reset()
-	{
-		_mm_empty();
-	}
-};
-
-template<>
-struct fpclass_reset< const float4 >
-{
-	static void reset()
-	{
-		_mm_empty();
-	}
-};
 
 typedef fpclass_def< avir :: float4, float > fpclass_float4; ///<
 	///< Class that can be used as the "fpclass" template parameter of the

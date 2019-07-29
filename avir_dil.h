@@ -1007,9 +1007,6 @@ public:
 		///<
 	typedef adith CDitherer; ///< Ditherer class to use during processing.
 		///<
-	typedef fpclass_reset< afptypesimd > CReset; ///< Floating-point
-		///< processing reset implementation class.
-		///<
 };
 
 } // namespace avir

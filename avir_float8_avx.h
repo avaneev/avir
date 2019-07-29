@@ -348,24 +348,6 @@ inline float8 clamp( const float8& Value, const float8& minv,
 		maxv.value ));
 }
 
-template<>
-struct fpclass_reset< float8 >
-{
-	static void reset()
-	{
-		_mm_empty();
-	}
-};
-
-template<>
-struct fpclass_reset< const float8 >
-{
-	static void reset()
-	{
-		_mm_empty();
-	}
-};
-
 typedef fpclass_def_dil< float, avir :: float8 > fpclass_float8_dil; ///<
 	///< Class that can be used as the "fpclass" template parameter of the
 	///< avir::CImageResizer class to perform calculation using
