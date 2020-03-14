@@ -361,6 +361,7 @@ Version 2.0:
 This library is used by:
 
   * [Contaware.com](http://www.contaware.com/)
+  * [Pretext contact maps](https://github.com/wtsi-hpag/PretextSnapshot)
 
 Please drop me a note at aleksey.vaneev@gmail.com and I will include a link to
 your software product to the list of users. This list is important at

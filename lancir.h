@@ -9,7 +9,7 @@
  * This is the self-contained inclusion file for the "LANCIR" image resizer,
  * part of the AVIR library.
  *
- * AVIR Copyright (c) 2015-2019 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2020 Aleksey Vaneev
  *
  * @mainpage
  *
@@ -23,7 +23,7 @@
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2015-2019 Aleksey Vaneev
+ * Copyright (c) 2015-2020 Aleksey Vaneev
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -608,7 +608,8 @@ protected:
 			FracCount = 607; // For 8-bit precision.
 			FracFill = 0;
 
-			const int FilterBufLenNew = FracCount * KernelLen;
+			const int FilterBufLenNew = ( FracCount + 1 ) * KernelLen;
+				// Add +1 to cover rare cases of fractional delay == 1.
 
 			if( FilterBufLenNew > FilterBufLen )
 			{
@@ -621,10 +622,10 @@ protected:
 			{
 				delete[] Filters;
 				FiltersLen = FracCount;
-				Filters = new float*[ FiltersLen ];
+				Filters = new float*[ FiltersLen + 1 ];
 			}
 
-			memset( Filters, 0, FracCount * sizeof( float* ));
+			memset( Filters, 0, ( FiltersLen + 1 ) * sizeof( float* ));
 
 			return( true );
 		}
