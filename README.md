@@ -320,6 +320,11 @@ LANCIR uses Lanczos filter "a" parameter equal to 3 which is similar to AVIR's
 default setting.
 
 ## Change log ##
+Version 2.5:
+
+* Surrounded `memcpy` calls with length checks to conform to `memcpy`
+specification which does not allow NULL pointers even with zero copy length.
+
 Version 2.4:
 
 * Removed outdated `_mm_reset()` function calls from the SIMD code.

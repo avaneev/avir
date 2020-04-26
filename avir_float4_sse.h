@@ -9,7 +9,7 @@
  * This file includes the "float4" SSE-based type used for SIMD variable
  * storage and processing.
  *
- * AVIR Copyright (c) 2015-2019 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2020 Aleksey Vaneev
  */
 
 #ifndef AVIR_FLOAT4_SSE_INCLUDED

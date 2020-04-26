@@ -11,7 +11,7 @@
  * in its entirety. Also includes several classes and functions that can be
  * useful elsewhere.
  *
- * AVIR Copyright (c) 2015-2019 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2020 Aleksey Vaneev
  *
  * @mainpage
  *
@@ -27,7 +27,7 @@
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2015-2019 Aleksey Vaneev
+ * Copyright (c) 2015-2020 Aleksey Vaneev
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -50,7 +50,7 @@
  * Please credit the author of this library in your documentation in the
  * following way: "AVIR image resizing algorithm designed by Aleksey Vaneev"
  *
- * @version 2.4
+ * @version 2.5
  */
 
 #ifndef AVIR_CIMAGERESIZER_INCLUDED
@@ -67,7 +67,7 @@ namespace avir {
  * The macro defines AVIR version string.
  */
 
-#define AVIR_VERSION "2.4"
+#define AVIR_VERSION "2.5"
 
 /**
  * The macro equals to "pi" constant, fills 53-bit floating point mantissa.
@@ -476,7 +476,11 @@ public:
 	CBuffer( const CBuffer& Source )
 	{
 		allocinit( Source.Capacity, Source.Alignment );
-		memcpy( DataAligned, Source.DataAligned, Capacity * sizeof( T ));
+
+		if( Capacity > 0 )
+		{
+			memcpy( DataAligned, Source.DataAligned, Capacity * sizeof( T ));
+		}
 	}
 
 	~CBuffer()
@@ -487,7 +491,12 @@ public:
 	CBuffer& operator = ( const CBuffer& Source )
 	{
 		alloc( Source.Capacity, Source.Alignment );
-		memcpy( DataAligned, Source.DataAligned, Capacity * sizeof( T ));
+
+		if( Capacity > 0 )
+		{
+			memcpy( DataAligned, Source.DataAligned, Capacity * sizeof( T ));
+		}
+
 		return( *this );
 	}
 
@@ -567,7 +576,12 @@ public:
 			T* const PrevDataAligned = DataAligned;
 
 			allocinit( NewCapacity, Alignment );
-			memcpy( DataAligned, PrevDataAligned, PrevCapacity * sizeof( T ));
+
+			if( PrevCapacity > 0 )
+			{
+				memcpy( DataAligned, PrevDataAligned,
+					PrevCapacity * sizeof( T ));
+			}
 
 			:: free( PrevData );
 		}
