@@ -367,7 +367,12 @@ This library is used by:
 
   * [Contaware.com](http://www.contaware.com/)
   * [Pretext contact maps](https://github.com/wtsi-hpag/PretextSnapshot)
+  * [LVC Audio](https://lvcaudio.com)
 
 Please drop me a note at aleksey.vaneev@gmail.com and I will include a link to
 your software product to the list of users. This list is important at
 maintaining confidence in this library among the interested parties.
+
+## Other ##
+
+[Follow me on Twitter](https://twitter.com/AlekseyVaneev)
