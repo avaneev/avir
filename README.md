@@ -1,5 +1,7 @@
 # AVIR #
+
 ## Introduction ##
+
 Keywords: image resize, image resizer, image resizing, image scaling,
 image scaler, image resize c++, image resizer c++
 
@@ -62,15 +64,18 @@ change during upsizing.
 *AVIR is devoted to women. Your digital photos can look good at any size!*
 
 ## Requirements ##
+
 C++ compiler and system with efficient "float" floating point (24-bit
 mantissa) type support. This library can also internally use the "double" and
 SIMD floating point types during resizing if needed. This library does not
 have dependencies beside the standard C library.
 
 ## Links ##
+
 * [Documentation](https://www.voxengo.com/public/avir/Documentation/)
 
 ## Usage Information ##
+
 The image resizer is represented by the `avir::CImageResizer<>` class, which
 is a single front-end class for the whole library. Basically, you do not need
 to use nor understand any other classes beside this class.
@@ -130,6 +135,7 @@ The multi-threaded (horizontally-threaded) infrastructure is available, but
 requires additional system-specific interfacing code for engagement.
 
 ## SIMD Usage Information ##
+
 This library is capable of using SIMD floating point types for internal
 variables. This means that up to 4 color channels can be processed in
 parallel. Since the default interleaved processing algorithm itself remains
@@ -162,6 +168,7 @@ SSE-specific resizing code may still be a little bit more efficient for
 4-channel image resizing.
 
 ## Notes ##
+
 This library was tested for compatibility with [GNU C++](http://gcc.gnu.org/),
 [Microsoft Visual C++](http://www.microsoft.com/visualstudio/eng/products/visual-studio-express-products)
 and [Intel C++](http://software.intel.com/en-us/c-compilers) compilers, on 32-
@@ -207,6 +214,7 @@ amplified by gamma correction. This can also have an effect of reduced
 contrast.
 
 ## Interpolation Discussion ##
+
 The use of certain low-pass filters and 2X upsampling in this library is
 hardly debatable, because they are needed to attain a certain anti-aliasing
 effect and keep ringing artifacts low. But the use of sinc function-based
@@ -229,6 +237,7 @@ superior stop-band attenuation which almost guarantees absence of artifacts if
 the image is considerably sharpened afterwards.
 
 ## Why 2X upsizing in AVIR? ##
+
 Classic approaches to image resizing do not perform an additional 2X upsizing.
 So, why such upsizing is needed at all in AVIR? Indeed, image resizing can be
 implemented using a single interpolation filter which is applied to the source
@@ -266,6 +275,7 @@ perform 2X upsizing usually cannot design a good interpolation filter for such
 factors just because there is not enough spectral space available.
 
 ## Why Peaked Cosine in AVIR? ##
+
 First of all, AVIR is a general solution to image resizing problem. That is
 why it should not be directly compared to "spline interpolation" or "Lanczos
 resampling", because the latter two are only means to design interpolation
@@ -319,7 +329,26 @@ LANCIR should be seen as a bonus and as some kind of quality comparison.
 LANCIR uses Lanczos filter "a" parameter equal to 3 which is similar to AVIR's
 default setting.
 
+## Users ##
+
+This library is used by:
+
+  * [Contaware.com](http://www.contaware.com/)
+  * [Pretext contact maps](https://github.com/wtsi-hpag/PretextSnapshot)
+  * [LVC Audio](https://lvcaudio.com)
+
+Please drop me a note at aleksey.vaneev@gmail.com and I will include a link to
+your software product to the list of users. This list is important at
+maintaining confidence in this library among the interested parties.
+
+## Other ##
+
+[Follow me on Twitter](https://twitter.com/AlekseyVaneev)
+
+[Become a patron on Patreon](https://patreon.com/aleksey_vaneev)
+
 ## Change log ##
+
 Version 2.5:
 
 * Surrounded `memcpy` calls with length checks to conform to `memcpy`
@@ -361,18 +390,3 @@ Version 2.0:
 * Fixed scaling of bit depth-reduction operation.
 * Improved error-diffusion dither's signal-to-noise ratio.
 * Compiled binaries with AVX2 instruction set (SSE4 for macOS).
-
-## Users ##
-This library is used by:
-
-  * [Contaware.com](http://www.contaware.com/)
-  * [Pretext contact maps](https://github.com/wtsi-hpag/PretextSnapshot)
-  * [LVC Audio](https://lvcaudio.com)
-
-Please drop me a note at aleksey.vaneev@gmail.com and I will include a link to
-your software product to the list of users. This list is important at
-maintaining confidence in this library among the interested parties.
-
-## Other ##
-
-[Follow me on Twitter](https://twitter.com/AlekseyVaneev)
