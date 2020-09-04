@@ -50,7 +50,7 @@
  * Please credit the author of this library in your documentation in the
  * following way: "AVIR image resizing algorithm designed by Aleksey Vaneev"
  *
- * @version 2.5
+ * @version 2.6
  */
 
 #ifndef AVIR_CIMAGERESIZER_INCLUDED
@@ -67,7 +67,7 @@ namespace avir {
  * The macro defines AVIR version string.
  */
 
-#define AVIR_VERSION "2.5"
+#define AVIR_VERSION "2.6"
 
 /**
  * The macro equals to "pi" constant, fills 53-bit floating point mantissa.
@@ -135,7 +135,7 @@ inline T clamp( const T& Value, const T minv, const T maxv )
 template< class T >
 inline T pow24_sRGB( const T x )
 {
-	const double x2 = x * x;
+	const double x2 = (double) x * x;
 	const double x3 = x2 * x;
 	const double x4 = x2 * x2;
 
@@ -155,7 +155,7 @@ inline T pow24_sRGB( const T x )
 template< class T >
 inline T pow24i_sRGB( const T x )
 {
-	const double sx = sqrt( x );
+	const double sx = sqrt( (double) x );
 	const double ssx = sqrt( sx );
 	const double sssx = sqrt( ssx );
 

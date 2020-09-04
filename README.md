@@ -334,6 +334,7 @@ This library is used by:
   * [Contaware.com](http://www.contaware.com/)
   * [Pretext contact maps](https://github.com/wtsi-hpag/PretextSnapshot)
   * [LVC Audio](https://lvcaudio.com)
+  * [Trainz](https://www.trainzportal.com/files/TRS19/credits.html)
 
 Please drop me a note at aleksey.vaneev@gmail.com and I will include a link to
 your software product to the list of users. This list is important at
@@ -346,6 +347,11 @@ maintaining confidence in this library among the interested parties.
 [Become a patron on Patreon](https://patreon.com/aleksey_vaneev)
 
 ## Change log ##
+
+Version 2.6:
+
+* A minor fix to sRGB gamma approximation functions.
+* LANCIR: fixed a rare access violation crash.
 
 Version 2.5:
 
