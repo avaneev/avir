@@ -94,11 +94,11 @@ For low-ringing performance:
 
     avir :: CImageResizer<> ImageResizer( 8, 0, avir :: CImageResizerParamsLR() );
 
-To use the built-in gamma correction, an object of the
-`avir::CImageResizerVars` class with its variable `UseSRGBGamma` set to "true"
-should be supplied to the `resizeImage()` function. Note that the gamma
-correction is applied to all channels (e.g. alpha-channel) in the current
-implementation.
+To use the built-in gamma correction, which is disabled by default, an object
+of the `avir::CImageResizerVars` class with its variable `UseSRGBGamma` set to
+`true` should be supplied to the `resizeImage()` function. Note that, when
+enabled, the gamma correction is applied to all channels (e.g. alpha-channel)
+in the current implementation.
 
     avir :: CImageResizerVars Vars;
     Vars.UseSRGBGamma = true;
@@ -113,7 +113,9 @@ this way:
 The library is able to process images of any bit depth: this includes 8-bit,
 16-bit, float and double types. Larger integer and signed integer types are
 not supported. Supported source and destination image sizes are only limited
-by the available system memory.
+by the available system memory. Note that the resizing function applies
+clipping to integer output only, floating point output will not be clipped to
+[0; 1] range.
 
 The code of this library was commented in the [Doxygen](http://www.doxygen.org/)
 style. To generate the documentation locally you may run the
