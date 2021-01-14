@@ -83,7 +83,9 @@ isolating it from all other code. The code is thread-safe. You need just
 a single resizer object per running application, at any time, even when
 resizing images concurrently.
 
-To resize images in your application, simply add 3 lines of code:
+To resize images in your application, simply add 3 lines of code (note that
+you may need to change `ImageResizer( 8 )` here, to specify your image's true
+bit resolution, which may be 10 or even 16):
 
     #include "avir.h"
     avir :: CImageResizer<> ImageResizer( 8 );
@@ -219,10 +221,9 @@ The use of certain low-pass filters and 2X upsampling in this library is
 hardly debatable, because they are needed to attain a certain anti-aliasing
 effect and keep ringing artifacts low. But the use of sinc function-based
 interpolation filter that is 18 taps-long (may be higher, up to 36 taps in
-practice) can be questioned, because even in 0th order case such
-interpolation filter requires 18 multiply-add operations. Comparatively, an
-optimal Hermite or cubic interpolation spline requires 8 multiply and 11 add
-operations.
+practice) can be questioned, because such interpolation filter requires 18
+multiply-add operations. Comparatively, an optimal Hermite or cubic
+interpolation spline requires 8 multiply and 11 add operations.
 
 One of the reasons 18-tap filter is preferred, is because due to memory
 bandwidth limitations using a lower-order filter does not provide any
