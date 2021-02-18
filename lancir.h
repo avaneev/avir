@@ -9,7 +9,7 @@
  * This is the self-contained inclusion file for the "LANCIR" image resizer,
  * part of the AVIR library.
  *
- * AVIR Copyright (c) 2015-2020 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2021 Aleksey Vaneev
  *
  * @mainpage
  *
@@ -23,7 +23,7 @@
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2015-2020 Aleksey Vaneev
+ * Copyright (c) 2015-2021 Aleksey Vaneev
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -151,7 +151,9 @@ public:
 
 		if( SrcWidth <= 0 || SrcHeight <= 0 )
 		{
-			memset( NewBuf, 0, (size_t) NewWidth * NewHeight * sizeof( T ));
+			memset( NewBuf, 0, (size_t) NewWidth * NewHeight * ElCount *
+				sizeof( T ));
+
 			return;
 		}
 
