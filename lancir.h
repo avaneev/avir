@@ -163,25 +163,14 @@ public:
 
 		if( kx0 == 0.0 )
 		{
-			if( NewWidth > SrcWidth )
-			{
-				kx = (double) ( SrcWidth - 1 ) / ( NewWidth - 1 );
-			}
-			else
-			{
-				kx = (double) SrcWidth / NewWidth;
-				ox += ( kx - 1.0 ) * 0.5;
-			}
+			kx = (double) SrcWidth / NewWidth;
+			ox += ( kx - 1.0 ) * 0.5;
 		}
 		else
 		if( kx0 > 0.0 )
 		{
 			kx = kx0;
-
-			if( kx0 > 1.0 )
-			{
-				ox += ( kx0 - 1.0 ) * 0.5;
-			}
+			ox += ( kx0 - 1.0 ) * 0.5;
 		}
 		else
 		{
@@ -190,25 +179,14 @@ public:
 
 		if( ky0 == 0.0 )
 		{
-			if( NewHeight > SrcHeight )
-			{
-				ky = (double) ( SrcHeight - 1 ) / ( NewHeight - 1 );
-			}
-			else
-			{
-				ky = (double) SrcHeight / NewHeight;
-				oy += ( ky - 1.0 ) * 0.5;
-			}
+			ky = (double) SrcHeight / NewHeight;
+			oy += ( ky - 1.0 ) * 0.5;
 		}
 		else
 		if( ky0 > 0.0 )
 		{
 			ky = ky0;
-
-			if( ky0 > 1.0 )
-			{
-				oy += ( ky0 - 1.0 ) * 0.5;
-			}
+			oy += ( ky0 - 1.0 ) * 0.5;
 		}
 		else
 		{

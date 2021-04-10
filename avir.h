@@ -11,7 +11,7 @@
  * in its entirety. Also includes several classes and functions that can be
  * useful elsewhere.
  *
- * AVIR Copyright (c) 2015-2020 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2021 Aleksey Vaneev
  *
  * @mainpage
  *
@@ -27,7 +27,7 @@
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2015-2020 Aleksey Vaneev
+ * Copyright (c) 2015-2021 Aleksey Vaneev
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -50,7 +50,7 @@
  * Please credit the author of this library in your documentation in the
  * following way: "AVIR image resizing algorithm designed by Aleksey Vaneev"
  *
- * @version 2.6
+ * @version 2.7
  */
 
 #ifndef AVIR_CIMAGERESIZER_INCLUDED
@@ -67,7 +67,7 @@ namespace avir {
  * The macro defines AVIR version string.
  */
 
-#define AVIR_VERSION "2.6"
+#define AVIR_VERSION "2.7"
 
 /**
  * The macro equals to "pi" constant, fills 53-bit floating point mantissa.
@@ -82,6 +82,17 @@ namespace avir {
  */
 
 #define AVIR_PId2 1.5707963267948966
+
+/**
+ * A special macro that defines empty copy-constructor and copy operator with
+ * the "private:" prefix. This macro should be used in classes that cannot be
+ * copied in a standard C++ way.
+ */
+
+#define AVIR_NOCTOR( ClassName ) \
+	private: \
+		ClassName( const ClassName& ) { } \
+		ClassName& operator = ( const ClassName& ) { return( *this ); }
 
 /**
  * Rounding function, based on the (int) typecast. Biased result. Not suitable
@@ -1537,6 +1548,8 @@ public:
 template< class fptype >
 class CDSPFracFilterBankLin
 {
+	AVIR_NOCTOR( CDSPFracFilterBankLin );
+
 public:
 	CDSPFracFilterBankLin()
 		: Order( -1 )
@@ -1881,6 +1894,8 @@ private:
 				op0++;
 				p += FracCount;
 			}
+
+			normalizeFIRFilter( op0 - SrcFilterLen, SrcFilterLen, 1.0 );
 		}
 
 		Table.alloc(( FracCount + 1 ) * FilterSize, Alignment );
@@ -2170,9 +2185,9 @@ struct CImageResizerParams
 		///<
 
 	CImageResizerParams()
-		: HBFltAlpha( 1.75395 )
-		, HBFltCutoff( 0.40356 )
-		, HBFltLen( 22.00000 )
+		: HBFltAlpha( 1.94609 )
+		, HBFltCutoff( 0.46437 )
+		, HBFltLen( 24 )
 	{
 	}
 
@@ -2193,7 +2208,7 @@ struct CImageResizerParams
 
 /**
  * @brief The default set of resizing algorithm parameters
- * (10.01/1.029/0.019169).
+ * (10.17/1.88/1.029(838.49)/0.012129).
  *
  * This is the default set of resizing parameters that was designed to deliver
  * a sharp image while still providing a low amount of ringing artifacts, and
@@ -2204,20 +2219,20 @@ struct CImageResizerParamsDef : public CImageResizerParams
 {
 	CImageResizerParamsDef()
 	{
-		CorrFltAlpha = 1.0;//10.01/1.88/1.029(522.43)/0.019169:258648,446808
-		CorrFltLen = 6.30770;
-		IntFltAlpha = 2.27825;
-		IntFltCutoff = 0.75493;
-		IntFltLen = 18.0;
-		LPFltAlpha = 3.40127;
-		LPFltBaseLen = 7.78;
-		LPFltCutoffMult = 0.78797;
+		CorrFltAlpha = 0.98677;//10.17/1.88/1.029(838.49)/0.012129:258649,447129
+		CorrFltLen = 6.38417;
+		IntFltAlpha = 2.99996;
+		IntFltCutoff = 0.75313;
+		IntFltLen = 18;
+		LPFltAlpha = 5.64964;
+		LPFltBaseLen = 7.49999999999998;
+		LPFltCutoffMult = 0.79531;
 	}
 };
 
 /**
  * @brief Set of resizing algorithm parameters for ultra-low-ringing
- * performance (7.69/1.069/0.000245).
+ * performance (7.59/1.99/1.075(233354.35)/0.000033).
  *
  * This set of resizing algorithm parameters offers the lowest amount of
  * ringing this library is capable of providing while still offering a decent
@@ -2229,20 +2244,20 @@ struct CImageResizerParamsULR : public CImageResizerParams
 {
 	CImageResizerParamsULR()
 	{
-		CorrFltAlpha = 1.0;//7.69/1.97/1.069(31445.45)/0.000245:258627,436845
-		CorrFltLen = 5.83280;
-		IntFltAlpha = 2.11453;
-		IntFltCutoff = 0.73986;
-		IntFltLen = 18.0;
-		LPFltAlpha = 1.73455;
-		LPFltBaseLen = 6.40;
-		LPFltCutoffMult = 0.61314;
+		CorrFltAlpha = 0.98235;//7.59/1.99/1.075(233354.35)/0.000033:258649,435861
+		CorrFltLen = 5.77266;
+		IntFltAlpha = 1.50018;
+		IntFltCutoff = 0.74157;
+		IntFltLen = 18;
+		LPFltAlpha = 1.69496;
+		LPFltBaseLen = 6.5;
+		LPFltCutoffMult = 0.64031;
 	}
 };
 
 /**
  * @brief Set of resizing algorithm parameters for low-ringing performance
- * (7.86/1.065/0.000106).
+ * (7.88/1.97/1.066(1800930.86)/0.000004).
  *
  * This set of resizing algorithm parameters offers a very low-ringing
  * performance at the expense of higher aliasing artifacts and a slightly
@@ -2253,20 +2268,20 @@ struct CImageResizerParamsLR : public CImageResizerParams
 {
 	CImageResizerParamsLR()
 	{
-		CorrFltAlpha = 1.0;//7.86/1.96/1.065(73865.02)/0.000106:258636,437381
-		CorrFltLen = 5.87671;
-		IntFltAlpha = 2.25322;
-		IntFltCutoff = 0.74090;
-		IntFltLen = 18.0;
-		LPFltAlpha = 1.79306;
-		LPFltBaseLen = 7.00;
-		LPFltCutoffMult = 0.68881;
+		CorrFltAlpha = 0.99985;//7.88/1.97/1.066(1800930.86)/0.000004:258649,437348
+		CorrFltLen = 5.85227;
+		IntFltAlpha = 1.77093;
+		IntFltCutoff = 0.74284;
+		IntFltLen = 18;
+		LPFltAlpha = 1.85481;
+		LPFltBaseLen = 6.81999999999999;
+		LPFltCutoffMult = 0.6844;
 	}
 };
 
 /**
  * @brief Set of resizing algorithm parameters for lower-ringing performance
- * (8.86/1.046/0.010168).
+ * (8.88/1.92/1.046(4418.17)/0.002010).
  *
  * This set of resizing algorithm parameters offers a lower-ringing
  * performance in comparison to the default setting, at the expense of higher
@@ -2277,20 +2292,20 @@ struct CImageResizerParamsLow : public CImageResizerParams
 {
 	CImageResizerParamsLow()
 	{
-		CorrFltAlpha = 1.0;//8.86/1.92/1.046(871.54)/0.010168:258647,442252
-		CorrFltLen = 6.09757;
-		IntFltAlpha = 2.36704;
-		IntFltCutoff = 0.74674;
-		IntFltLen = 18.0;
-		LPFltAlpha = 2.19427;
-		LPFltBaseLen = 7.66;
-		LPFltCutoffMult = 0.75380;
+		CorrFltAlpha = 1;//8.88/1.92/1.046(4418.17)/0.002010:258649,442103
+		CorrFltLen = 6.01786;
+		IntFltAlpha = 1.7348;
+		IntFltCutoff = 0.75223;
+		IntFltLen = 18;
+		LPFltAlpha = 7.59851;
+		LPFltBaseLen = 6.77999999999999;
+		LPFltCutoffMult = 0.7891;
 	}
 };
 
 /**
  * @brief Set of resizing algorithm parameters for low-aliasing
- * resizing (11.81/1.012/0.038379).
+ * resizing (11.82/1.84/1.012(722.10)/0.016373).
  *
  * This set of resizing algorithm parameters offers a considerable
  * anti-aliasing performance with a good frequency response linearity (and
@@ -2302,20 +2317,20 @@ struct CImageResizerParamsHigh : public CImageResizerParams
 {
 	CImageResizerParamsHigh()
 	{
-		CorrFltAlpha = 1.0;//11.81/1.83/1.012(307.84)/0.038379:258660,452719
-		CorrFltLen = 6.80909;
-		IntFltAlpha = 2.44917;
-		IntFltCutoff = 0.75856;
-		IntFltLen = 18.0;
-		LPFltAlpha = 4.39527;
-		LPFltBaseLen = 8.18;
-		LPFltCutoffMult = 0.79172;
+		CorrFltAlpha = 0.97327;//11.82/1.84/1.012(722.10)/0.016373:258649,452274
+		CorrFltLen = 6.7318;
+		IntFltAlpha = 1.66663;
+		IntFltCutoff = 0.76746;
+		IntFltLen = 18;
+		LPFltAlpha = 7.99998;
+		LPFltBaseLen = 7.89999999999997;
+		LPFltCutoffMult = 0.80382;
 	}
 };
 
 /**
  * @brief Set of resizing algorithm parameters for ultra low-aliasing
- * resizing (13.65/1.001/0.000483).
+ * resizing (13.70/1.79/0.999(58814.38)/0.000233).
  *
  * This set of resizing algorithm parameters offers a very considerable
  * anti-aliasing performance with a good frequency response linearity (and
@@ -2327,14 +2342,14 @@ struct CImageResizerParamsUltra : public CImageResizerParams
 {
 	CImageResizerParamsUltra()
 	{
-		CorrFltAlpha = 1.0;//13.65/1.79/1.001(28288.41)/0.000483:258658,457974
-		CorrFltLen = 7.48060;
-		IntFltAlpha = 1.93750;
-		IntFltCutoff = 0.75462;
-		IntFltLen = 18.0;
-		LPFltAlpha = 5.55209;
-		LPFltBaseLen = 8.34;
-		LPFltCutoffMult = 0.78002;
+		CorrFltAlpha = 1;//13.70/1.79/0.999(58814.38)/0.000233:258649,457860
+		CorrFltLen = 7.39368;
+		IntFltAlpha = 1.70948;
+		IntFltCutoff = 0.75848;
+		IntFltLen = 18;
+		LPFltAlpha = 7.52518;
+		LPFltBaseLen = 8.23999999999996;
+		LPFltCutoffMult = 0.78447;
 	}
 };
 
@@ -2423,6 +2438,34 @@ public:
 		, RndSeed( 0 )
 	{
 	}
+
+	CImageResizerVars( const CImageResizerVars& s )
+	{
+		copy( s );
+	}
+
+	CImageResizerVars& operator = ( const CImageResizerVars& s )
+	{
+		copy( s );
+		return( *this );
+	}
+
+private:
+	/**
+	 * Function assigns user-adjustable variables to *this object.
+	 *
+	 * @param s Source object.
+	 */
+
+	void copy( const CImageResizerVars& s )
+	{
+		ox = s.ox;
+		oy = s.oy;
+		ThreadPool = s.ThreadPool;
+		UseSRGBGamma = s.UseSRGBGamma;
+		BuildMode = s.BuildMode;
+		RndSeed = s.RndSeed;
+	}
 };
 
 /**
@@ -2447,6 +2490,8 @@ public:
 template< class fptype, class fptypeatom >
 class CImageResizerFilterStep
 {
+	AVIR_NOCTOR( CImageResizerFilterStep );
+
 public:
 	bool IsUpsample; ///< "True" if this step is an upsampling step, "false"
 		///< if downsampling step. Should be set to "false" if ResampleFactor
@@ -2622,6 +2667,10 @@ public:
 	CDSPFracFilterBankLin< fptype >* FltBank; ///< Filter bank in use by *this
 		///< resizing step.
 		///<
+
+	CImageResizerFilterStep()
+	{
+	}
 };
 
 /**
@@ -4213,6 +4262,8 @@ public:
 template< class fpclass = fpclass_def< float > >
 class CImageResizer
 {
+	AVIR_NOCTOR( CImageResizer );
+
 public:
 	/**
 	 * Constructor initializes the resizer.
@@ -4315,25 +4366,11 @@ public:
 
 		if( k == 0.0 )
 		{
-			if( NewWidth > SrcWidth )
-			{
-				kx = (double) ( SrcWidth - 1 ) / ( NewWidth - 1 );
-			}
-			else
-			{
-				kx = (double) SrcWidth / NewWidth;
-				ox += ( kx - 1.0 ) * 0.5;
-			}
+			kx = (double) SrcWidth / NewWidth;
+			ox += ( kx - 1.0 ) * 0.5;
 
-			if( NewHeight > SrcHeight )
-			{
-				ky = (double) ( SrcHeight - 1 ) / ( NewHeight - 1 );
-			}
-			else
-			{
-				ky = (double) SrcHeight / NewHeight;
-				oy += ( ky - 1.0 ) * 0.5;
-			}
+			ky = (double) SrcHeight / NewHeight;
+			oy += ( ky - 1.0 ) * 0.5;
 		}
 		else
 		if( k > 0.0 )
@@ -4341,12 +4378,9 @@ public:
 			kx = k;
 			ky = k;
 
-			if( k > 1.0 )
-			{
-				const double ko = ( k - 1.0 ) * 0.5;
-				ox += ko;
-				oy += ko;
-			}
+			const double ko = ( k - 1.0 ) * 0.5;
+			ox += ko;
+			oy += ko;
 		}
 		else
 		{
@@ -6206,6 +6240,7 @@ private:
 
 #undef AVIR_PI
 #undef AVIR_PId2
+#undef AVIR_NOCTOR
 
 } // namespace avir
 

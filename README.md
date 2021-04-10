@@ -197,14 +197,12 @@ first to reduce aliasing during subsequent resizing, and at last filtered by a
 correction filter. Such approach allows algorithm to maintain a stable level
 of quality regardless of the resizing "k" factor used.
 
-This library includes a binary command line tool "imageresize" for major
+This library includes a binary command line tool "imageresize" for some
 desktop platforms. This tool was designed to be used as a demonstration of
 library's performance, and as a reference, it is multi-threaded (the `-t`
 switch can be used to control the number of threads utilized). This tool uses
 plain "float" processing (no explicit SIMD) and relies on automatic compiler
-optimization (with Win64 binary being the "main" binary as it was compiled
-with the best ICC optimization options for the time being). This tool uses the
-following libraries:
+optimization. This tool uses the following libraries:
 * turbojpeg Copyright (c) 2009-2013 D. R. Commander
 * libpng Copyright (c) 1998-2013 Glenn Randers-Pehrson
 * zlib Copyright (c) 1995-2013 Jean-loup Gailly and Mark Adler
@@ -338,6 +336,11 @@ This library is used by:
   * [Pretext contact maps](https://github.com/wtsi-hpag/PretextSnapshot)
   * [LVC Audio](https://lvcaudio.com)
   * [Trainz](https://www.trainzportal.com/files/TRS19/credits.html)
+  * [MLV App](https://mlv.app/)
+
+[This video](https://www.youtube.com/watch?v=oNF-c6YX7-8) was "unsqueezed"
+with AVIR by a factor of 3 from ML RAW video, and at a final stage downsampled
+to 4K resolution.
 
 Please drop me a note at aleksey.vaneev@gmail.com and I will include a link to
 your software product to the list of users. This list is important at
@@ -350,6 +353,18 @@ maintaining confidence in this library among the interested parties.
 [Become a patron on Patreon](https://patreon.com/aleksey_vaneev)
 
 ## Change log ##
+
+Version 2.7:
+
+* Added normalization of individual fractional delay filters. This reduced
+peak error by 3 dB, which is substantial for image resizing.
+* Reoptimized all filter parameters resulting in better frequency response
+linearity.
+* Added AVIR_NOCTOR macro to avoid copy-constructing and copying objects of
+some classes via a default copy function.
+* Added copy-constructor and assignment operator to the CImageResizerVars
+class, to avoid uninitialized memory copying.
+* Corrected automatic image offseting and "k" factor on image upsizing.
 
 Version 2.6:
 
