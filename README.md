@@ -61,6 +61,9 @@ change during upsizing.
 
 *AVIR is devoted to women. Your digital photos can look good at any size!*
 
+P.S. Please credit the author of this library in your documentation in the
+following way: "AVIR image resizing algorithm designed by Aleksey Vaneev".
+
 ## Requirements ##
 
 C++ compiler and system with efficient "float" floating point (24-bit
@@ -353,6 +356,16 @@ maintaining confidence in this library among the interested parties.
 [Become a patron on Patreon](https://patreon.com/aleksey_vaneev)
 
 ## Change log ##
+
+Version 2.8:
+
+* Fixed regression with the copy-constructor of CImageResizeVars class
+(previously it caused uninitialized accesses).
+* Removed filter length optimization as it did not reduce overhead measurably.
+* Optimized "peaked cosine" window function generator (removed division).
+* Added "unbiasing" to resizer - an unconventional approach which reduces peak
+error significantly, at the expense of 5% increased overhead.
+* Reoptimized filter parameters, now yielding an unprecedented quality.
 
 Version 2.7:
 

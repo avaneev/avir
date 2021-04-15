@@ -9,7 +9,7 @@
  * This file includes the "CImageResizerFilterStepDIL" class which implements
  * image resizing functions in de-interleaved mode.
  *
- * AVIR Copyright (c) 2015-2020 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2021 Aleksey Vaneev
  */
 
 namespace avir {
@@ -236,6 +236,64 @@ public:
 			{
 				*op = (Tout) ip[ i ];
 				op += ElCount;
+			}
+		}
+	}
+
+	/**
+	 * Function calculates scanline's DC gain for each channel, further used
+	 * to "unbias" the scanline.
+	 *
+	 * @param p0 Source scanline.
+	 * @param SrcLen Source scanline's length.
+	 * @param[out] ElBiases Resuling biases.
+	 */
+
+	void calcScanlineBias( const fptype* const p0, const int SrcLen,
+		fptype* const ElBiases ) const
+	{
+		const int ElCount = Vars -> ElCount;
+		int j;
+
+		for( j = 0; j < ElCount; j++ )
+		{
+			const fptype* const p = p0 + j * InElIncr;
+			fptype b = (fptype) 0;
+			int i;
+
+			for( i = 0; i < SrcLen; i++ )
+			{
+				b += p[ i ];
+			}
+
+			ElBiases[ j ] = b / (fptype) SrcLen;
+		}
+	}
+
+	/**
+	 * Function applies "unbiasing" to the scanline, by subtracting the
+	 * previously calculated bias (DC gain) values.
+	 *
+	 * @param p0 Scanline.
+	 * @param l Scanline's length.
+	 * @param ElBiases Biases to subtract, for each channel.
+	 */
+
+	void unbiasScanline( fptype* const p0, const int l,
+		const fptype* const ElBiases ) const
+	{
+		const int ElCount = Vars -> ElCount;
+		int j;
+
+		for( j = 0; j < ElCount; j++ )
+		{
+			fptype* const p = p0 + j * InElIncr;
+			const fptype b = ElBiases[ j ];
+			int i;
+
+			for( i = 0; i < l; i++ )
+			{
+				p[ i ] -= b;
 			}
 		}
 	}
@@ -522,12 +580,14 @@ public:
 	 * @param DstLine Destination (resized) scanline buffer.
 	 * @param DstLineIncr Destination scanline position increment, used for
 	 * horizontal or vertical scanline stepping.
+	 * @param ElBiases Bias values to add to the resulting scanline.
 	 * @param xx Temporary buffer, of size FltBank -> getFilterLen(), must be
 	 * aligned by fpclass :: fpalign.
 	 */
 
 	void doResize( const fptype* SrcLine, fptype* DstLine,
-		int DstLineIncr, fptype* const xx ) const
+		int DstLineIncr, const fptype* const ElBiases,
+		fptype* const xx ) const
 	{
 		const int IntFltLen = FltBank -> getFilterLen();
 		const int ElCount = Vars -> ElCount;
@@ -561,6 +621,8 @@ public:
 
 		if( ElCount == 1 )
 		{
+			const fptype b = ElBiases[ 0 ];
+
 			if( FltBank -> getOrder() == 1 )
 			{
 				AVIR_RESIZE_PART1
@@ -576,7 +638,7 @@ public:
 						fptypesimd :: loadu( Src + i );
 				}
 
-				DstLine[ 0 ] = sum.hadd();
+				DstLine[ 0 ] = sum.hadd() + b;
 
 				AVIR_RESIZE_PART2
 			}
@@ -593,7 +655,7 @@ public:
 						fptypesimd :: loadu( Src + i );
 				}
 
-				DstLine[ 0 ] = sum.hadd();
+				DstLine[ 0 ] = sum.hadd() + b;
 
 				AVIR_RESIZE_PART2
 			}
@@ -610,6 +672,8 @@ public:
 			{
 				for( j = 0; j < ElCount; j++ )
 				{
+					const fptype b = ElBiases[ j ];
+
 					AVIR_RESIZE_PART1
 
 					fptypesimd sum = 0.0;
@@ -621,7 +685,7 @@ public:
 							fptypesimd :: loadu( Src + i );
 					}
 
-					DstLine[ 0 ] = sum.hadd();
+					DstLine[ 0 ] = sum.hadd() + b;
 
 					AVIR_RESIZE_PART2
 
@@ -635,6 +699,8 @@ public:
 			{
 				for( j = 0; j < ElCount; j++ )
 				{
+					const fptype b = ElBiases[ j ];
+
 					AVIR_RESIZE_PART1nx
 
 					fptypesimd sum = fptypesimd :: load( ftp ) *
@@ -646,7 +712,7 @@ public:
 							fptypesimd :: loadu( Src + i );
 					}
 
-					DstLine[ 0 ] = sum.hadd();
+					DstLine[ 0 ] = sum.hadd() + b;
 
 					AVIR_RESIZE_PART2
 
@@ -684,7 +750,7 @@ public:
 							fptypesimd :: loadu( Src + i );
 					}
 
-					DstLine[ 0 ] = sum.hadd();
+					DstLine[ 0 ] = sum.hadd() + ElBiases[ j ];
 					DstLine += DstLineElIncr;
 					Src += SrcIncr;
 				}
@@ -706,7 +772,7 @@ public:
 							fptypesimd :: loadu( Src + i );
 					}
 
-					DstLine[ 0 ] = sum.hadd();
+					DstLine[ 0 ] = sum.hadd() + ElBiases[ j ];
 					DstLine += DstLineElIncr;
 					Src += SrcIncr;
 				}

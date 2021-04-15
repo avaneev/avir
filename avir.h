@@ -21,11 +21,12 @@
  *
  * AVIR is devoted to women. Your digital photos can look good at any size!
  *
+ * Please credit the author of this library in your documentation in the
+ * following way: "AVIR image resizing algorithm designed by Aleksey Vaneev".
+ *
  * @section license License
  *
- * AVIR License Agreement
- *
- * The MIT License (MIT)
+ * MIT License
  *
  * Copyright (c) 2015-2021 Aleksey Vaneev
  *
@@ -47,10 +48,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  *
- * Please credit the author of this library in your documentation in the
- * following way: "AVIR image resizing algorithm designed by Aleksey Vaneev"
- *
- * @version 2.7
+ * @version 2.8
  */
 
 #ifndef AVIR_CIMAGERESIZER_INCLUDED
@@ -67,7 +65,7 @@ namespace avir {
  * The macro defines AVIR version string.
  */
 
-#define AVIR_VERSION "2.7"
+#define AVIR_VERSION "2.8"
 
 /**
  * The macro equals to "pi" constant, fills 53-bit floating point mantissa.
@@ -105,7 +103,8 @@ namespace avir {
 template< class T >
 inline T round( const T d )
 {
-	return( d < 0.0 ? -(T) (int) ( (T) 0.5 - d ) : (T) (int) ( d + (T) 0.5 ));
+	return( d < (T) 0 ? -(T) (int) ( (T) 0.5 - d ) :
+		(T) (int) ( d + (T) 0.5 ));
 }
 
 /**
@@ -286,7 +285,7 @@ inline void replicateArray( const T1* const ip, const int ipl, T2* op, int l,
 	{
 		while( l > 0 )
 		{
-			op[ 0 ] = ip[ 0 ];
+			op[ 0 ] = (T2) ip[ 0 ];
 			op += opinc;
 			l--;
 		}
@@ -296,10 +295,10 @@ inline void replicateArray( const T1* const ip, const int ipl, T2* op, int l,
 	{
 		while( l > 0 )
 		{
-			op[ 0 ] = ip[ 0 ];
-			op[ 1 ] = ip[ 1 ];
-			op[ 2 ] = ip[ 2 ];
-			op[ 3 ] = ip[ 3 ];
+			op[ 0 ] = (T2) ip[ 0 ];
+			op[ 1 ] = (T2) ip[ 1 ];
+			op[ 2 ] = (T2) ip[ 2 ];
+			op[ 3 ] = (T2) ip[ 3 ];
 			op += opinc;
 			l--;
 		}
@@ -309,9 +308,9 @@ inline void replicateArray( const T1* const ip, const int ipl, T2* op, int l,
 	{
 		while( l > 0 )
 		{
-			op[ 0 ] = ip[ 0 ];
-			op[ 1 ] = ip[ 1 ];
-			op[ 2 ] = ip[ 2 ];
+			op[ 0 ] = (T2) ip[ 0 ];
+			op[ 1 ] = (T2) ip[ 1 ];
+			op[ 2 ] = (T2) ip[ 2 ];
 			op += opinc;
 			l--;
 		}
@@ -321,8 +320,8 @@ inline void replicateArray( const T1* const ip, const int ipl, T2* op, int l,
 	{
 		while( l > 0 )
 		{
-			op[ 0 ] = ip[ 0 ];
-			op[ 1 ] = ip[ 1 ];
+			op[ 0 ] = (T2) ip[ 0 ];
+			op[ 1 ] = (T2) ip[ 1 ];
 			op += opinc;
 			l--;
 		}
@@ -335,7 +334,7 @@ inline void replicateArray( const T1* const ip, const int ipl, T2* op, int l,
 
 			for( i = 0; i < ipl; i++ )
 			{
-				op[ i ] = ip[ i ];
+				op[ i ] = (T2) ip[ i ];
 			}
 
 			op += opinc;
@@ -718,46 +717,6 @@ private:
 };
 
 /**
- * Function optimizes the length of the symmetric-odd FIR filter by removing
- * left- and rightmost elements that are below specific threshold.
- *
- * Synthetic test shows that filter gets optimized in 2..3% of cases and in
- * each such case optimization reduces filter length by 6..8%. Optimization,
- * however, may skew the results of algorithm modeling and complexity
- * calculation leading to a choice of a less optimal algorithm.
- *
- * @param[in,out] Flt Buffer that contains filter being optimized.
- * @param[in,out] FltLatency Variable that holds the current latency of the
- * filter. May be adjusted on function return.
- * @param Threshold Threshold level.
- */
-
-template< class T >
-inline void optimizeFIRFilter( CBuffer< T >& Flt, int& FltLatency,
-	T const Threshold = (T) 0.00001 )
-{
-	int i;
-
-	// Optimize length.
-
-	for( i = 0; i <= FltLatency; i++ )
-	{
-		if( fabs( Flt[ i ]) >= Threshold || i == FltLatency )
-		{
-			if( i > 0 )
-			{
-				const int NewCapacity = Flt.getCapacity() - i * 2;
-				copyArray( &Flt[ i ], &Flt[ 0 ], NewCapacity );
-				Flt.truncateCapacity( NewCapacity );
-				FltLatency -= i;
-			}
-
-			break;
-		}
-	}
-}
-
-/**
  * @brief Array of structured objects.
  *
  * Implements allocation of a linear array of objects of class T (which are
@@ -967,14 +926,15 @@ public:
 	 * Constructor initializes *this window function generator.
 	 *
 	 * @param aAlpha Alpha parameter, affects the peak shape (peak
-	 * augmentation) of the window function. Should be >= 1.0.
+	 * augmentation) of the window function. Any positive value can be used.
 	 * @param aLen2 Half filter's length (non-truncated).
 	 */
 
 	CDSPWindowGenPeakedCosine( const double aAlpha, const double aLen2 )
 		: Alpha( aAlpha )
 		, Len2( aLen2 )
-		, wn( 0 )
+		, Len2i( 1.0 / aLen2 )
+		, wn( 0.0 )
 		, w1( AVIR_PId2 / Len2, AVIR_PI * 0.5 )
 	{
 	}
@@ -985,8 +945,8 @@ public:
 
 	double generate()
 	{
-		const double h = pow( wn / Len2, Alpha );
-		wn++;
+		const double h = pow( wn * Len2i, Alpha );
+		wn += 1.0;
 
 		return( w1.generate() * ( 1.0 - h ));
 	}
@@ -996,7 +956,9 @@ private:
 		///<
 	double Len2; ///< Half length of the window function.
 		///<
-	int wn; ///< Window function integer position. 0 - center of the
+	double Len2i; ///< = 1 / Len2.
+		///<
+	double wn; ///< Window function integer position. 0 - center of the
 		///< window function.
 		///<
 	CSineGen w1; ///< Sine-wave generator.
@@ -1933,12 +1895,12 @@ private:
 
 		for( i = 0; i < ResOffs; i++ )
 		{
-			op[ i ] = 0.0;
+			op[ i ] = (fptype) 0;
 		}
 
 		for( i = ResOffs + ResLen; i < FilterLen; i++ )
 		{
-			op[ i ] = 0.0;
+			op[ i ] = (fptype) 0;
 		}
 
 		op += ResOffs;
@@ -2208,7 +2170,7 @@ struct CImageResizerParams
 
 /**
  * @brief The default set of resizing algorithm parameters
- * (10.17/1.88/1.029(838.49)/0.012129).
+ * (10.06/1.88/1.029(256064.90)/0.000039).
  *
  * This is the default set of resizing parameters that was designed to deliver
  * a sharp image while still providing a low amount of ringing artifacts, and
@@ -2219,20 +2181,20 @@ struct CImageResizerParamsDef : public CImageResizerParams
 {
 	CImageResizerParamsDef()
 	{
-		CorrFltAlpha = 0.98677;//10.17/1.88/1.029(838.49)/0.012129:258649,447129
-		CorrFltLen = 6.38417;
-		IntFltAlpha = 2.99996;
-		IntFltCutoff = 0.75313;
+		CorrFltAlpha = 0.97946;//10.06/1.88/1.029(256064.90)/0.000039:258649,447179
+		CorrFltLen = 6.4262;
+		IntFltAlpha = 6.41341;
+		IntFltCutoff = 0.7372;
 		IntFltLen = 18;
-		LPFltAlpha = 5.64964;
-		LPFltBaseLen = 7.49999999999998;
-		LPFltCutoffMult = 0.79531;
+		LPFltAlpha = 4.76449;
+		LPFltBaseLen = 7.55999999999998;
+		LPFltCutoffMult = 0.79285;
 	}
 };
 
 /**
  * @brief Set of resizing algorithm parameters for ultra-low-ringing
- * performance (7.59/1.99/1.075(233354.35)/0.000033).
+ * performance (7.50/2.01/1.083(11568559.86)/0.000001).
  *
  * This set of resizing algorithm parameters offers the lowest amount of
  * ringing this library is capable of providing while still offering a decent
@@ -2244,20 +2206,20 @@ struct CImageResizerParamsULR : public CImageResizerParams
 {
 	CImageResizerParamsULR()
 	{
-		CorrFltAlpha = 0.98235;//7.59/1.99/1.075(233354.35)/0.000033:258649,435861
-		CorrFltLen = 5.77266;
-		IntFltAlpha = 1.50018;
-		IntFltCutoff = 0.74157;
+		CorrFltAlpha = 0.95521;//7.50/2.01/1.083(11568559.86)/0.000001:258649,434609
+		CorrFltLen = 5.70774;
+		IntFltAlpha = 1.00766;
+		IntFltCutoff = 0.74202;
 		IntFltLen = 18;
-		LPFltAlpha = 1.69496;
-		LPFltBaseLen = 6.5;
-		LPFltCutoffMult = 0.64031;
+		LPFltAlpha = 1.6801;
+		LPFltBaseLen = 6.62;
+		LPFltCutoffMult = 0.67821;
 	}
 };
 
 /**
  * @brief Set of resizing algorithm parameters for low-ringing performance
- * (7.88/1.97/1.066(1800930.86)/0.000004).
+ * (7.91/1.96/1.065(1980857.66)/0.000004).
  *
  * This set of resizing algorithm parameters offers a very low-ringing
  * performance at the expense of higher aliasing artifacts and a slightly
@@ -2268,20 +2230,20 @@ struct CImageResizerParamsLR : public CImageResizerParams
 {
 	CImageResizerParamsLR()
 	{
-		CorrFltAlpha = 0.99985;//7.88/1.97/1.066(1800930.86)/0.000004:258649,437348
-		CorrFltLen = 5.85227;
-		IntFltAlpha = 1.77093;
-		IntFltCutoff = 0.74284;
+		CorrFltAlpha = 1;//7.91/1.96/1.065(1980857.66)/0.000004:258649,437578
+		CorrFltLen = 5.865;
+		IntFltAlpha = 1.79529;
+		IntFltCutoff = 0.74325;
 		IntFltLen = 18;
-		LPFltAlpha = 1.85481;
-		LPFltBaseLen = 6.81999999999999;
-		LPFltCutoffMult = 0.6844;
+		LPFltAlpha = 1.87597;
+		LPFltBaseLen = 6.89999999999999;
+		LPFltCutoffMult = 0.69326;
 	}
 };
 
 /**
  * @brief Set of resizing algorithm parameters for lower-ringing performance
- * (8.88/1.92/1.046(4418.17)/0.002010).
+ * (9.21/1.91/1.040(391960.71)/0.000023).
  *
  * This set of resizing algorithm parameters offers a lower-ringing
  * performance in comparison to the default setting, at the expense of higher
@@ -2292,20 +2254,20 @@ struct CImageResizerParamsLow : public CImageResizerParams
 {
 	CImageResizerParamsLow()
 	{
-		CorrFltAlpha = 1;//8.88/1.92/1.046(4418.17)/0.002010:258649,442103
-		CorrFltLen = 6.01786;
-		IntFltAlpha = 1.7348;
-		IntFltCutoff = 0.75223;
+		CorrFltAlpha = 0.99739;//9.21/1.91/1.040(391960.71)/0.000023:258649,444105
+		CorrFltLen = 6.20326;
+		IntFltAlpha = 4.6836;
+		IntFltCutoff = 0.73879;
 		IntFltLen = 18;
-		LPFltAlpha = 7.59851;
-		LPFltBaseLen = 6.77999999999999;
-		LPFltCutoffMult = 0.7891;
+		LPFltAlpha = 7.86565;
+		LPFltBaseLen = 6.91999999999999;
+		LPFltCutoffMult = 0.78379;
 	}
 };
 
 /**
  * @brief Set of resizing algorithm parameters for low-aliasing
- * resizing (11.82/1.84/1.012(722.10)/0.016373).
+ * resizing (11.59/1.84/1.015(73054.59)/0.000159).
  *
  * This set of resizing algorithm parameters offers a considerable
  * anti-aliasing performance with a good frequency response linearity (and
@@ -2317,20 +2279,20 @@ struct CImageResizerParamsHigh : public CImageResizerParams
 {
 	CImageResizerParamsHigh()
 	{
-		CorrFltAlpha = 0.97327;//11.82/1.84/1.012(722.10)/0.016373:258649,452274
-		CorrFltLen = 6.7318;
-		IntFltAlpha = 1.66663;
-		IntFltCutoff = 0.76746;
+		CorrFltAlpha = 0.97433;//11.59/1.84/1.015(73054.59)/0.000159:258649,451830
+		CorrFltLen = 6.87893;
+		IntFltAlpha = 7.74731;
+		IntFltCutoff = 0.73844;
 		IntFltLen = 18;
-		LPFltAlpha = 7.99998;
-		LPFltBaseLen = 7.89999999999997;
-		LPFltCutoffMult = 0.80382;
+		LPFltAlpha = 4.8149;
+		LPFltBaseLen = 8.07999999999996;
+		LPFltCutoffMult = 0.79335;
 	}
 };
 
 /**
  * @brief Set of resizing algorithm parameters for ultra low-aliasing
- * resizing (13.70/1.79/0.999(58814.38)/0.000233).
+ * resizing (13.68/1.79/1.000(521792.07)/0.000026).
  *
  * This set of resizing algorithm parameters offers a very considerable
  * anti-aliasing performance with a good frequency response linearity (and
@@ -2342,14 +2304,14 @@ struct CImageResizerParamsUltra : public CImageResizerParams
 {
 	CImageResizerParamsUltra()
 	{
-		CorrFltAlpha = 1;//13.70/1.79/0.999(58814.38)/0.000233:258649,457860
-		CorrFltLen = 7.39368;
-		IntFltAlpha = 1.70948;
-		IntFltCutoff = 0.75848;
+		CorrFltAlpha = 0.99705;//13.68/1.79/1.000(521792.07)/0.000026:258649,457973
+		CorrFltLen = 7.42695;
+		IntFltAlpha = 1.71985;
+		IntFltCutoff = 0.7571;
 		IntFltLen = 18;
-		LPFltAlpha = 7.52518;
-		LPFltBaseLen = 8.23999999999996;
-		LPFltCutoffMult = 0.78447;
+		LPFltAlpha = 6.71313;
+		LPFltBaseLen = 8.27999999999996;
+		LPFltCutoffMult = 0.78413;
 	}
 };
 
@@ -2437,34 +2399,6 @@ public:
 		, BuildMode( -1 )
 		, RndSeed( 0 )
 	{
-	}
-
-	CImageResizerVars( const CImageResizerVars& s )
-	{
-		copy( s );
-	}
-
-	CImageResizerVars& operator = ( const CImageResizerVars& s )
-	{
-		copy( s );
-		return( *this );
-	}
-
-private:
-	/**
-	 * Function assigns user-adjustable variables to *this object.
-	 *
-	 * @param s Source object.
-	 */
-
-	void copy( const CImageResizerVars& s )
-	{
-		ox = s.ox;
-		oy = s.oy;
-		ThreadPool = s.ThreadPool;
-		UseSRGBGamma = s.UseSRGBGamma;
-		BuildMode = s.BuildMode;
-		RndSeed = s.RndSeed;
 	}
 };
 
@@ -2708,7 +2642,7 @@ public:
 	using CImageResizerFilterStep< fptype, fptypeatom > :: EdgePixelCount;
 
 	/**
-	 * Function performs "packing" of a scanline and type conversion.
+	 * Function performs "packing" of a scanline, and type conversion.
 	 * Scanline, depending on the "fptype" can be potentially stored as a
 	 * packed SIMD values having a certain atomic type. If required, the sRGB
 	 * gamma correction is applied.
@@ -2842,14 +2776,14 @@ public:
 		}
 
 		const int ZeroCount = ElCount * Vars -> fppack - ElCountIO;
-		op = op0;
+		op = (fptype*) ( (fptypeatom*) op0 + ElCountIO );
 		l = l0;
 
 		if( ZeroCount == 1 )
 		{
 			while( l > 0 )
 			{
-				fptypeatom* v = (fptypeatom*) op + ElCountIO;
+				fptypeatom* v = (fptypeatom*) op;
 				v[ 0 ] = (fptypeatom) 0;
 				op += ElCount;
 				l--;
@@ -2860,7 +2794,7 @@ public:
 		{
 			while( l > 0 )
 			{
-				fptypeatom* v = (fptypeatom*) op + ElCountIO;
+				fptypeatom* v = (fptypeatom*) op;
 				v[ 0 ] = (fptypeatom) 0;
 				v[ 1 ] = (fptypeatom) 0;
 				op += ElCount;
@@ -2872,7 +2806,7 @@ public:
 		{
 			while( l > 0 )
 			{
-				fptypeatom* v = (fptypeatom*) op + ElCountIO;
+				fptypeatom* v = (fptypeatom*) op;
 				v[ 0 ] = (fptypeatom) 0;
 				v[ 1 ] = (fptypeatom) 0;
 				v[ 2 ] = (fptypeatom) 0;
@@ -3087,6 +3021,171 @@ public:
 				op[ 1 ] = (Tout) v[ 1 ];
 				ip += ElCount;
 				op += 2;
+				l--;
+			}
+		}
+	}
+
+	/**
+	 * Function calculates scanline's DC gain for each channel, further used
+	 * to "unbias" the scanline.
+	 *
+	 * @param p Source scanline.
+	 * @param SrcLen Source scanline's length.
+	 * @param[out] ElBiases Resuling biases.
+	 */
+
+	void calcScanlineBias( const fptype* p, const int SrcLen,
+		fptype* const ElBiases ) const
+	{
+		const int ElCount = Vars -> ElCount;
+		int l = SrcLen;
+
+		if( ElCount == 1 )
+		{
+			fptype b0 = (fptype) 0;
+
+			while( l > 0 )
+			{
+				b0 += p[ 0 ];
+				p++;
+				l--;
+			}
+
+			ElBiases[ 0 ] = b0 / (fptype) SrcLen;
+		}
+		else
+		if( ElCount == 4 )
+		{
+			fptype b0 = (fptype) 0;
+			fptype b1 = (fptype) 0;
+			fptype b2 = (fptype) 0;
+			fptype b3 = (fptype) 0;
+
+			while( l > 0 )
+			{
+				b0 += p[ 0 ];
+				b1 += p[ 1 ];
+				b2 += p[ 2 ];
+				b3 += p[ 3 ];
+				p += 4;
+				l--;
+			}
+
+			ElBiases[ 0 ] = b0 / (fptype) SrcLen;
+			ElBiases[ 1 ] = b1 / (fptype) SrcLen;
+			ElBiases[ 2 ] = b2 / (fptype) SrcLen;
+			ElBiases[ 3 ] = b3 / (fptype) SrcLen;
+		}
+		else
+		if( ElCount == 3 )
+		{
+			fptype b0 = (fptype) 0;
+			fptype b1 = (fptype) 0;
+			fptype b2 = (fptype) 0;
+
+			while( l > 0 )
+			{
+				b0 += p[ 0 ];
+				b1 += p[ 1 ];
+				b2 += p[ 2 ];
+				p += 3;
+				l--;
+			}
+
+			ElBiases[ 0 ] = b0 / (fptype) SrcLen;
+			ElBiases[ 1 ] = b1 / (fptype) SrcLen;
+			ElBiases[ 2 ] = b2 / (fptype) SrcLen;
+		}
+		else
+		if( ElCount == 2 )
+		{
+			fptype b0 = (fptype) 0;
+			fptype b1 = (fptype) 0;
+
+			while( l > 0 )
+			{
+				b0 += p[ 0 ];
+				b1 += p[ 1 ];
+				p += 2;
+				l--;
+			}
+
+			ElBiases[ 0 ] = b0 / (fptype) SrcLen;
+			ElBiases[ 1 ] = b1 / (fptype) SrcLen;
+		}
+	}
+
+	/**
+	 * Function applies "unbiasing" to the scanline, by subtracting the
+	 * previously calculated bias (DC gain) values.
+	 *
+	 * @param p Scanline.
+	 * @param l Scanline's length.
+	 * @param ElBiases Biases to subtract, for each channel.
+	 */
+
+	void unbiasScanline( fptype* p, int l,
+		const fptype* const ElBiases ) const
+	{
+		const int ElCount = Vars -> ElCount;
+
+		if( ElCount == 1 )
+		{
+			const fptype b0 = ElBiases[ 0 ];
+
+			while( l > 0 )
+			{
+				p[ 0 ] -= b0;
+				p++;
+				l--;
+			}
+		}
+		else
+		if( ElCount == 4 )
+		{
+			const fptype b0 = ElBiases[ 0 ];
+			const fptype b1 = ElBiases[ 1 ];
+			const fptype b2 = ElBiases[ 2 ];
+			const fptype b3 = ElBiases[ 3 ];
+
+			while( l > 0 )
+			{
+				p[ 0 ] -= b0;
+				p[ 1 ] -= b1;
+				p[ 2 ] -= b2;
+				p[ 3 ] -= b3;
+				p += 4;
+				l--;
+			}
+		}
+		else
+		if( ElCount == 3 )
+		{
+			const fptype b0 = ElBiases[ 0 ];
+			const fptype b1 = ElBiases[ 1 ];
+			const fptype b2 = ElBiases[ 2 ];
+
+			while( l > 0 )
+			{
+				p[ 0 ] -= b0;
+				p[ 1 ] -= b1;
+				p[ 2 ] -= b2;
+				p += 3;
+				l--;
+			}
+		}
+		else
+		if( ElCount == 2 )
+		{
+			const fptype b0 = ElBiases[ 0 ];
+			const fptype b1 = ElBiases[ 1 ];
+
+			while( l > 0 )
+			{
+				p[ 0 ] -= b0;
+				p[ 1 ] -= b1;
+				p += 2;
 				l--;
 			}
 		}
@@ -3753,12 +3852,14 @@ public:
 	 * @param DstLine Destination (resized) scanline buffer.
 	 * @param DstLineIncr Destination scanline position increment, used for
 	 * horizontal or vertical scanline stepping.
+	 * @param ElBiases Bias values to add to the resulting scanline.
 	 * @param xx Temporary buffer, of size FltBank -> getFilterLen(), must be
 	 * aligned by fpclass :: fpalign.
 	 */
 
 	void doResize( const fptype* SrcLine, fptype* DstLine,
-		const int DstLineIncr, fptype* const ) const
+		const int DstLineIncr, const fptype* const ElBiases,
+		fptype* const ) const
 	{
 		const int IntFltLen = FltBank -> getFilterLen();
 		const int ElCount = Vars -> ElCount;
@@ -3795,14 +3896,14 @@ public:
 			{
 				AVIR_RESIZE_PART1
 
-				fptype sum = 0.0;
+				fptype sum0 = ElBiases[ 0 ];
 
 				for( i = 0; i < IntFltLen; i++ )
 				{
-					sum += ( ftp[ i ] + ftp2[ i ] * x ) * Src[ i ];
+					sum0 += ( ftp[ i ] + ftp2[ i ] * x ) * Src[ i ];
 				}
 
-				DstLine[ 0 ] = sum;
+				DstLine[ 0 ] = sum0;
 
 				AVIR_RESIZE_PART2
 			}
@@ -3811,26 +3912,25 @@ public:
 			{
 				AVIR_RESIZE_PART1
 
-				fptype sum[ 4 ];
-				sum[ 0 ] = 0.0;
-				sum[ 1 ] = 0.0;
-				sum[ 2 ] = 0.0;
-				sum[ 3 ] = 0.0;
+				fptype sum0 = ElBiases[ 0 ];
+				fptype sum1 = ElBiases[ 1 ];
+				fptype sum2 = ElBiases[ 2 ];
+				fptype sum3 = ElBiases[ 3 ];
 
 				for( i = 0; i < IntFltLen; i++ )
 				{
 					const fptype xx = ftp[ i ] + ftp2[ i ] * x;
-					sum[ 0 ] += xx * Src[ 0 ];
-					sum[ 1 ] += xx * Src[ 1 ];
-					sum[ 2 ] += xx * Src[ 2 ];
-					sum[ 3 ] += xx * Src[ 3 ];
+					sum0 += xx * Src[ 0 ];
+					sum1 += xx * Src[ 1 ];
+					sum2 += xx * Src[ 2 ];
+					sum3 += xx * Src[ 3 ];
 					Src += 4;
 				}
 
-				DstLine[ 0 ] = sum[ 0 ];
-				DstLine[ 1 ] = sum[ 1 ];
-				DstLine[ 2 ] = sum[ 2 ];
-				DstLine[ 3 ] = sum[ 3 ];
+				DstLine[ 0 ] = sum0;
+				DstLine[ 1 ] = sum1;
+				DstLine[ 2 ] = sum2;
+				DstLine[ 3 ] = sum3;
 
 				AVIR_RESIZE_PART2
 			}
@@ -3839,23 +3939,22 @@ public:
 			{
 				AVIR_RESIZE_PART1
 
-				fptype sum[ 3 ];
-				sum[ 0 ] = 0.0;
-				sum[ 1 ] = 0.0;
-				sum[ 2 ] = 0.0;
+				fptype sum0 = ElBiases[ 0 ];
+				fptype sum1 = ElBiases[ 1 ];
+				fptype sum2 = ElBiases[ 2 ];
 
 				for( i = 0; i < IntFltLen; i++ )
 				{
 					const fptype xx = ftp[ i ] + ftp2[ i ] * x;
-					sum[ 0 ] += xx * Src[ 0 ];
-					sum[ 1 ] += xx * Src[ 1 ];
-					sum[ 2 ] += xx * Src[ 2 ];
+					sum0 += xx * Src[ 0 ];
+					sum1 += xx * Src[ 1 ];
+					sum2 += xx * Src[ 2 ];
 					Src += 3;
 				}
 
-				DstLine[ 0 ] = sum[ 0 ];
-				DstLine[ 1 ] = sum[ 1 ];
-				DstLine[ 2 ] = sum[ 2 ];
+				DstLine[ 0 ] = sum0;
+				DstLine[ 1 ] = sum1;
+				DstLine[ 2 ] = sum2;
 
 				AVIR_RESIZE_PART2
 			}
@@ -3864,20 +3963,19 @@ public:
 			{
 				AVIR_RESIZE_PART1
 
-				fptype sum[ 2 ];
-				sum[ 0 ] = 0.0;
-				sum[ 1 ] = 0.0;
+				fptype sum0 = ElBiases[ 0 ];
+				fptype sum1 = ElBiases[ 1 ];
 
 				for( i = 0; i < IntFltLen; i++ )
 				{
 					const fptype xx = ftp[ i ] + ftp2[ i ] * x;
-					sum[ 0 ] += xx * Src[ 0 ];
-					sum[ 1 ] += xx * Src[ 1 ];
+					sum0 += xx * Src[ 0 ];
+					sum1 += xx * Src[ 1 ];
 					Src += 2;
 				}
 
-				DstLine[ 0 ] = sum[ 0 ];
-				DstLine[ 1 ] = sum[ 1 ];
+				DstLine[ 0 ] = sum0;
+				DstLine[ 1 ] = sum1;
 
 				AVIR_RESIZE_PART2
 			}
@@ -3888,14 +3986,14 @@ public:
 			{
 				AVIR_RESIZE_PART1nx
 
-				fptype sum = 0.0;
+				fptype sum0 = ElBiases[ 0 ];
 
 				for( i = 0; i < IntFltLen; i++ )
 				{
-					sum += ftp[ i ] * Src[ i ];
+					sum0 += ftp[ i ] * Src[ i ];
 				}
 
-				DstLine[ 0 ] = sum;
+				DstLine[ 0 ] = sum0;
 
 				AVIR_RESIZE_PART2
 			}
@@ -3904,26 +4002,25 @@ public:
 			{
 				AVIR_RESIZE_PART1nx
 
-				fptype sum[ 4 ];
-				sum[ 0 ] = 0.0;
-				sum[ 1 ] = 0.0;
-				sum[ 2 ] = 0.0;
-				sum[ 3 ] = 0.0;
+				fptype sum0 = ElBiases[ 0 ];
+				fptype sum1 = ElBiases[ 1 ];
+				fptype sum2 = ElBiases[ 2 ];
+				fptype sum3 = ElBiases[ 3 ];
 
 				for( i = 0; i < IntFltLen; i++ )
 				{
 					const fptype xx = ftp[ i ];
-					sum[ 0 ] += xx * Src[ 0 ];
-					sum[ 1 ] += xx * Src[ 1 ];
-					sum[ 2 ] += xx * Src[ 2 ];
-					sum[ 3 ] += xx * Src[ 3 ];
+					sum0 += xx * Src[ 0 ];
+					sum1 += xx * Src[ 1 ];
+					sum2 += xx * Src[ 2 ];
+					sum3 += xx * Src[ 3 ];
 					Src += 4;
 				}
 
-				DstLine[ 0 ] = sum[ 0 ];
-				DstLine[ 1 ] = sum[ 1 ];
-				DstLine[ 2 ] = sum[ 2 ];
-				DstLine[ 3 ] = sum[ 3 ];
+				DstLine[ 0 ] = sum0;
+				DstLine[ 1 ] = sum1;
+				DstLine[ 2 ] = sum2;
+				DstLine[ 3 ] = sum3;
 
 				AVIR_RESIZE_PART2
 			}
@@ -3932,23 +4029,22 @@ public:
 			{
 				AVIR_RESIZE_PART1nx
 
-				fptype sum[ 3 ];
-				sum[ 0 ] = 0.0;
-				sum[ 1 ] = 0.0;
-				sum[ 2 ] = 0.0;
+				fptype sum0 = ElBiases[ 0 ];
+				fptype sum1 = ElBiases[ 1 ];
+				fptype sum2 = ElBiases[ 2 ];
 
 				for( i = 0; i < IntFltLen; i++ )
 				{
 					const fptype xx = ftp[ i ];
-					sum[ 0 ] += xx * Src[ 0 ];
-					sum[ 1 ] += xx * Src[ 1 ];
-					sum[ 2 ] += xx * Src[ 2 ];
+					sum0 += xx * Src[ 0 ];
+					sum1 += xx * Src[ 1 ];
+					sum2 += xx * Src[ 2 ];
 					Src += 3;
 				}
 
-				DstLine[ 0 ] = sum[ 0 ];
-				DstLine[ 1 ] = sum[ 1 ];
-				DstLine[ 2 ] = sum[ 2 ];
+				DstLine[ 0 ] = sum0;
+				DstLine[ 1 ] = sum1;
+				DstLine[ 2 ] = sum2;
 
 				AVIR_RESIZE_PART2
 			}
@@ -3957,20 +4053,19 @@ public:
 			{
 				AVIR_RESIZE_PART1nx
 
-				fptype sum[ 2 ];
-				sum[ 0 ] = 0.0;
-				sum[ 1 ] = 0.0;
+				fptype sum0 = ElBiases[ 0 ];
+				fptype sum1 = ElBiases[ 1 ];
 
 				for( i = 0; i < IntFltLen; i++ )
 				{
 					const fptype xx = ftp[ i ];
-					sum[ 0 ] += xx * Src[ 0 ];
-					sum[ 1 ] += xx * Src[ 1 ];
+					sum0 += xx * Src[ 0 ];
+					sum1 += xx * Src[ 1 ];
 					Src += 2;
 				}
 
-				DstLine[ 0 ] = sum[ 0 ];
-				DstLine[ 1 ] = sum[ 1 ];
+				DstLine[ 0 ] = sum0;
+				DstLine[ 1 ] = sum1;
 
 				AVIR_RESIZE_PART2
 			}
@@ -4040,7 +4135,7 @@ public:
 
 	void dither( fptype* const ResScanline ) const
 	{
-		const fptype c0 = 0.0;
+		const fptype c0 = (fptype) 0;
 		const fptype PkOut = (fptype) PkOut0;
 		int j;
 
@@ -4118,7 +4213,7 @@ public:
 
 		for( i = 0; i < LenE + Vars -> ElCount; i++ )
 		{
-			ResScanlineDith0[ i ] = 0.0;
+			ResScanlineDith0[ i ] = (fptype) 0;
 		}
 	}
 
@@ -4130,7 +4225,7 @@ public:
 	void dither( fptype* const ResScanline )
 	{
 		const int ElCount = Vars -> ElCount;
-		const fptype c0 = 0.0;
+		const fptype c0 = (fptype) 0;
 		const fptype TrMul = (fptype) TrMul0;
 		const fptype PkOut = (fptype) PkOut0;
 		int j;
@@ -4138,7 +4233,7 @@ public:
 		for( j = 0; j < LenE; j++ )
 		{
 			ResScanline[ j ] += ResScanlineDith[ j ];
-			ResScanlineDith[ j ] = 0.0;
+			ResScanlineDith[ j ] = (fptype) 0;
 		}
 
 		for( j = 0; j < LenE - ElCount; j++ )
@@ -4192,8 +4287,8 @@ protected:
  * clamping (saturation) operation.
  * 
  * The fpclass_def class can be used to define processing using both SIMD and
- * non-SIMD types, but using algorithms that are operate on interleaved pixels
- * and non-SIMD optimized themselves.
+ * non-SIMD types, but using algorithms that operate on interleaved pixels,
+ * and which are non-SIMD optimized themselves.
  *
  * @tparam afptype Floating point type to use for storing intermediate data
  * and variables. For variables that are not used in intensive calculations
@@ -4390,8 +4485,8 @@ public:
 
 		// Evaluate pre-multipliers used on the output stage.
 
-		const bool IsInFloat = ( (Tin) 0.4 != 0 );
-		const bool IsOutFloat = ( (Tout) 0.4 != 0 );
+		const bool IsInFloat = ( (Tin) 0.25 != 0 );
+		const bool IsOutFloat = ( (Tout) 0.25 != 0 );
 		double OutMul; // Output multiplier.
 
 		if( Vars.UseSRGBGamma )
@@ -4874,7 +4969,7 @@ private:
 		while( Ext > 0 )
 		{
 			Ext--;
-			Flt[ ReqCapacity + Ext ] = 0.0;
+			Flt[ ReqCapacity + Ext ] = (fptype) 0;
 		}
 	}
 
@@ -4964,7 +5059,6 @@ private:
 			fs.FltOrig.alloc( w.FilterLen );
 
 			w.generateLPF( &fs.FltOrig[ 0 ], 1.0 );
-			optimizeFIRFilter( fs.FltOrig, fs.FltLatency );
 			normalizeFIRFilter( &fs.FltOrig[ 0 ], fs.FltOrig.getCapacity(),
 				fs.DCGain );
 
@@ -5148,8 +5242,6 @@ private:
 		CBuffer< double > Filter( EQ.getFilterLength() );
 		EQ.buildFilter( Bins, &Filter[ 0 ]);
 		normalizeFIRFilter( &Filter[ 0 ], Filter.getCapacity(), 1.0 );
-		optimizeFIRFilter( Filter, fs.FltLatency );
-		normalizeFIRFilter( &Filter[ 0 ], Filter.getCapacity(), 1.0 );
 
 		allocFilter( fs.Flt, Filter.getCapacity() );
 		copyArray( &Filter[ 0 ], &fs.Flt[ 0 ], Filter.getCapacity() );
@@ -5242,8 +5334,6 @@ private:
 
 		CBuffer< double > Filter( EQ.getFilterLength() );
 		EQ.buildFilter( Bins, &Filter[ 0 ]);
-		normalizeFIRFilter( &Filter[ 0 ], Filter.getCapacity(), 1.0 );
-		optimizeFIRFilter( Filter, fs.FltLatency );
 		normalizeFIRFilter( &Filter[ 0 ], Filter.getCapacity(), 1.0 );
 
 		allocFilter( fs.Flt, Filter.getCapacity() );
@@ -6159,8 +6249,15 @@ private:
 
 		void resizeScanlineH( const Tin* const SrcBuf, fptype* const ResBuf )
 		{
-			(*Steps)[ 0 ].packScanline( SrcBuf, BufPtrs[ 0 ], SrcLen );
+			const CFilterStep& fs0 = (*Steps)[ 0 ];
+
+			fs0.packScanline( SrcBuf, BufPtrs[ 0 ], SrcLen );
 			BufPtrs[ 2 ] = ResBuf;
+
+			fptype ElBiases[ 4 ];
+			fs0.calcScanlineBias( BufPtrs[ 0 ], SrcLen, ElBiases );
+			fs0.unbiasScanline( BufPtrs[ 0 ], SrcLen, ElBiases );
+
 			int j;
 
 			for( j = 0; j < Steps -> getItemCount(); j++ )
@@ -6186,7 +6283,7 @@ private:
 				else
 				{
 					fs.doResize( BufPtrs[ fs.InBuf ], BufPtrs[ fs.OutBuf ],
-						DstIncr, TmpFltBuf );
+						DstIncr, ElBiases, TmpFltBuf );
 				}
 			}
 		}
@@ -6202,10 +6299,15 @@ private:
 		void resizeScanlineV( const fptype* const SrcBuf,
 			fptype* const ResBuf )
 		{
-			(*Steps)[ 0 ].convertVtoH( SrcBuf, BufPtrs[ 0 ], SrcLen,
-				SrcIncr );
+			const CFilterStep& fs0 = (*Steps)[ 0 ];
 
+			fs0.convertVtoH( SrcBuf, BufPtrs[ 0 ], SrcLen, SrcIncr );
 			BufPtrs[ 2 ] = ResBuf;
+
+			fptype ElBiases[ 4 ];
+			fs0.calcScanlineBias( BufPtrs[ 0 ], SrcLen, ElBiases );
+			fs0.unbiasScanline( BufPtrs[ 0 ], SrcLen, ElBiases );
+
 			int j;
 
 			for( j = 0; j < Steps -> getItemCount(); j++ )
@@ -6231,7 +6333,7 @@ private:
 				else
 				{
 					fs.doResize( BufPtrs[ fs.InBuf ], BufPtrs[ fs.OutBuf ],
-						DstIncr, TmpFltBuf );
+						DstIncr, ElBiases, TmpFltBuf );
 				}
 			}
 		}

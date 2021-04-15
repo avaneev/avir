@@ -19,9 +19,7 @@
  *
  * @section license License
  *
- * AVIR License Agreement
- *
- * The MIT License (MIT)
+ * MIT License
  *
  * Copyright (c) 2015-2021 Aleksey Vaneev
  *
