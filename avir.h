@@ -48,7 +48,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  *
- * @version 2.8
+ * @version 2.9
  */
 
 #ifndef AVIR_CIMAGERESIZER_INCLUDED
@@ -65,7 +65,7 @@ namespace avir {
  * The macro defines AVIR version string.
  */
 
-#define AVIR_VERSION "2.8"
+#define AVIR_VERSION "2.9"
 
 /**
  * The macro equals to "pi" constant, fills 53-bit floating point mantissa.
@@ -1399,7 +1399,8 @@ public:
 	 *
 	 * @param[out] op Output buffer, length = FilterLen (fl2 * 2 + 1).
 	 * @param DCGain Required gain at DC. The resulting filter will be
-	 * normalized to achieve this DC gain.
+	 * normalized to achieve this DC gain. If non-positive, no automatic
+	 * normalization will be performed.
 	 */
 
 	template< class T >
@@ -1411,30 +1412,50 @@ public:
 		op += fl2;
 		T* op2 = op;
 		f2.generate();
-		int t = 1;
 
-		*op = (T) ( Freq2 * wf.generate() / AVIR_PI );
-		double s = *op;
-
-		while( t <= fl2 )
+		if( DCGain > 0.0 )
 		{
-			const double v = f2.generate() * wf.generate() / t / AVIR_PI;
-			op++;
-			op2--;
-			*op = (T) v;
-			*op2 = (T) v;
-			s += *op + *op2;
-			t++;
+			int t = 1;
+
+			*op = (T) ( Freq2 * wf.generate() );
+			double s = *op;
+
+			while( t <= fl2 )
+			{
+				const T v = (T) ( f2.generate() * wf.generate() / t );
+				op++;
+				op2--;
+				*op = v;
+				*op2 = v;
+				s += v + v;
+				t++;
+			}
+
+			t = FilterLen;
+			s = DCGain / s;
+
+			while( t > 0 )
+			{
+				*op2 = (T) ( *op2 * s );
+				op2++;
+				t--;
+			}
 		}
-
-		t = FilterLen;
-		s = DCGain / s;
-
-		while( t > 0 )
+		else
 		{
-			*op2 = (T) ( *op2 * s );
-			op2++;
-			t--;
+			int t = 1;
+
+			*op = (T) ( Freq2 * wf.generate() );
+
+			while( t <= fl2 )
+			{
+				const T v = (T) ( f2.generate() * wf.generate() / t );
+				op++;
+				op2--;
+				*op = v;
+				*op2 = v;
+				t++;
+			}
 		}
 	}
 
@@ -1838,7 +1859,7 @@ private:
 		int i = BufLen - BufCenter - p.fl2 - 1;
 		memset( &Buf[ BufLen - i ], 0, i * sizeof( double ));
 
-		p.generateLPF( &Buf[ BufCenter - p.fl2 ], FracCount );
+		p.generateLPF( &Buf[ BufCenter - p.fl2 ], 0.0 );
 
 		SrcTable.alloc(( FracCount + 1 ) * SrcFilterLen );
 		TableFillFlags.alloc( FracCount + 1 );
@@ -5058,9 +5079,7 @@ private:
 		{
 			fs.FltOrig.alloc( w.FilterLen );
 
-			w.generateLPF( &fs.FltOrig[ 0 ], 1.0 );
-			normalizeFIRFilter( &fs.FltOrig[ 0 ], fs.FltOrig.getCapacity(),
-				fs.DCGain );
+			w.generateLPF( &fs.FltOrig[ 0 ], fs.DCGain );
 
 			allocFilter( fs.Flt, fs.FltOrig.getCapacity(), false, &FltExt );
 			copyArray( &fs.FltOrig[ 0 ], &fs.Flt[ 0 ],
@@ -5428,21 +5447,7 @@ private:
 			while( true )
 			{
 				DownsampleFactor = (int) floor( 0.5 / FltCutoff );
-				bool DoHBFltAdd;
-
-				if( DownsampleFactor > 16 )
-				{
-					// Add half-band filter unconditionally in order to keep
-					// filter lengths lower for more precise frequency
-					// response and less edge artifacts.
-
-					DoHBFltAdd = true;
-					DownsampleFactor = 16;
-				}
-				else
-				{
-					DoHBFltAdd = ( UseHalfband && DownsampleFactor > 1 );
-				}
+				bool DoHBFltAdd = ( UseHalfband && DownsampleFactor > 1 );
 
 				if( DoHBFltAdd )
 				{

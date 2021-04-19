@@ -369,6 +369,14 @@ maintaining confidence in this library among the interested parties.
 
 ## Change log ##
 
+Version 2.9:
+
+* Removed a rarely-used half-band resizing step completely since it offers no
+practical performance nor quality benefits.
+* Optimized filter generation function (removed divisions by a constant) as
+filters are always post-normalized anyway. This may reduce overhead when
+creating thumbnail-sized images.
+
 Version 2.8:
 
 * Fixed regression with the copy-constructor of CImageResizeVars class
