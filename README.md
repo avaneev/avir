@@ -343,10 +343,23 @@ LANCIR should be seen as a bonus and as some kind of quality comparison.
 LANCIR uses Lanczos filter "a" parameter equal to 3 which is similar to AVIR's
 default setting.
 
-## Comparison ##
+## Users ##
 
-    1.000 0.950 0.902 0.857 0.815 0.774 0.735 0.698 0.663 0.630 0.599 0.569
-    0.540 0.513 0.488 0.463 0.440 0.418 0.397 0.377 0.358 0.341 0.324 0.307
+This library is used by:
+
+  * [Contaware.com](http://www.contaware.com/)
+  * [Pretext contact maps](https://github.com/wtsi-hpag/PretextSnapshot)
+  * [LVC Audio](https://lvcaudio.com)
+  * [Trainz](https://www.trainzportal.com/files/TRS19/credits.html)
+  * [MLV App](https://mlv.app/)
+
+[This video](https://www.youtube.com/watch?v=oNF-c6YX7-8) was "unsqueezed"
+with AVIR by a factor of 3 from ML RAW video, and at a final stage downsampled
+to 4K resolution.
+
+Please drop me a note at aleksey.vaneev@gmail.com and I will include a link to
+your software product to the list of users. This list is important at
+maintaining confidence in this library among the interested parties.
 
 ## Change log ##
 
