@@ -1,9 +1,6 @@
-# AVIR #
+# AVIR - Image Resizing Algorithm #
 
 ## Introduction ##
-
-Keywords: image resize, image resizer, image resizing, image scaling,
-image scaler, image resize c++, image resizer c++
 
 Me, Aleksey Vaneev, is happy to offer you an open source image resizing /
 scaling library which has reached a production level of quality, and is
@@ -44,6 +41,13 @@ As a bonus, a faster `LANCIR` image resizing algorithm is also offered as a
 part of this library. But the main focus of this documentation is the original
 AVIR image resizing algorithm.
 
+*AVIR is devoted to women. Your digital photos can look good at any size!*
+
+P.S. Please credit the author of this library in your documentation in the
+following way: "AVIR image resizing algorithm designed by Aleksey Vaneev".
+
+## Affine and Non-Linear Transformations ##
+
 AVIR does not offer affine and non-linear image transformations "out of the
 box". Since upsizing is a relatively fast operation in AVIR (required time
 scales linearly with the output image area), affine and non-linear
@@ -59,16 +63,11 @@ serious drawback is the increased memory requirement). Note that affine
 transformations that change image proportions should first apply proportion
 change during upsizing.
 
-*AVIR is devoted to women. Your digital photos can look good at any size!*
-
-P.S. Please credit the author of this library in your documentation in the
-following way: "AVIR image resizing algorithm designed by Aleksey Vaneev".
-
 ## Requirements ##
 
-C++ compiler and system with efficient "float" floating point (24-bit
+C++ compiler and system with efficient "float" floating-point (24-bit
 mantissa) type support. This library can also internally use the "double" and
-SIMD floating point types during resizing if needed. This library does not
+SIMD floating-point types during resizing if needed. This library does not
 have dependencies beside the standard C library.
 
 ## Links ##
@@ -95,17 +94,18 @@ bit resolution, which may be 10 or even 16):
     ImageResizer.resizeImage( InBuf, 640, 480, 0, OutBuf, 1024, 768, 3, 0 );
     (multi-threaded operation requires additional coding, see the documentation)
 
-If you are not too familiar with the low-level "packed interleaved" image
-storage format, the `InBuf` is expected to be `w*h*c` elements in size, where
-`w` and `h` is the width and the height of the image in pixels, respectively,
-and `c` is the number of color channels in the image. In the example above,
-the size of the `InBuf` is `640*480*3=921600` elements. If you are working
-with 8-bit images, the buffer and the elements should have the `uint8_t*`
-type; if you are working with 16-bit images, they should have the `uint16_t*`
-type. Note that when processing 16-bit images, the value of `16` should be
-used in resizer's constructor. AVIR's algorithm does not discern between
-channel packing order (`RGBA`, `ARGB`, `BGRA`, etc.), so if the `BGRA`
-ordered elements were passed to it, the result will be also `BGRA`.
+AVIR works with header-less "raw" image buffers. If you are not too familiar
+with the low-level "packed interleaved" image storage format, the `InBuf` is
+expected to be `w*h*c` elements in size, where `w` and `h` is the width and
+the height of the image in pixels, respectively, and `c` is the number of
+color channels in the image. In the example above, the size of the `InBuf` is
+`640*480*3=921600` elements. If you are working with 8-bit images, the buffer
+and the elements should have the `uint8_t*` type; if you are working with
+16-bit images, they should have the `uint16_t*` type. Note that when
+processing 16-bit images, the value of `16` should be used in resizer's
+constructor. AVIR's algorithm does not discern between channel packing order
+(`RGBA`, `ARGB`, `BGRA`, etc.), so if the `BGRA` ordered elements were passed
+to it, the result will be also `BGRA`.
 
 For low-ringing performance:
 
@@ -131,7 +131,7 @@ The library is able to process images of any bit depth: this includes 8-bit,
 16-bit, float and double types. Larger integer and signed integer types are
 not supported. Supported source and destination image sizes are only limited
 by the available system memory. Note that the resizing function applies
-clipping to integer output only, floating point output will not be clipped to
+clipping to integer output only; floating-point output will not be clipped to
 [0; 1] range.
 
 The code of this library was commented in the [Doxygen](http://www.doxygen.org/)
@@ -153,7 +153,7 @@ requires additional system-specific interfacing code for engagement.
 
 ## SIMD Usage Information ##
 
-This library is capable of using SIMD floating point types for internal
+This library is capable of using SIMD floating-point types for internal
 variables. This means that up to 4 color channels can be processed in
 parallel. Since the default interleaved processing algorithm itself remains
 non-SIMD, the use of SIMD internal types is not practical for 1- and 2-channel
@@ -187,11 +187,11 @@ SSE-specific resizing code may still be a little bit more efficient for
 ## Notes ##
 
 This library was tested for compatibility with [GNU C++](http://gcc.gnu.org/),
-[Microsoft Visual C++](http://www.microsoft.com/visualstudio/eng/products/visual-studio-express-products)
-and [Intel C++](http://software.intel.com/en-us/c-compilers) compilers, on 32-
-and 64-bit Windows, macOS and CentOS Linux. The code was also tested with
-Dr.Memory/Win32 for the absence of uninitialized or unaddressable memory
-accesses.
+[Microsoft Visual C++](http://www.microsoft.com/visualstudio/eng/products/visual-studio-express-products),
+[LLVM](https://llvm.org/), and [Intel C++](http://software.intel.com/en-us/c-compilers)
+compilers, on 32- and 64-bit Windows, macOS, and CentOS Linux. The code was
+also tested with Dr.Memory/Win32 for the absence of uninitialized or
+unaddressable memory accesses.
 
 All code is fully "inline", without the need to compile any source files. The
 memory footprint of the library itself is very modest, except that the size of
@@ -217,7 +217,8 @@ desktop platforms. This tool was designed to be used as a demonstration of
 library's performance, and as a reference, it is multi-threaded (the `-t`
 switch can be used to control the number of threads utilized). This tool uses
 plain "float" processing (no explicit SIMD) and relies on automatic compiler
-optimization. This tool uses the following libraries:
+optimizations. This tool uses the following libraries:
+
 * turbojpeg Copyright (c) 2009-2013 D. R. Commander
 * libpng Copyright (c) 1998-2013 Glenn Randers-Pehrson
 * zlib Copyright (c) 1995-2013 Jean-loup Gailly and Mark Adler
@@ -329,19 +330,21 @@ characteristics.
 ## LANCIR ##
 
 As a part of AVIR library, the `CLancIR` class is also offered which is an
-optimal implementation of *Lanczos* image resizing filter. This class has a
-similar programmatic interface to AVIR, but it is not thread-safe: each
-executing thread should have its own `CLancIR` object. This class was designed
-for cases of batch processing of same-sized frames like in video encoding.
+optimal implementation of [Lanczos](https://en.wikipedia.org/wiki/Lanczos_resampling)
+image resizing filter. This class has a similar programmatic interface to
+AVIR, but it is not thread-safe: each executing thread should have its own
+`CLancIR` object. This class was designed for cases of batch processing of
+same-sized frames like in video encoding, or for just-in-time resizing of
+an application's assets.
 
 LANCIR offers up to 200% faster image resizing in comparison to AVIR. The
 quality difference is, however, debatable. Note that while LANCIR can take
 8- and 16-bit and float image buffers, its precision is limited to 8-bit
 resizing.
 
-LANCIR should be seen as a bonus and as some kind of quality comparison.
-LANCIR uses Lanczos filter "a" parameter equal to 3 which is similar to AVIR's
-default setting.
+LANCIR should be seen as a bonus and as an "industrial standard" reference for
+comparison. LANCIR uses Lanczos filter "a" parameter equal to 3 which is
+similar to AVIR's default setting.
 
 ## Comparison ##
 
@@ -385,7 +388,7 @@ Please drop me a note at aleksey.vaneev@gmail.com and I will include a link to
 your software product to the list of users. This list is important at
 maintaining confidence in this library among the interested parties.
 
-## Change log ##
+## Change Log ##
 
 Version 2.9:
 
