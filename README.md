@@ -343,6 +343,30 @@ LANCIR should be seen as a bonus and as some kind of quality comparison.
 LANCIR uses Lanczos filter "a" parameter equal to 3 which is similar to AVIR's
 default setting.
 
+## Comparison ##
+
+This graph displays a comparison of AVIR 2.9 (default parameters) and
+Lanczos-3 image resizing algorithm in the area of frequency response.
+The methodology can be seen in the `other/frtest.cpp` file. This graph
+displays an average frequency response over a set of resizing factors.
+It is similar but not equal to Fourier analysis as any errors and aliasing
+artifacts are integrated into the response. As you can see, AVIR offers a
+visibly better frequency response linearity. The horizontal scale displays a
+normalized frequency scale, where 0 is DC frequency and 1 is Nyquist
+frequency. In common terms, 1 corresponds to 1-pixel image features, 0.5
+corresponds to 2-pixel features while 0.25 corresponds to 4-pixel features,
+etc. The vertical scale is in decibel.
+
+![FR plot](https://github.com/avaneev/avir/blob/master/other/_fr_up.png)
+
+The following graph displays a comparison of an average dynamic range over a
+set of resizing factors. The dynamic range is estimated by performing
+two-way resizing, followed by deviation/error estimation relative to the
+original image. As you can see here, aliasing artifacts visibly reduce dynamic
+range above 0.5\*Nyquist.
+
+![DR plot](https://github.com/avaneev/avir/blob/master/other/_dr_up.png)
+
 ## Users ##
 
 This library is used by:
