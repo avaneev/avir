@@ -337,13 +337,13 @@ AVIR, but it is not thread-safe: each executing thread should have its own
 same-sized frames like in video encoding, or for just-in-time resizing of
 an application's assets.
 
-LANCIR offers up to 200% faster image resizing in comparison to AVIR. The
-quality difference is, however, debatable. Note that while LANCIR can take
-8- and 16-bit and float image buffers, its precision is limited to 8-bit
-resizing.
+LANCIR offers up to two times faster image resizing in comparison to AVIR.
+The quality difference is, however, debatable. Note that while LANCIR can
+take 8- and 16-bit and float image buffers, its precision is limited to
+8-bit resizing.
 
-LANCIR should be seen as a bonus and as an "industrial standard" reference for
-comparison. LANCIR uses Lanczos filter "a" parameter equal to 3 which is
+LANCIR should be seen as a bonus and as an "industrial standard" reference
+for comparison. LANCIR uses Lanczos filter "a" parameter equal to 3 which is
 similar to AVIR's default setting.
 
 ## Comparison ##
@@ -389,6 +389,13 @@ your software product to the list of users. This list is important at
 maintaining confidence in this library among the interested parties.
 
 ## Change Log ##
+
+Version 3.0:
+
+* Improved speed by 10-25% on upsizing by utilizing a special resizing
+function together with filter-less 2X upsizing. Does not apply to the
+de-interleaved (AVX) resizing.
+* Minor LANCIR optimization.
 
 Version 2.9:
 

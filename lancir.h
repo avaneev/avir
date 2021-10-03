@@ -572,13 +572,8 @@ protected:
 
 			NormFreq = ( k <= 1.0 ? 1.0 : 1.0 / k );
 			Freq = LANCIR_PI * NormFreq;
-
-			if( Freq > LANCIR_PI )
-			{
-				Freq = LANCIR_PI;
-			}
-
 			FreqA = LANCIR_PI * NormFreq / la;
+
 			Len2 = la / NormFreq;
 			fl2 = (int) ceil( Len2 );
 			KernelLen = fl2 + fl2;
@@ -715,6 +710,8 @@ protected:
 		/**
 		 * Function creates filter for the specified fractional delay. The
 		 * update() function should be called prior to calling this function.
+		 * The created filter is not normalized, so it should be normalized
+		 * afterwards.
 		 *
 		 * @param FracDelay Fractional delay, 0 to 1, inclusive.
 		 * @param[out] Output filter buffer.
@@ -743,7 +740,7 @@ protected:
 
 			while( t < mt )
 			{
-				double ut = ( t + FracDelay ) * LANCIR_PI;
+				double ut = t + FracDelay;
 				*op = (T) ( f.generate() * fw.generate() / ( ut * ut ));
 				op++;
 				t++;
@@ -753,13 +750,12 @@ protected:
 
 			if( fabs( ut ) <= 1e-13 )
 			{
-				*op = (T) NormFreq;
+				*op = (T) ( NormFreq * ( LANCIR_PI * LANCIR_PI ));
 				f.generate();
 				fw.generate();
 			}
 			else
 			{
-				ut *= LANCIR_PI;
 				*op = (T) ( f.generate() * fw.generate() / ( ut * ut ));
 			}
 
@@ -769,7 +765,7 @@ protected:
 			{
 				op++;
 				t++;
-				ut = ( t + FracDelay ) * LANCIR_PI;
+				ut = t + FracDelay;
 				*op = (T) ( f.generate() * fw.generate() / ( ut * ut ));
 			}
 
@@ -783,7 +779,6 @@ protected:
 			}
 			else
 			{
-				ut *= LANCIR_PI;
 				*op = (T) ( f.generate() * fw.generate() / ( ut * ut ));
 			}
 		}

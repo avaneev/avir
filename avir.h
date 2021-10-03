@@ -48,7 +48,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  *
- * @version 2.9
+ * @version 3.0
  */
 
 #ifndef AVIR_CIMAGERESIZER_INCLUDED
@@ -65,7 +65,7 @@ namespace avir {
  * The macro defines AVIR version string.
  */
 
-#define AVIR_VERSION "2.9"
+#define AVIR_VERSION "3.0"
 
 /**
  * The macro equals to "pi" constant, fills 53-bit floating point mantissa.
@@ -2384,6 +2384,8 @@ public:
 	int ResizeStep; ///< Index of the resizing step in the latest filtering
 		///< steps array.
 		///<
+	bool IsResize2; ///< Use optimized "doResize2" function.
+		///<
 	double InGammaMult; ///< Input gamma multiplier, used to convert input
 		///< data to 0 to 1 range. 0.0 if no gamma is in use.
 		///<
@@ -2545,6 +2547,8 @@ public:
 		fptypeatom x; ///< Interpolation coefficient between delay filters.
 			///<
 		int SrcOffs; ///< Source scanline offset.
+			///<
+		int fl; ///< Filter length to use, applies to doResize2() only.
 			///<
 	};
 
@@ -4095,6 +4099,240 @@ public:
 #undef AVIR_RESIZE_PART2
 #undef AVIR_RESIZE_PART1nx
 #undef AVIR_RESIZE_PART1
+
+	/**
+	 * Function performs resizing of a single scanline assuming that the input
+	 * buffer consists of zero-padded elements (2X upsampling without
+	 * filtering). Similar to the doResize() function otherwise.
+	 *
+	 * @param SrcLine Source scanline buffer.
+	 * @param DstLine Destination (resized) scanline buffer.
+	 * @param DstLineIncr Destination scanline position increment, used for
+	 * horizontal or vertical scanline stepping.
+	 * @param ElBiases Bias values to add to the resulting scanline.
+	 * @param xx Temporary buffer, of size FltBank -> getFilterLen(), must be
+	 * aligned by fpclass :: fpalign.
+	 */
+
+	void doResize2( const fptype* SrcLine, fptype* DstLine,
+		const int DstLineIncr, const fptype* const ElBiases,
+		fptype* const ) const
+	{
+		const int IntFltLen0 = FltBank -> getFilterLen();
+		const int ElCount = Vars -> ElCount;
+		const typename CImageResizerFilterStep< fptype, fptypeatom > ::
+			CResizePos* rpos = &(*RPosBuf)[ 0 ];
+
+		const typename CImageResizerFilterStep< fptype, fptypeatom > ::
+			CResizePos* const rpose = rpos + OutLen;
+
+#define AVIR_RESIZE_PART1 \
+			while( rpos < rpose ) \
+			{ \
+				const fptype x = (fptype) rpos -> x; \
+				const fptype* const ftp = rpos -> ftp; \
+				const fptype* const ftp2 = ftp + IntFltLen0; \
+				const fptype* Src = SrcLine + rpos -> SrcOffs; \
+				const int IntFltLen = rpos -> fl; \
+				int i;
+
+#define AVIR_RESIZE_PART1nx \
+			while( rpos < rpose ) \
+			{ \
+				const fptype* const ftp = rpos -> ftp; \
+				const fptype* Src = SrcLine + rpos -> SrcOffs; \
+				const int IntFltLen = rpos -> fl; \
+				int i;
+
+#define AVIR_RESIZE_PART2 \
+				DstLine += DstLineIncr; \
+				rpos++; \
+			}
+
+		if( FltBank -> getOrder() == 1 )
+		{
+			if( ElCount == 1 )
+			{
+				AVIR_RESIZE_PART1
+
+				fptype sum0 = ElBiases[ 0 ];
+
+				for( i = 0; i < IntFltLen; i += 2 )
+				{
+					sum0 += ( ftp[ i ] + ftp2[ i ] * x ) * Src[ i ];
+				}
+
+				DstLine[ 0 ] = sum0;
+
+				AVIR_RESIZE_PART2
+			}
+			else
+			if( ElCount == 4 )
+			{
+				AVIR_RESIZE_PART1
+
+				fptype sum0 = ElBiases[ 0 ];
+				fptype sum1 = ElBiases[ 1 ];
+				fptype sum2 = ElBiases[ 2 ];
+				fptype sum3 = ElBiases[ 3 ];
+
+				for( i = 0; i < IntFltLen; i += 2 )
+				{
+					const fptype xx = ftp[ i ] + ftp2[ i ] * x;
+					sum0 += xx * Src[ 0 ];
+					sum1 += xx * Src[ 1 ];
+					sum2 += xx * Src[ 2 ];
+					sum3 += xx * Src[ 3 ];
+					Src += 4 * 2;
+				}
+
+				DstLine[ 0 ] = sum0;
+				DstLine[ 1 ] = sum1;
+				DstLine[ 2 ] = sum2;
+				DstLine[ 3 ] = sum3;
+
+				AVIR_RESIZE_PART2
+			}
+			else
+			if( ElCount == 3 )
+			{
+				AVIR_RESIZE_PART1
+
+				fptype sum0 = ElBiases[ 0 ];
+				fptype sum1 = ElBiases[ 1 ];
+				fptype sum2 = ElBiases[ 2 ];
+
+				for( i = 0; i < IntFltLen; i += 2 )
+				{
+					const fptype xx = ftp[ i ] + ftp2[ i ] * x;
+					sum0 += xx * Src[ 0 ];
+					sum1 += xx * Src[ 1 ];
+					sum2 += xx * Src[ 2 ];
+					Src += 3 * 2;
+				}
+
+				DstLine[ 0 ] = sum0;
+				DstLine[ 1 ] = sum1;
+				DstLine[ 2 ] = sum2;
+
+				AVIR_RESIZE_PART2
+			}
+			else
+			if( ElCount == 2 )
+			{
+				AVIR_RESIZE_PART1
+
+				fptype sum0 = ElBiases[ 0 ];
+				fptype sum1 = ElBiases[ 1 ];
+
+				for( i = 0; i < IntFltLen; i += 2 )
+				{
+					const fptype xx = ftp[ i ] + ftp2[ i ] * x;
+					sum0 += xx * Src[ 0 ];
+					sum1 += xx * Src[ 1 ];
+					Src += 2 * 2;
+				}
+
+				DstLine[ 0 ] = sum0;
+				DstLine[ 1 ] = sum1;
+
+				AVIR_RESIZE_PART2
+			}
+		}
+		else
+		{
+			if( ElCount == 1 )
+			{
+				AVIR_RESIZE_PART1nx
+
+				fptype sum0 = ElBiases[ 0 ];
+
+				for( i = 0; i < IntFltLen; i += 2 )
+				{
+					sum0 += ftp[ i ] * Src[ i ];
+				}
+
+				DstLine[ 0 ] = sum0;
+
+				AVIR_RESIZE_PART2
+			}
+			else
+			if( ElCount == 4 )
+			{
+				AVIR_RESIZE_PART1nx
+
+				fptype sum0 = ElBiases[ 0 ];
+				fptype sum1 = ElBiases[ 1 ];
+				fptype sum2 = ElBiases[ 2 ];
+				fptype sum3 = ElBiases[ 3 ];
+
+				for( i = 0; i < IntFltLen; i += 2 )
+				{
+					const fptype xx = ftp[ i ];
+					sum0 += xx * Src[ 0 ];
+					sum1 += xx * Src[ 1 ];
+					sum2 += xx * Src[ 2 ];
+					sum3 += xx * Src[ 3 ];
+					Src += 4 * 2;
+				}
+
+				DstLine[ 0 ] = sum0;
+				DstLine[ 1 ] = sum1;
+				DstLine[ 2 ] = sum2;
+				DstLine[ 3 ] = sum3;
+
+				AVIR_RESIZE_PART2
+			}
+			else
+			if( ElCount == 3 )
+			{
+				AVIR_RESIZE_PART1nx
+
+				fptype sum0 = ElBiases[ 0 ];
+				fptype sum1 = ElBiases[ 1 ];
+				fptype sum2 = ElBiases[ 2 ];
+
+				for( i = 0; i < IntFltLen; i += 2 )
+				{
+					const fptype xx = ftp[ i ];
+					sum0 += xx * Src[ 0 ];
+					sum1 += xx * Src[ 1 ];
+					sum2 += xx * Src[ 2 ];
+					Src += 3 * 2;
+				}
+
+				DstLine[ 0 ] = sum0;
+				DstLine[ 1 ] = sum1;
+				DstLine[ 2 ] = sum2;
+
+				AVIR_RESIZE_PART2
+			}
+			else
+			if( ElCount == 2 )
+			{
+				AVIR_RESIZE_PART1nx
+
+				fptype sum0 = ElBiases[ 0 ];
+				fptype sum1 = ElBiases[ 1 ];
+
+				for( i = 0; i < IntFltLen; i += 2 )
+				{
+					const fptype xx = ftp[ i ];
+					sum0 += xx * Src[ 0 ];
+					sum1 += xx * Src[ 1 ];
+					Src += 2 * 2;
+				}
+
+				DstLine[ 0 ] = sum0;
+				DstLine[ 1 ] = sum1;
+
+				AVIR_RESIZE_PART2
+			}
+		}
+	}
+#undef AVIR_RESIZE_PART2
+#undef AVIR_RESIZE_PART1nx
+#undef AVIR_RESIZE_PART1
 };
 
 /**
@@ -5216,7 +5454,6 @@ private:
 				}
 			}
 
-			const double dcg = 1.0 / fs.DCGain; // DC gain correction.
 			const fptype* Flt;
 			int FltLen;
 
@@ -5235,13 +5472,13 @@ private:
 			// filter at this step, within the bounds of bandwidth of
 			// interest.
 
+			const double thm = AVIR_PI * bw / ( curbw * BinCount1 );
+
 			for( j = 0; j < BinCount; j++ )
 			{
-				const double th = AVIR_PI * bw / curbw * j / BinCount1;
+				calcFIRFilterResponse( Flt, FltLen, j * thm, re, im );
 
-				calcFIRFilterResponse( Flt, FltLen, th, re, im );
-
-				Bins[ j ] /= sqrt( re * re + im * im ) * dcg;
+				Bins[ j ] *= fs.DCGain / sqrt( re * re + im * im );
 			}
 
 			if( !fs.IsUpsample && fs.ResampleFactor > 1 )
@@ -5688,10 +5925,22 @@ private:
 		}
 
 		Steps[ Steps.getItemCount() - 1 ].OutBuf = 2;
+		Vars.IsResize2 = false;
 
 		if( upstep != -1 )
 		{
 			extendUpsample( Steps[ upstep ], Steps[ upstep + 1 ]);
+
+			if( Steps[ upstep ].ResampleFactor == 2 &&
+				Vars.ResizeStep == upstep + 1 &&
+				fpclass :: packmode == 0 &&
+				Steps[ upstep ].FltOrig.getCapacity() > 0 )
+			{
+				// Interpolation with preceeding 2x filterless upsample,
+				// interleaved resizing only.
+
+				Vars.IsResize2 = true;
+			}
 		}
 	}
 
@@ -5820,13 +6069,29 @@ private:
 		CFilterStep& fs = Steps[ Vars.ResizeStep ];
 		typename CFilterStep :: CResizePos* rpos = &(*fs.RPosBuf)[ 0 ];
 		const int em = ( fpclass :: packmode == 0 ? Vars.ElCount : 1 );
-		const int FilterLenD21 = fs.FltBank -> getFilterLen() / 2 - 1;
+		const int fl = fs.FltBank -> getFilterLen();
+		const int FilterLenD21 = fl / 2 - 1;
 
-		for( i = 0; i < fs.OutLen; i++ )
+		if( Vars.IsResize2 )
 		{
-			rpos -> ftp = fs.FltBank -> getFilter( rpos -> fti );
-			rpos -> SrcOffs = ( rpos -> SrcPosInt - FilterLenD21 ) * em;
-			rpos++;
+			for( i = 0; i < fs.OutLen; i++ )
+			{
+				const int p = rpos -> SrcPosInt - FilterLenD21;
+				const int fo = p & 1;
+				rpos -> SrcOffs = ( p + fo ) * em;
+				rpos -> ftp = fs.FltBank -> getFilter( rpos -> fti ) + fo;
+				rpos -> fl = fl - fo;
+				rpos++;
+			}
+		}
+		else
+		{
+			for( i = 0; i < fs.OutLen; i++ )
+			{
+				rpos -> SrcOffs = ( rpos -> SrcPosInt - FilterLenD21 ) * em;
+				rpos -> ftp = fs.FltBank -> getFilter( rpos -> fti );
+				rpos++;
+			}
 		}
 	}
 
@@ -5953,6 +6218,11 @@ private:
 			{
 				s += fs.FltBank -> getFilterLen() *
 					( fs.FltBank -> getOrder() + Vars.ElCount ) * fs.OutLen;
+
+				if( i == Vars.ResizeStep && Vars.IsResize2 )
+				{
+					s >>= 1;
+				}
 
 				s2 += fs.FltBank -> calcInitComplexity( UsedFracMap );
 			}
@@ -6287,8 +6557,18 @@ private:
 				}
 				else
 				{
-					fs.doResize( BufPtrs[ fs.InBuf ], BufPtrs[ fs.OutBuf ],
-						DstIncr, ElBiases, TmpFltBuf );
+					if( Vars -> IsResize2 )
+					{
+						fs.doResize2( BufPtrs[ fs.InBuf ],
+							BufPtrs[ fs.OutBuf ], DstIncr, ElBiases,
+							TmpFltBuf );
+					}
+					else
+					{
+						fs.doResize( BufPtrs[ fs.InBuf ],
+							BufPtrs[ fs.OutBuf ], DstIncr, ElBiases,
+							TmpFltBuf );
+					}
 				}
 			}
 		}
@@ -6337,8 +6617,18 @@ private:
 				}
 				else
 				{
-					fs.doResize( BufPtrs[ fs.InBuf ], BufPtrs[ fs.OutBuf ],
-						DstIncr, ElBiases, TmpFltBuf );
+					if( Vars -> IsResize2 )
+					{
+						fs.doResize2( BufPtrs[ fs.InBuf ],
+							BufPtrs[ fs.OutBuf ], DstIncr, ElBiases,
+							TmpFltBuf );
+					}
+					else
+					{
+						fs.doResize( BufPtrs[ fs.InBuf ],
+							BufPtrs[ fs.OutBuf ], DstIncr, ElBiases,
+							TmpFltBuf );
+					}
 				}
 			}
 		}

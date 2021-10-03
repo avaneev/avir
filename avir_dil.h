@@ -785,6 +785,18 @@ public:
 #undef AVIR_RESIZE_PART1nx
 #undef AVIR_RESIZE_PART1
 	}
+
+	/**
+	 * Same as doResize(). No specific 2x filter-less upsampling
+	 * optimization.
+	 */
+
+	void doResize2( const fptype* SrcLine, fptype* DstLine,
+		int DstLineIncr, const fptype* const ElBiases,
+		fptype* const xx ) const
+	{
+		doResize( SrcLine, DstLine, DstLineIncr, ElBiases, xx );
+	}
 };
 
 /**
