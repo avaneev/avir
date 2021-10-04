@@ -370,6 +370,8 @@ range above 0.5\*Nyquist.
 
 ![DR plot](https://github.com/avaneev/avir/blob/master/other/_dr_up.png)
 
+Note that on downsizing the response graphs look similar to these.
+
 ## Users ##
 
 This library is used by:
