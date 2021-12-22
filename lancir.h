@@ -7,7 +7,8 @@
  * @brief The self-contained "lancir" inclusion file.
  *
  * This is the self-contained inclusion file for the "LANCIR" image resizer,
- * part of the AVIR library.
+ * a part of the AVIR library. Features scalar, AVX, SSE2, and NEON
+ * optimizations.
  *
  * AVIR Copyright (c) 2015-2021 Aleksey Vaneev
  *
@@ -40,13 +41,47 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
+ *
+ * @version 3.0.1
  */
 
 #ifndef AVIR_CLANCIR_INCLUDED
 #define AVIR_CLANCIR_INCLUDED
 
+#include <stdint.h>
 #include <string.h>
 #include <math.h>
+
+#if defined( __AVX__ ) || defined( __AVX2__ )
+
+	#include <immintrin.h>
+
+	#define LANCIR_AVX
+	#define LANCIR_SSE2 // Some functions use SSE2; AVX has a higher priority.
+	#define LANCIR_ALIGN 32
+
+#elif defined( __SSE4_2__ ) || defined( __SSE4_1__ ) || \
+	defined( __SSSE3__ ) || defined( __SSE3__ ) || defined( __SSE2__ ) || \
+	defined( __x86_64__ ) || defined( _M_AMD64 ) || defined( _M_X64 ) || \
+	defined( __amd64 )
+
+	#include <immintrin.h>
+
+	#define LANCIR_SSE2
+	#define LANCIR_ALIGN 16
+
+#elif defined( __aarch64__ ) || defined( __arm64__ )
+
+	#include <arm_neon.h>
+
+	#define LANCIR_NEON
+	#define LANCIR_ALIGN 16
+
+#else // NEON
+
+	#define LANCIR_ALIGN 4
+
+#endif // NEON
 
 namespace avir {
 
@@ -56,6 +91,56 @@ namespace avir {
  */
 
 #define LANCIR_PI 3.1415926535897932
+
+/**
+ * Function reallocates a typed buffer if its current length is smaller than
+ * the required length.
+ *
+ * @param buf0 Reference to the pointer of the previously allocated buffer.
+ * @param buf Reference to address-aligned "buf0" pointer.
+ * @param len The current length of the "buf0".
+ * @param newlen A new required length.
+ * @tparam Tb Buffer element type.
+ * @tparam Tl Length variable type.
+ */
+
+template< typename Tb, typename Tl >
+inline void reallocBuf( Tb*& buf0, Tb*& buf, Tl& len, Tl newlen )
+{
+	newlen += LANCIR_ALIGN;
+
+	if( newlen > len )
+	{
+		delete[] buf0;
+		len = newlen;
+		buf0 = new Tb[ newlen ];
+		buf = (Tb*) (( (uintptr_t) buf0 + LANCIR_ALIGN - 1 ) &
+			~(uintptr_t) ( LANCIR_ALIGN - 1 ));
+	}
+}
+
+/**
+ * Function reallocates a typed buffer if its current length is smaller than
+ * the required length.
+ *
+ * @param buf Reference to the pointer of the previously allocated buffer;
+ * address alignment will not be applied.
+ * @param len The current length of the "buf0".
+ * @param newlen A new required length.
+ * @tparam Tb Buffer element type.
+ * @tparam Tl Length variable type.
+ */
+
+template< typename Tb, typename Tl >
+inline void reallocBuf( Tb*& buf, Tl& len, const Tl newlen )
+{
+	if( newlen > len )
+	{
+		delete[] buf;
+		len = newlen;
+		buf = new Tb[ newlen ];
+	}
+}
 
 /**
  * @brief LANCIR image resizer class.
@@ -90,33 +175,34 @@ private:
 
 public:
 	CLancIR()
-		: FltBuf( NULL )
-		, FltBufLen( 0 )
-		, spv( NULL )
-		, spvlen( 0 )
+		: FltBuf0( NULL )
+		, FltBuf0Len( 0 )
+		, spv0( NULL )
+		, spv0len( 0 )
 	{
 	}
 
 	~CLancIR()
 	{
-		delete[] FltBuf;
-		delete[] spv;
+		delete[] FltBuf0;
+		delete[] spv0;
 	}
 
 	/**
-	 * Function resizes image.
+	 * Function resizes an image.
 	 *
-	 * @param SrcBuf Source image buffer.
+	 * @param[in] SrcBuf Source image buffer.
 	 * @param SrcWidth Source image width.
 	 * @param SrcHeight Source image height.
-	 * @param SrcScanlineSize Physical size of source scanline in elements
-	 * (not bytes). If this value is below 1, SrcWidth * ElCount will be
-	 * used as the physical source scanline size.
+	 * @param SrcSSize Physical size of the source scanline, in elements (not
+	 * bytes). If this value is below 1, SrcWidth * ElCount will be used.
 	 * @param[out] NewBuf Buffer to accept the resized image. Can be equal to
 	 * SrcBuf if the size of the resized image is smaller or equal to source
 	 * image in size.
 	 * @param NewWidth New image width.
 	 * @param NewHeight New image height.
+	 * @param NewSSize Physical size of the destination scanline, in elements
+	 * (not bytes). If this value is below 1, NewWidth * ElCount will be used.
 	 * @param ElCount The number of elements (channels) used to store each
 	 * source and destination pixel (1-4).
 	 * @param kx0 Resizing step - horizontal (one output pixel corresponds to
@@ -124,23 +210,25 @@ public:
 	 * if <= 1.0. Multiply by -1 if you would like to bypass "ox" and "oy"
 	 * adjustment which is done by default to produce a centered image. If
 	 * step value equals 0, the step value will be chosen automatically.
-	 * @param ky0 Resizing step - vertical. Same as "kx".
+	 * @param ky0 Resizing step - vertical. Same as "kx0".
 	 * @param ox Start X pixel offset within source image (can be negative).
 	 * Positive offset moves the image to the left.
 	 * @param oy Start Y pixel offset within source image (can be negative).
 	 * Positive offset moves the image to the top.
-	 * @tparam T Input and output buffer element's type. Can be uint8_t
-	 * (0-255 value range), uint16_t (0-65535 value range), float
-	 * (any value range), double (any value range). Larger integer types are
-	 * treated as uint16_t. Signed integer types are unsupported.
+	 * @tparam Tin Input buffer element's type. Can be uint8_t (0-255 value
+	 * range), uint16_t (0-65535 value range), float (0-1 value range), double
+	 * (0-1 value range). uint32_t type is treated as uint16_t. Signed integer
+	 * types and uint64_t are unsupported. If Tin and Tout types do not match,
+	 * an output value scaling will be applied.
+	 * @tparam Tout Output buffer element's type, treated like Tin.
 	 */
 
-	template< class T >
-	void resizeImage( const T* const SrcBuf, const int SrcWidth,
-		const int SrcHeight, int SrcScanlineSize, T* const NewBuf,
-		const int NewWidth, const int NewHeight, const int ElCount,
-		const double kx0 = 0.0, const double ky0 = 0.0, double ox = 0.0,
-		double oy = 0.0 )
+	template< typename Tin, typename Tout >
+	void resizeImage( const Tin* const SrcBuf, const int SrcWidth,
+		const int SrcHeight, const int SrcSSize, Tout* const NewBuf,
+		const int NewWidth, const int NewHeight, const int NewSSize,
+		const int ElCount, const double kx0 = 0.0, const double ky0 = 0.0,
+		double ox = 0.0, double oy = 0.0 )
 	{
 		if( NewWidth <= 0 || NewHeight <= 0 )
 		{
@@ -150,7 +238,7 @@ public:
 		if( SrcWidth <= 0 || SrcHeight <= 0 )
 		{
 			memset( NewBuf, 0, (size_t) NewWidth * NewHeight * ElCount *
-				sizeof( T ));
+				sizeof( NewBuf[ 0 ]));
 
 			return;
 		}
@@ -191,334 +279,178 @@ public:
 			ky = -ky0;
 		}
 
-		if( rfh.update( la, kx ))
+		if( rfv.update( la, ky, ElCount ))
 		{
-			rsh.reset();
 			rsv.reset();
+			rsh.reset();
 		}
 
-		CResizeFilters* rfv; // Pointer to resizing filters for vertical
-			// resizing, may equal to "rfh" if the same stepping is in use.
+		CResizeFilters* rfh; // Pointer to resizing filters for horizontal
+			// resizing, may equal to "rfv" if the same stepping is in use.
 
-		if( ky == kx )
+		if( kx == ky )
 		{
-			rfv = &rfh;
+			rfh = &rfv;
 		}
 		else
 		{
-			rfv = &rfv0;
+			rfh = &rfh0;
 
-			if( rfv0.update( la, ky ))
+			if( rfh0.update( la, kx, ElCount ))
 			{
-				rsv.reset();
+				rsh.reset();
 			}
 		}
 
-		rsh.update( kx, ox, ElCount, SrcWidth, NewWidth, rfh );
-		rsv.update( ky, oy, ElCount, SrcHeight, NewHeight, *rfv );
+		rsv.update( ky, oy, ElCount, SrcHeight, NewHeight, rfv );
+		rsh.update( kx, ox, ElCount, SrcWidth, NewWidth, *rfh );
 
-		const int NewWidthE = NewWidth * ElCount;
+		const size_t SrcScanlineSize = ( SrcSSize < 1 ?
+			SrcWidth * ElCount : SrcSSize );
 
-		if( SrcScanlineSize < 1 )
+		const size_t NewScanlineSize = ( NewSSize < 1 ?
+			NewWidth * ElCount : NewSSize );
+
+		// Allocate/resize intermediate buffer.
+
+		const size_t FltWidthE = SrcWidth * ElCount;
+		reallocBuf( FltBuf0, FltBuf, FltBuf0Len, FltWidthE * NewHeight );
+
+		// Perform vertical resizing.
+
+		const bool IsInFloat = ( (Tin) 0.25 != 0 );
+		const Tin* ips = SrcBuf;
+		float* op = FltBuf;
+		int i;
+
+		if( ElCount == 1 )
 		{
-			SrcScanlineSize = SrcWidth * ElCount;
+			for( i = 0; i < SrcWidth; i++ )
+			{
+				copyScanline1v( ips, SrcScanlineSize, rsv, SrcHeight );
+				resize1( op, FltWidthE, NewHeight, rsv.pos, rfv.KernelLen );
+				ips++;
+				op++;
+			}
 		}
-
-		// Allocate/resize temporary buffer.
-
-		const size_t FltBufLenNew = (size_t) NewWidthE * (size_t) SrcHeight;
-
-		if( FltBufLenNew > FltBufLen )
+		else
+		if( ElCount == 2 )
 		{
-			delete[] FltBuf;
-			FltBufLen = FltBufLenNew;
-			FltBuf = new float[ FltBufLen ];
+			for( i = 0; i < SrcWidth; i++ )
+			{
+				copyScanline2v( ips, SrcScanlineSize, rsv, SrcHeight );
+				resize2( op, FltWidthE, NewHeight, rsv.pos, rfv.KernelLen );
+				ips += 2;
+				op += 2;
+			}
+		}
+		else
+		if( ElCount == 3 )
+		{
+			for( i = 0; i < SrcWidth; i++ )
+			{
+				copyScanline3v( ips, SrcScanlineSize, rsv, SrcHeight );
+				resize3( op, FltWidthE, NewHeight, rsv.pos, rfv.KernelLen );
+				ips += 3;
+				op += 3;
+			}
+		}
+		else
+		if( ElCount == 4 )
+		{
+			for( i = 0; i < SrcWidth; i++ )
+			{
+				copyScanline4v( ips, SrcScanlineSize, rsv, SrcHeight );
+				resize4( op, FltWidthE, NewHeight, rsv.pos, rfv.KernelLen );
+				ips += 4;
+				op += 4;
+			}
 		}
 
 		// Perform horizontal resizing.
 
-		const T* ips = SrcBuf;
-		float* op = FltBuf;
-		int i;
+		reallocBuf( spv0, spv, spv0len, NewWidth * ElCount );
 
-		if( ElCount == 3 )
+		const bool IsOutFloat = ( (Tout) 0.25 != 0 );
+		const int Clamp = ( sizeof( Tout ) == 1 ? 255 : 65535 );
+		float OutMul = ( IsOutFloat ? 1.0f : (float) Clamp );
+
+		if( !IsInFloat )
 		{
-			for( i = 0; i < SrcHeight; i++ )
-			{
-				copyScanline3h( ips, rsh, SrcWidth );
-				resize3( op, NewWidth, rsh.pos, rfh.KernelLen );
-				ips += SrcScanlineSize;
-				op += NewWidthE;
-			}
-		}
-		else
-		if( ElCount == 1 )
-		{
-			for( i = 0; i < SrcHeight; i++ )
-			{
-				copyScanline1h( ips, rsh, SrcWidth );
-				resize1( op, NewWidth, rsh.pos, rfh.KernelLen );
-				ips += SrcScanlineSize;
-				op += NewWidthE;
-			}
-		}
-		else
-		if( ElCount == 4 )
-		{
-			for( i = 0; i < SrcHeight; i++ )
-			{
-				copyScanline4h( ips, rsh, SrcWidth );
-				resize4( op, NewWidth, rsh.pos, rfh.KernelLen );
-				ips += SrcScanlineSize;
-				op += NewWidthE;
-			}
-		}
-		else
-		if( ElCount == 2 )
-		{
-			for( i = 0; i < SrcHeight; i++ )
-			{
-				copyScanline2h( ips, rsh, SrcWidth );
-				resize2( op, NewWidth, rsh.pos, rfh.KernelLen );
-				ips += SrcScanlineSize;
-				op += NewWidthE;
-			}
+			OutMul /= ( sizeof( Tin ) == 1 ? 255 : 65535 );
 		}
 
-		// Perform vertical resizing.
-
-		const int spvlennew = NewHeight * ElCount;
-
-		if( spvlennew > spvlen )
-		{
-			delete[] spv;
-			spvlen = spvlennew;
-			spv = new float[ spvlen ];
-		}
-
-		const bool IsIOFloat = ( (T) 0.25 != 0 );
-		const int Clamp = ( sizeof( T ) == 1 ? 255 : 65535 );
 		const float* ip = FltBuf;
-		T* opd = NewBuf;
+		Tout* opd = NewBuf;
 
-		if( ElCount == 3 )
-		{
-			for( i = 0; i < NewWidth; i++ )
-			{
-				copyScanline3v( ip, rsv, SrcHeight, NewWidthE );
-				resize3( spv, NewHeight, rsv.pos, rfv -> KernelLen );
-				copyOutput3( spv, opd, NewHeight, NewWidthE, IsIOFloat,
-					Clamp );
-
-				ip += 3;
-				opd += 3;
-			}
-		}
-		else
 		if( ElCount == 1 )
 		{
-			for( i = 0; i < NewWidth; i++ )
+			for( i = 0; i < NewHeight; i++ )
 			{
-				copyScanline1v( ip, rsv, SrcHeight, NewWidthE );
-				resize1( spv, NewHeight, rsv.pos, rfv -> KernelLen );
-				copyOutput1( spv, opd, NewHeight, NewWidthE, IsIOFloat,
-					Clamp );
-
-				ip++;
-				opd++;
-			}
-		}
-		else
-		if( ElCount == 4 )
-		{
-			for( i = 0; i < NewWidth; i++ )
-			{
-				copyScanline4v( ip, rsv, SrcHeight, NewWidthE );
-				resize4( spv, NewHeight, rsv.pos, rfv -> KernelLen );
-				copyOutput4( spv, opd, NewHeight, NewWidthE, IsIOFloat,
-					Clamp );
-
-				ip += 4;
-				opd += 4;
+				copyScanline1h( ip, rsh, SrcWidth );
+				resize1( spv, 1, NewWidth, rsh.pos, rfh -> KernelLen );
+				copyToOutput( spv, opd, NewWidth, IsOutFloat, OutMul, Clamp );
+				ip += FltWidthE;
+				opd += NewScanlineSize;
 			}
 		}
 		else
 		if( ElCount == 2 )
 		{
-			for( i = 0; i < NewWidth; i++ )
+			for( i = 0; i < NewHeight; i++ )
 			{
-				copyScanline2v( ip, rsv, SrcHeight, NewWidthE );
-				resize2( spv, NewHeight, rsv.pos, rfv -> KernelLen );
-				copyOutput2( spv, opd, NewHeight, NewWidthE, IsIOFloat,
+				copyScanline2h( ip, rsh, SrcWidth );
+				resize2( spv, 2, NewWidth, rsh.pos, rfh -> KernelLen );
+				copyToOutput( spv, opd, NewWidth * 2, IsOutFloat, OutMul,
 					Clamp );
 
-				ip += 2;
-				opd += 2;
+				ip += FltWidthE;
+				opd += NewScanlineSize;
+			}
+		}
+		else
+		if( ElCount == 3 )
+		{
+			for( i = 0; i < NewHeight; i++ )
+			{
+				copyScanline3h( ip, rsh, SrcWidth );
+				resize3( spv, 3, NewWidth, rsh.pos, rfh -> KernelLen );
+				copyToOutput( spv, opd, NewWidth * 3, IsOutFloat, OutMul,
+					Clamp );
+
+				ip += FltWidthE;
+				opd += NewScanlineSize;
+			}
+		}
+		else
+		if( ElCount == 4 )
+		{
+			for( i = 0; i < NewHeight; i++ )
+			{
+				copyScanline4h( ip, rsh, SrcWidth );
+				resize4( spv, 4, NewWidth, rsh.pos, rfh -> KernelLen );
+				copyToOutput( spv, opd, NewWidth * 4, IsOutFloat, OutMul,
+					Clamp );
+
+				ip += FltWidthE;
+				opd += NewScanlineSize;
 			}
 		}
 	}
 
 protected:
-	float* FltBuf; ///< Intermediate resizing buffer.
+	float* FltBuf0; ///< Intermediate resizing buffer.
 		///<
-	size_t FltBufLen; ///< Intermediate resizing buffer length.
+	size_t FltBuf0Len; ///< Intermediate resizing buffer length.
 		///<
-	float* spv; ///< Scanline buffer for vertical resizing.
+	float* FltBuf; ///< Address-aligned "FltBuf0".
 		///<
-	int spvlen; ///< Length of "spv".
+	float* spv0; ///< Scanline buffer for vertical resizing.
 		///<
-
-	/**
-	 * Function rounds a value and applies clamping.
-	 *
-	 * @param v Value to round and clamp.
-	 * @param Clamp High clamp level, low level is 0.
-	 */
-
-	static int roundclamp( const float v, const int Clamp )
-	{
-		if( v <= 0.0f )
-		{
-			return( 0 );
-		}
-
-		const int vr = (int) ( v + 0.5f );
-
-		if( vr > Clamp )
-		{
-			return( Clamp );
-		}
-
-		return( vr );
-	}
-
-	/**
-	 * Function performs final output of the resized scanline data to the
-	 * destination image buffer. Variants for 1-4-channel image.
-	 *
-	 * @param ip Input resized scanline.
-	 * @param op Output image buffer.
-	 * @param l Pixel count.
-	 * @param opinc "op" increment, should account ElCount.
-	 * @param IsIOFloat "True" if float output and no clamping is necessary.
-	 * @param Clamp Clamp high level, used if IsIOFloat is "false".
-	 */
-
-	template< class T >
-	static void copyOutput1( const float* ip, T* op, int l, const int opinc,
-		const bool IsIOFloat, const int Clamp )
-	{
-		if( IsIOFloat )
-		{
-			while( l > 0 )
-			{
-				op[ 0 ] = (T) ip[ 0 ];
-				ip++;
-				op += opinc;
-				l--;
-			}
-		}
-		else
-		{
-			while( l > 0 )
-			{
-				op[ 0 ] = (T) roundclamp( ip[ 0 ], Clamp );
-				ip++;
-				op += opinc;
-				l--;
-			}
-		}
-	}
-
-	template< class T >
-	static void copyOutput2( const float* ip, T* op, int l, const int opinc,
-		const bool IsIOFloat, const int Clamp )
-	{
-		if( IsIOFloat )
-		{
-			while( l > 0 )
-			{
-				op[ 0 ] = (T) ip[ 0 ];
-				op[ 1 ] = (T) ip[ 1 ];
-				ip += 2;
-				op += opinc;
-				l--;
-			}
-		}
-		else
-		{
-			while( l > 0 )
-			{
-				op[ 0 ] = (T) roundclamp( ip[ 0 ], Clamp );
-				op[ 1 ] = (T) roundclamp( ip[ 1 ], Clamp );
-				ip += 2;
-				op += opinc;
-				l--;
-			}
-		}
-	}
-
-	template< class T >
-	static void copyOutput3( const float* ip, T* op, int l, const int opinc,
-		const bool IsIOFloat, const int Clamp )
-	{
-		if( IsIOFloat )
-		{
-			while( l > 0 )
-			{
-				op[ 0 ] = (T) ip[ 0 ];
-				op[ 1 ] = (T) ip[ 1 ];
-				op[ 2 ] = (T) ip[ 2 ];
-				ip += 3;
-				op += opinc;
-				l--;
-			}
-		}
-		else
-		{
-			while( l > 0 )
-			{
-				op[ 0 ] = (T) roundclamp( ip[ 0 ], Clamp );
-				op[ 1 ] = (T) roundclamp( ip[ 1 ], Clamp );
-				op[ 2 ] = (T) roundclamp( ip[ 2 ], Clamp );
-				ip += 3;
-				op += opinc;
-				l--;
-			}
-		}
-	}
-
-	template< class T >
-	static void copyOutput4( const float* ip, T* op, int l, const int opinc,
-		const bool IsIOFloat, const int Clamp )
-	{
-		if( IsIOFloat )
-		{
-			while( l > 0 )
-			{
-				op[ 0 ] = (T) ip[ 0 ];
-				op[ 1 ] = (T) ip[ 1 ];
-				op[ 2 ] = (T) ip[ 2 ];
-				op[ 3 ] = (T) ip[ 3 ];
-				ip += 4;
-				op += opinc;
-				l--;
-			}
-		}
-		else
-		{
-			while( l > 0 )
-			{
-				op[ 0 ] = (T) roundclamp( ip[ 0 ], Clamp );
-				op[ 1 ] = (T) roundclamp( ip[ 1 ], Clamp );
-				op[ 2 ] = (T) roundclamp( ip[ 2 ], Clamp );
-				op[ 3 ] = (T) roundclamp( ip[ 3 ], Clamp );
-				ip += 4;
-				op += opinc;
-				l--;
-			}
-		}
-	}
+	int spv0len; ///< Length of "spv".
+		///<
+	float* spv; ///< Address-aligned "spv0".
+		///<
 
 	class CResizeScanline;
 
@@ -532,22 +464,24 @@ protected:
 
 	public:
 		int KernelLen; ///< Resampling filter kernel length, taps. Available
-			///< after the update() function call.
+			///< after the update() function call. Always an even value,
+			///< should not be lesser than 4.
 			///<
 
 		CResizeFilters()
-			: FilterBuf( NULL )
+			: FilterBuf0( NULL )
+			, FilterBuf0Len( 0 )
 			, Filters( NULL )
+			, FiltersLen( 0 )
 			, Prevla( -1.0 )
 			, Prevk( -1.0 )
-			, FilterBufLen( 0 )
-			, FiltersLen( 0 )
+			, PrevElCount( 0 )
 		{
 		}
 
 		~CResizeFilters()
 		{
-			delete[] FilterBuf;
+			delete[] FilterBuf0;
 			delete[] Filters;
 		}
 
@@ -556,19 +490,32 @@ protected:
 		 *
 		 * @param la Lanczos "a" parameter value.
 		 * @param k Resizing step.
+		 * @param ElCount Image element count, may be used for alignment.
 		 * @return "True" if update occured and resizing positions should be
 		 * updated unconditionally.
 		 */
 
-		bool update( const double la, const double k )
+		bool update( const double la, const double k, const int ElCount )
 		{
-			if( la == Prevla && k == Prevk )
-			{
-				return( false );
-			}
+			#if LANCIR_ALIGN > 4
+
+				if( la == Prevla && k == Prevk && ElCount == PrevElCount )
+				{
+					return( true );
+				}
+
+			#else // LANCIR_ALIGN > 4
+
+				if( la == Prevla && k == Prevk )
+				{
+					return( true );
+				}
+
+			#endif // LANCIR_ALIGN > 4
 
 			Prevla = la;
 			Prevk = k;
+			PrevElCount = ElCount;
 
 			NormFreq = ( k <= 1.0 ? 1.0 : 1.0 / k );
 			Freq = LANCIR_PI * NormFreq;
@@ -581,24 +528,29 @@ protected:
 			FracCount = 607; // For 8-bit precision.
 			FracFill = 0;
 
-			const int FilterBufLenNew = ( FracCount + 1 ) * KernelLen;
-				// Add +1 to cover rare cases of fractional delay == 1.
+			#if LANCIR_ALIGN > 4
 
-			if( FilterBufLenNew > FilterBufLen )
-			{
-				delete[] FilterBuf;
-				FilterBufLen = FilterBufLenNew;
-				FilterBuf = new float[ FilterBufLen ];
-			}
+				ElRepl = PrevElCount;
+				KernelLenA = KernelLen * ElRepl;
 
-			if( FracCount > FiltersLen )
-			{
-				delete[] Filters;
-				FiltersLen = FracCount;
-				Filters = new float*[ FiltersLen + 1 ];
-			}
+				const int elalign =
+					(int) ( LANCIR_ALIGN / sizeof( float )) - 1;
 
-			memset( Filters, 0, ( FiltersLen + 1 ) * sizeof( float* ));
+				KernelLenA = ( KernelLenA + elalign ) & ~elalign;
+
+			#else // LANCIR_ALIGN > 4
+
+				ElRepl = 1;
+				KernelLenA = KernelLen;
+
+			#endif // LANCIR_ALIGN > 4
+
+			reallocBuf( FilterBuf0, FilterBuf, FilterBuf0Len,
+				( FracCount + 1 ) * KernelLenA ); // Add +1 to cover a rare
+				// cases of fractional delay == 1.0.
+
+			reallocBuf( Filters, FiltersLen, FracCount + 1 );
+			memset( Filters, 0, FiltersLen * sizeof( Filters[ 0 ]));
 
 			return( true );
 		}
@@ -608,22 +560,32 @@ protected:
 		 * function can only be called before the prior update() function
 		 * call.
 		 *
-		 * @param x Fractional offset, [0; 1).
+		 * @param x Fractional offset, [0; 1].
 		 */
 
-		float* getFilter( const double x )
+		const float* getFilter( const double x )
 		{
 			const int Frac = (int) floor( x * FracCount );
+			float* flt = Filters[ Frac ];
 
-			if( Filters[ Frac ] == NULL )
+			if( flt != NULL )
 			{
-				Filters[ Frac ] = FilterBuf + FracFill * KernelLen;
-				FracFill++;
-				makeFilter( 1.0 - (double) Frac / FracCount, Filters[ Frac ]);
-				normalizeFilter( Filters[ Frac ]);
+				return( flt );
 			}
 
-			return( Filters[ Frac ]);
+			flt = FilterBuf + FracFill * KernelLenA;
+			Filters[ Frac ] = flt;
+			FracFill++;
+
+			makeFilter( 1.0 - (double) Frac / FracCount, flt );
+			normalizeFilter( flt );
+
+			if( ElRepl > 1 )
+			{
+				replicateFilter( flt );
+			}
+
+			return( flt );
 		}
 
 	protected:
@@ -643,29 +605,38 @@ protected:
 		int FracFill; ///< The number of fractional positions filled in the
 			///< filter buffer.
 			///<
-		float* FilterBuf; ///< Buffer that holds all filters.
+		int KernelLenA; ///< SIMD-aligned and replicated filter kernel's
+			///< length.
+			///<
+		int ElRepl; ///< The number of repetitions of each filter tap,
+			///<
+		float* FilterBuf0; ///< Buffer that holds all filters, original.
+			///<
+		int FilterBuf0Len; ///< Allocated length of FilterBuf0 in elements.
+			///<
+		float* FilterBuf; ///< Address-aligned FilterBuf0.
 			///<
 		float** Filters; ///< Fractional delay filters for all positions.
 			///< Filter pointers equal NULL if filter was not yet created.
+			///<
+		int FiltersLen; ///< Allocated length of Filters in elements.
 			///<
 		double Prevla; ///< Previous "la".
 			///<
 		double Prevk; ///< Previous "k".
 			///<
-		int FilterBufLen; ///< Allocated length of FilterBuf in elements.
-			///<
-		int FiltersLen; ///< Allocated length of Filters in elements.
+		int PrevElCount; ///< Previous "ElCount".
 			///<
 
 		/**
-		 * @brief Sine signal generator class.
+		 * @brief Sine-wave signal generator class.
 		 *
-		 * Class implements sine signal generator without biasing, with
-		 * constructor-based initalization only. This generator uses
-		 * oscillator instead of "sin" function.
+		 * Class implements sine-wave signal generator without biasing, with
+		 * constructor-based initalization only. This generator uses an
+		 * oscillator instead of the "sin" function.
 		 */
 
-		class CSinGen
+		class CSineGen
 		{
 		public:
 			/**
@@ -677,7 +648,7 @@ protected:
 			 * @param g Gain value.
 			 */
 
-			CSinGen( const double si, const double ph, const double g = 1.0 )
+			CSineGen( const double si, const double ph, const double g = 1.0 )
 				: svalue1( sin( ph ) * g )
 				, svalue2( sin( ph - si ) * g )
 				, sincr( 2.0 * cos( si ))
@@ -718,11 +689,11 @@ protected:
 		 * @tparam T Output buffer type.
 		 */
 
-		template< class T >
+		template< typename T >
 		void makeFilter( const double FracDelay, T* op ) const
 		{
-			CSinGen f( Freq, Freq * ( FracDelay - fl2 ));
-			CSinGen fw( FreqA, FreqA * ( FracDelay - fl2 ), Len2 );
+			CSineGen f( Freq, Freq * ( FracDelay - fl2 ));
+			CSineGen fw( FreqA, FreqA * ( FracDelay - fl2 ), Len2 );
 
 			int t = -fl2;
 
@@ -730,7 +701,7 @@ protected:
 			{
 				f.generate();
 				fw.generate();
-				*op = (T) 0.0;
+				*op = (T) 0;
 				op++;
 				t++;
 			}
@@ -740,7 +711,7 @@ protected:
 
 			while( t < mt )
 			{
-				double ut = t + FracDelay;
+				const double ut = t + FracDelay;
 				*op = (T) ( f.generate() * fw.generate() / ( ut * ut ));
 				op++;
 				t++;
@@ -775,7 +746,7 @@ protected:
 
 			if( ut > Len2 )
 			{
-				*op = (T) 0.0;
+				*op = (T) 0;
 			}
 			else
 			{
@@ -791,7 +762,7 @@ protected:
 		 * @tparam T Filter buffer type.
 		 */
 
-		template< class T >
+		template< typename T >
 		void normalizeFilter( T* const p ) const
 		{
 			double s = 0.0;
@@ -809,6 +780,66 @@ protected:
 				p[ i ] = (T) ( p[ i ] * s );
 			}
 		}
+
+		/**
+		 * Function replicates taps of the specified filter so that it can
+		 * be used with SIMD loading instructions. This function works
+		 * "in-place".
+		 *
+		 * @param p Filter buffer pointer, should be sized to contain
+		 * FilterLen * ElRepl elements.
+		 * @tparam T Filter buffer type.
+		 */
+
+		template< typename T >
+		void replicateFilter( T* const p ) const
+		{
+			T* ip = p + KernelLen - 1;
+			T* op = p + ( KernelLen - 1 ) * ElRepl;
+			int c = KernelLen;
+
+			if( ElRepl == 2 )
+			{
+				while( c != 0 )
+				{
+					const float v = *ip;
+					op[ 1 ] = v;
+					op[ 0 ] = v;
+					ip--;
+					op -= 2;
+					c--;
+				}
+			}
+			else
+			if( ElRepl == 3 )
+			{
+				while( c != 0 )
+				{
+					const float v = *ip;
+					op[ 2 ] = v;
+					op[ 1 ] = v;
+					op[ 0 ] = v;
+					ip--;
+					op -= 3;
+					c--;
+				}
+			}
+			else
+			if( ElRepl == 4 )
+			{
+				while( c != 0 )
+				{
+					const float v = *ip;
+					op[ 3 ] = v;
+					op[ 2 ] = v;
+					op[ 1 ] = v;
+					op[ 0 ] = v;
+					ip--;
+					op -= 4;
+					c--;
+				}
+			}
+		}
 	};
 
 	/**
@@ -820,7 +851,7 @@ protected:
 	{
 		const float* ip; ///< Source image pixel pointer.
 			///<
-		float* flt; ///< Fractional delay filter.
+		const float* flt; ///< Fractional delay filter.
 			///<
 	};
 
@@ -839,7 +870,7 @@ protected:
 			///< Available after the update() function call.
 			///<
 		float* sp; ///< Source scanline buffer, with "padl" and "padr"
-			///< padding.
+			///< padding. Address-aligned "sp0".
 			///<
 		CResizePos* pos; ///< Source scanline pointers (point to "sp")
 			///< and filters for each destination pixel position. Available
@@ -847,22 +878,22 @@ protected:
 			///<
 
 		CResizeScanline()
-			: sp( NULL )
-			, pos( NULL )
+			: pos( NULL )
+			, poslen( 0 )
+			, sp0( NULL )
+			, sp0len( 0 )
 			, PrevSrcLen( -1 )
 			, PrevDstLen( -1 )
 			, Prevk( 0.0 )
 			, Prevo( 0.0 )
 			, PrevElCount( 0 )
-			, splen( 0 )
-			, poslen( 0 )
 		{
 		}
 
 		~CResizeScanline()
 		{
-			delete[] sp;
 			delete[] pos;
+			delete[] sp0;
 		}
 
 		/**
@@ -911,43 +942,47 @@ protected:
 				padl = 0;
 			}
 
-			padr = (int) floor( o0 + k * ( DstLen - 1 )) + rf.fl2 + 1 -
-				SrcLen;
+			// Make sure "padr" and "pos" are in sync; calculate last pos
+			// offset in advance.
+
+			const int DstLen_m1 = DstLen - 1;
+			const double ol = o0 + k * DstLen_m1;
+			const int ixl = (int) floor( ol );
+
+			padr = ixl + rf.fl2 + 1 - SrcLen;
 
 			if( padr < 0 )
 			{
 				padr = 0;
 			}
 
-			const int splennew = ( padl + SrcLen + padr ) * ElCount;
-
-			if( splennew > splen )
-			{
-				delete[] sp;
-				splen = splennew;
-				sp = new float[ splen ];
-			}
-
-			if( DstLen > poslen )
-			{
-				delete[] pos;
-				poslen = DstLen;
-				pos = new CResizePos[ poslen ];
-			}
+			reallocBuf( sp0, sp, sp0len, ( padl + SrcLen + padr ) * ElCount );
+			reallocBuf( pos, poslen, DstLen );
 
 			const float* const spo = sp + ( padl - fl2m1 ) * ElCount;
 			int i;
 
-			for( i = 0; i < DstLen; i++ )
+			for( i = 0; i < DstLen_m1; i++ )
 			{
 				const double o = o0 + k * i;
 				const int ix = (int) floor( o );
+
 				pos[ i ].ip = spo + ix * ElCount;
 				pos[ i ].flt = rf.getFilter( o - ix );
 			}
+
+			pos[ i ].ip = spo + ixl * ElCount;
+			pos[ i ].flt = rf.getFilter( ol - ixl );
 		}
 
 	protected:
+		int poslen; ///< Allocated "pos" buffer length.
+			///<
+		float* sp0; ///< Source scanline buffer, with "padl" and "padr"
+			///< padding.
+			///<
+		int sp0len; ///< Allocated "sp0" buffer length.
+			///<
 		int PrevSrcLen; ///< Previous SrcLen.
 			///<
 		int PrevDstLen; ///< Previous DstLen.
@@ -958,21 +993,183 @@ protected:
 			///<
 		int PrevElCount; ///< Previous pixel element count.
 			///<
-		int splen; ///< Allocated "sp" buffer length.
-			///<
-		int poslen; ///< Allocated "pos" buffer length.
-			///<
 	};
 
-	CResizeFilters rfh; ///< Resizing filters for horizontal resizing.
+	CResizeFilters rfv; ///< Resizing filters for vertical resizing.
 		///<
-	CResizeFilters rfv0; ///< Resizing filters for vertical resizing (may not
-		///< be in use).
-		///<
-	CResizeScanline rsh; ///< Horizontal resize scanline.
+	CResizeFilters rfh0; ///< Resizing filters for horizontal resizing (may
+		///< not be in use).
 		///<
 	CResizeScanline rsv; ///< Vertical resize scanline.
 		///<
+	CResizeScanline rsh; ///< Horizontal resize scanline.
+		///<
+
+	/**
+	 * Function copies scanline from the source buffer in its native format
+	 * to the internal scanline buffer, in preparation for vertical resizing.
+	 * Variants for 1-4-channel images.
+	 *
+	 * @param ip Source scanline buffer.
+	 * @param ipinc "ip" increment per pixel.
+	 * @param rs Scanline resizing positions object.
+	 * @param l Source scanline length, in pixels.
+	 * @tparam T Input buffer element's type.
+	 */
+
+	template< typename T >
+	static void copyScanline1v( const T* ip, const size_t ipinc,
+		CResizeScanline& rs, const int l )
+	{
+		float* op = rs.sp;
+		int i;
+
+		float v0 = ip[ 0 ];
+
+		for( i = 0; i < rs.padl; i++ )
+		{
+			op[ 0 ] = v0;
+			op++;
+		}
+
+		for( i = 0; i < l - 1; i++ )
+		{
+			op[ 0 ] = ip[ 0 ];
+			ip += ipinc;
+			op++;
+		}
+
+		v0 = ip[ 0 ];
+
+		for( i = 0; i <= rs.padr; i++ )
+		{
+			op[ 0 ] = v0;
+			op++;
+		}
+	}
+
+	template< typename T >
+	static void copyScanline2v( const T* ip, const size_t ipinc,
+		CResizeScanline& rs, const int l )
+	{
+		float* op = rs.sp;
+		int i;
+
+		float v0 = ip[ 0 ];
+		float v1 = ip[ 1 ];
+
+		for( i = 0; i < rs.padl; i++ )
+		{
+			op[ 0 ] = v0;
+			op[ 1 ] = v1;
+			op += 2;
+		}
+
+		for( i = 0; i < l - 1; i++ )
+		{
+			op[ 0 ] = ip[ 0 ];
+			op[ 1 ] = ip[ 1 ];
+			ip += ipinc;
+			op += 2;
+		}
+
+		v0 = ip[ 0 ];
+		v1 = ip[ 1 ];
+
+		for( i = 0; i <= rs.padr; i++ )
+		{
+			op[ 0 ] = v0;
+			op[ 1 ] = v1;
+			op += 2;
+		}
+	}
+
+	template< typename T >
+	static void copyScanline3v( const T* ip, const size_t ipinc,
+		CResizeScanline& rs, const int l )
+	{
+		float* op = rs.sp;
+		int i;
+
+		float v0 = ip[ 0 ];
+		float v1 = ip[ 1 ];
+		float v2 = ip[ 2 ];
+
+		for( i = 0; i < rs.padl; i++ )
+		{
+			op[ 0 ] = v0;
+			op[ 1 ] = v1;
+			op[ 2 ] = v2;
+			op += 3;
+		}
+
+		for( i = 0; i < l - 1; i++ )
+		{
+			op[ 0 ] = ip[ 0 ];
+			op[ 1 ] = ip[ 1 ];
+			op[ 2 ] = ip[ 2 ];
+			ip += ipinc;
+			op += 3;
+		}
+
+		v0 = ip[ 0 ];
+		v1 = ip[ 1 ];
+		v2 = ip[ 2 ];
+
+		for( i = 0; i <= rs.padr; i++ )
+		{
+			op[ 0 ] = v0;
+			op[ 1 ] = v1;
+			op[ 2 ] = v2;
+			op += 3;
+		}
+	}
+
+	template< typename T >
+	static void copyScanline4v( const T* ip, const size_t ipinc,
+		CResizeScanline& rs, const int l )
+	{
+		float* op = rs.sp;
+		int i;
+
+		float v0 = ip[ 0 ];
+		float v1 = ip[ 1 ];
+		float v2 = ip[ 2 ];
+		float v3 = ip[ 3 ];
+
+		for( i = 0; i < rs.padl; i++ )
+		{
+			op[ 0 ] = v0;
+			op[ 1 ] = v1;
+			op[ 2 ] = v2;
+			op[ 3 ] = v3;
+			op += 4;
+		}
+
+		for( i = 0; i < l - 1; i++ )
+		{
+			op[ 0 ] = ip[ 0 ];
+			op[ 1 ] = ip[ 1 ];
+			op[ 2 ] = ip[ 2 ];
+			op[ 3 ] = ip[ 3 ];
+			ip += ipinc;
+			op += 4;
+		}
+
+		v0 = ip[ 0 ];
+		v1 = ip[ 1 ];
+		v2 = ip[ 2 ];
+		v3 = ip[ 3 ];
+
+		for( i = 0; i <= rs.padr; i++ )
+		{
+			op[ 0 ] = v0;
+			op[ 1 ] = v1;
+			op[ 2 ] = v2;
+			op[ 3 ] = v3;
+			op += 4;
+		}
+	}
 
 	/**
 	 * Function copies scanline from the source buffer in its native format
@@ -982,274 +1179,473 @@ protected:
 	 * @param ip Source scanline buffer.
 	 * @param rs Scanline resizing positions object.
 	 * @param l Source scanline length, in pixels.
-	 * @param ipinc "ip" increment per pixel.
 	 */
 
-	template< class T >
-	static void copyScanline1h( const T* ip, CResizeScanline& rs, const int l )
+	static void copyScanline1h( const float* ip, CResizeScanline& rs,
+		const int l )
 	{
 		float* op = rs.sp;
 		int i;
 
+		float v0 = ip[ 0 ];
+
 		for( i = 0; i < rs.padl; i++ )
 		{
-			op[ 0 ] = ip[ 0 ];
+			op[ 0 ] = v0;
 			op++;
 		}
 
-		for( i = 0; i < l - 1; i++ )
-		{
-			op[ 0 ] = ip[ 0 ];
-			ip++;
-			op++;
-		}
+		const int lc = l - 1;
+		memcpy( op, ip, lc * sizeof( op[ 0 ]));
+		ip += lc;
+		op += lc;
+
+		v0 = ip[ 0 ];
 
 		for( i = 0; i <= rs.padr; i++ )
 		{
-			op[ 0 ] = ip[ 0 ];
+			op[ 0 ] = v0;
 			op++;
 		}
 	}
 
-	template< class T >
-	static void copyScanline2h( const T* ip, CResizeScanline& rs, const int l )
+	static void copyScanline2h( const float* ip, CResizeScanline& rs,
+		const int l )
 	{
 		float* op = rs.sp;
 		int i;
 
-		for( i = 0; i < rs.padl; i++ )
-		{
-			op[ 0 ] = ip[ 0 ];
-			op[ 1 ] = ip[ 1 ];
-			op += 2;
-		}
-
-		for( i = 0; i < l - 1; i++ )
-		{
-			op[ 0 ] = ip[ 0 ];
-			op[ 1 ] = ip[ 1 ];
-			ip += 2;
-			op += 2;
-		}
-
-		for( i = 0; i <= rs.padr; i++ )
-		{
-			op[ 0 ] = ip[ 0 ];
-			op[ 1 ] = ip[ 1 ];
-			op += 2;
-		}
-	}
-
-	template< class T >
-	static void copyScanline3h( const T* ip, CResizeScanline& rs, const int l )
-	{
-		float* op = rs.sp;
-		int i;
+		float v0 = ip[ 0 ];
+		float v1 = ip[ 1 ];
 
 		for( i = 0; i < rs.padl; i++ )
 		{
-			op[ 0 ] = ip[ 0 ];
-			op[ 1 ] = ip[ 1 ];
-			op[ 2 ] = ip[ 2 ];
-			op += 3;
+			op[ 0 ] = v0;
+			op[ 1 ] = v1;
+			op += 2;
 		}
 
-		for( i = 0; i < l - 1; i++ )
-		{
-			op[ 0 ] = ip[ 0 ];
-			op[ 1 ] = ip[ 1 ];
-			op[ 2 ] = ip[ 2 ];
-			ip += 3;
-			op += 3;
-		}
+		const int lc = ( l - 1 ) * 2;
+		memcpy( op, ip, lc * sizeof( op[ 0 ]));
+		ip += lc;
+		op += lc;
+
+		v0 = ip[ 0 ];
+		v1 = ip[ 1 ];
 
 		for( i = 0; i <= rs.padr; i++ )
 		{
 			op[ 0 ] = ip[ 0 ];
 			op[ 1 ] = ip[ 1 ];
-			op[ 2 ] = ip[ 2 ];
-			op += 3;
+			op += 2;
 		}
 	}
 
-	template< class T >
-	static void copyScanline4h( const T* ip, CResizeScanline& rs, const int l )
+	static void copyScanline3h( const float* ip, CResizeScanline& rs,
+		const int l )
 	{
 		float* op = rs.sp;
 		int i;
 
+		float v0 = ip[ 0 ];
+		float v1 = ip[ 1 ];
+		float v2 = ip[ 2 ];
+
 		for( i = 0; i < rs.padl; i++ )
 		{
-			op[ 0 ] = ip[ 0 ];
-			op[ 1 ] = ip[ 1 ];
-			op[ 2 ] = ip[ 2 ];
-			op[ 3 ] = ip[ 3 ];
+			op[ 0 ] = v0;
+			op[ 1 ] = v1;
+			op[ 2 ] = v2;
+			op += 3;
+		}
+
+		const int lc = ( l - 1 ) * 3;
+		memcpy( op, ip, lc * sizeof( op[ 0 ]));
+		ip += lc;
+		op += lc;
+
+		v0 = ip[ 0 ];
+		v1 = ip[ 1 ];
+		v2 = ip[ 2 ];
+
+		for( i = 0; i <= rs.padr; i++ )
+		{
+			op[ 0 ] = v0;
+			op[ 1 ] = v1;
+			op[ 2 ] = v2;
+			op += 3;
+		}
+	}
+
+	static void copyScanline4h( const float* ip, CResizeScanline& rs,
+		const int l )
+	{
+		float* op = rs.sp;
+		int i;
+
+		float v0 = ip[ 0 ];
+		float v1 = ip[ 1 ];
+		float v2 = ip[ 2 ];
+		float v3 = ip[ 3 ];
+
+		for( i = 0; i < rs.padl; i++ )
+		{
+			op[ 0 ] = v0;
+			op[ 1 ] = v1;
+			op[ 2 ] = v2;
+			op[ 3 ] = v3;
 			op += 4;
 		}
 
-		for( i = 0; i < l - 1; i++ )
-		{
-			op[ 0 ] = ip[ 0 ];
-			op[ 1 ] = ip[ 1 ];
-			op[ 2 ] = ip[ 2 ];
-			op[ 3 ] = ip[ 3 ];
-			ip += 4;
-			op += 4;
-		}
+		const int lc = ( l - 1 ) * 4;
+		memcpy( op, ip, lc * sizeof( op[ 0 ]));
+		ip += lc;
+		op += lc;
+
+		v0 = ip[ 0 ];
+		v1 = ip[ 1 ];
+		v2 = ip[ 2 ];
+		v3 = ip[ 3 ];
 
 		for( i = 0; i <= rs.padr; i++ )
 		{
-			op[ 0 ] = ip[ 0 ];
-			op[ 1 ] = ip[ 1 ];
-			op[ 2 ] = ip[ 2 ];
-			op[ 3 ] = ip[ 3 ];
+			op[ 0 ] = v0;
+			op[ 1 ] = v1;
+			op[ 2 ] = v2;
+			op[ 3 ] = v3;
 			op += 4;
 		}
 	}
 
 	/**
-	 * Function copies scanline from the source buffer in its native format
-	 * to internal scanline buffer, in preparation for vertical resizing.
-	 * Variants for 1-4-channel images.
+	 * Function rounds a value and applies clamping.
 	 *
-	 * @param ip Source scanline buffer.
-	 * @param rs Scanline resizing positions object.
-	 * @param l Source scanline length, in pixels.
-	 * @param ipinc "ip" increment per pixel.
+	 * @param v Value to round and clamp.
+	 * @param Clamp High clamp level; low level is 0.
 	 */
 
-	template< class T >
-	static void copyScanline1v( const T* ip, CResizeScanline& rs, const int l,
-		const int ipinc )
+	static inline int roundclamp( const float v, const int Clamp )
 	{
-		float* op = rs.sp;
-		int i;
-
-		for( i = 0; i < rs.padl; i++ )
+		if( v < 0.5f )
 		{
-			op[ 0 ] = ip[ 0 ];
-			op++;
+			return( 0 );
 		}
 
-		for( i = 0; i < l - 1; i++ )
-		{
-			op[ 0 ] = ip[ 0 ];
-			ip += ipinc;
-			op++;
-		}
+		const int vr = (int) ( v + 0.5f );
 
-		for( i = 0; i <= rs.padr; i++ )
-		{
-			op[ 0 ] = ip[ 0 ];
-			op++;
-		}
+		return( vr > Clamp ? Clamp : vr );
 	}
 
-	template< class T >
-	static void copyScanline2v( const T* ip, CResizeScanline& rs, const int l,
-		const int ipinc )
+	/**
+	 * Function performs final output of the resized scanline pixels to the
+	 * destination image buffer.
+	 *
+	 * @param ip Input resized scanline.
+	 * @param op Output image buffer.
+	 * @param l Scanline size (not pixel count).
+	 * @param ElCount Pixel element count.
+	 * @param IsOutFloat "True" if float output: no clamping is necessary.
+	 * @param OutMul Output multiplier, for value range conversion.
+	 * @param Clamp Clamp high level, used if IsOutFloat is "false".
+	 * @tparam T Output buffer element's type.
+	 */
+
+	template< typename T >
+	static void copyToOutput( const float* ip, T* op, int l,
+		const bool IsOutFloat, const float OutMul, const int Clamp )
 	{
-		float* op = rs.sp;
-		int i;
+		const bool IsUnityMul = ( OutMul == 1.0f );
 
-		for( i = 0; i < rs.padl; i++ )
+		if( IsOutFloat )
 		{
-			op[ 0 ] = ip[ 0 ];
-			op[ 1 ] = ip[ 1 ];
-			op += 2;
+			if( IsUnityMul )
+			{
+				if( sizeof( op[ 0 ]) == sizeof( ip[ 0 ]))
+				{
+					memcpy( op, ip, l * sizeof( op[ 0 ]));
+					return;
+				}
+
+				int l4 = l >> 2;
+				l = l & 3;
+
+				while( l4 != 0 )
+				{
+					op[ 0 ] = (T) ip[ 0 ];
+					op[ 1 ] = (T) ip[ 1 ];
+					op[ 2 ] = (T) ip[ 2 ];
+					op[ 3 ] = (T) ip[ 3 ];
+					ip += 4;
+					op += 4;
+					l4--;
+				}
+
+				while( l != 0 )
+				{
+					*op = (T) *ip;
+					ip++;
+					op++;
+					l--;
+				}
+
+				return;
+			}
+
+			int l4 = l >> 2;
+			l = l & 3;
+			bool DoScalar = true;
+
+			if( sizeof( op[ 0 ]) == sizeof( ip[ 0 ]))
+			{
+			#if defined( LANCIR_SSE2 )
+
+				DoScalar = false;
+				const __m128 om = _mm_set1_ps( OutMul );
+
+				while( l4 != 0 )
+				{
+					_mm_storeu_ps( (float*) op,
+						_mm_mul_ps( _mm_load_ps( ip ), om ));
+
+					ip += 4;
+					op += 4;
+					l4--;
+				}
+
+			#elif defined( LANCIR_NEON )
+
+				DoScalar = false;
+				const float32x4_t om = vdupq_n_f32( OutMul );
+
+				while( l4 != 0 )
+				{
+					vst1q_f32( (float*) op,
+						vmulq_f32( vld1q_f32( ip ), om ));
+
+					ip += 4;
+					op += 4;
+					l4--;
+				}
+
+			#endif // defined( LANCIR_NEON )
+			}
+
+			if( DoScalar )
+			{
+				while( l4 != 0 )
+				{
+					op[ 0 ] = (T) ( ip[ 0 ] * OutMul );
+					op[ 1 ] = (T) ( ip[ 1 ] * OutMul );
+					op[ 2 ] = (T) ( ip[ 2 ] * OutMul );
+					op[ 3 ] = (T) ( ip[ 3 ] * OutMul );
+					ip += 4;
+					op += 4;
+					l4--;
+				}
+			}
+
+			while( l != 0 )
+			{
+				*op = (T) ( *ip * OutMul );
+				ip++;
+				op++;
+				l--;
+			}
+
+			return;
 		}
 
-		for( i = 0; i < l - 1; i++ )
+		int l4 = l >> 2;
+		l = l & 3;
+
+	#if defined( LANCIR_SSE2 )
+
+		const __m128 minv = _mm_setzero_ps();
+		const __m128 maxv = _mm_set1_ps( (float) Clamp );
+		const __m128 om = _mm_set1_ps( OutMul );
+
+		unsigned int prevrm = _MM_GET_ROUNDING_MODE();
+		_MM_SET_ROUNDING_MODE( _MM_ROUND_NEAREST );
+
+		if( sizeof( op[ 0 ]) == 4 )
 		{
-			op[ 0 ] = ip[ 0 ];
-			op[ 1 ] = ip[ 1 ];
-			ip += ipinc;
-			op += 2;
+			while( l4 != 0 )
+			{
+				const __m128 cv = _mm_max_ps( _mm_min_ps(
+					_mm_mul_ps( _mm_load_ps( ip ), om ), maxv ), minv );
+
+				_mm_storeu_si128( (__m128i*) op, _mm_cvtps_epi32( cv ));
+
+				ip += 4;
+				op += 4;
+				l4--;
+			}
+		}
+		else
+		if( sizeof( op[ 0 ]) == 2 )
+		{
+			while( l4 != 0 )
+			{
+				const __m128 cv = _mm_max_ps( _mm_min_ps(
+					_mm_mul_ps( _mm_load_ps( ip ), om ), maxv ), minv );
+
+				const __m128i v32 = _mm_cvtps_epi32( cv );
+				const __m128i v16s = _mm_shufflehi_epi16(
+					_mm_shufflelo_epi16( v32, 0 | 2 << 2 ), 0 | 2 << 2 );
+
+				const __m128i v16 = _mm_shuffle_epi32( v16s, 0 | 2 << 2 );
+
+				uint64_t tmp[ 2 ];
+				_mm_storeu_si128( (__m128i*) tmp, v16 );
+				*(uint64_t*) op = tmp[ 0 ];
+
+				ip += 4;
+				op += 4;
+				l4--;
+			}
+		}
+		else
+		{
+			while( l4 != 0 )
+			{
+				const __m128 cv = _mm_max_ps( _mm_min_ps(
+					_mm_mul_ps( _mm_load_ps( ip ), om ), maxv ), minv );
+
+				const __m128i v32 = _mm_cvtps_epi32( cv );
+				const __m128i v16s = _mm_shufflehi_epi16(
+					_mm_shufflelo_epi16( v32, 0 | 2 << 2 ), 0 | 2 << 2 );
+
+				const __m128i v16 = _mm_shuffle_epi32( v16s, 0 | 2 << 2 );
+				const __m128i v8 = _mm_packus_epi16( v16, v16 );
+
+				*(uint32_t*) op = _mm_cvtsi128_si32( v8 );
+
+				ip += 4;
+				op += 4;
+				l4--;
+			}
 		}
 
-		for( i = 0; i <= rs.padr; i++ )
+		_MM_SET_ROUNDING_MODE( prevrm );
+
+	#elif defined( LANCIR_NEON )
+
+		const float32x4_t minv = vdupq_n_f32( 0.0f );
+		const float32x4_t maxv = vdupq_n_f32( (float) Clamp );
+		const float32x4_t om = vdupq_n_f32( OutMul );
+		const float32x4_t v05 = vdupq_n_f32( 0.5f );
+
+		if( sizeof( op[ 0 ]) == 4 )
 		{
-			op[ 0 ] = ip[ 0 ];
-			op[ 1 ] = ip[ 1 ];
-			op += 2;
+			while( l4 != 0 )
+			{
+				const float32x4_t cv = vmaxq_f32( vminq_f32(
+					vmulq_f32( vld1q_f32( ip ), om ), maxv ), minv );
+
+				vst1q_u32( (uint32_t*) op, vcvtq_u32_f32( vaddq_f32(
+					cv, v05 )));
+
+				ip += 4;
+				op += 4;
+				l4--;
+			}
 		}
-	}
-
-	template< class T >
-	static void copyScanline3v( const T* ip, CResizeScanline& rs, const int l,
-		const int ipinc )
-	{
-		float* op = rs.sp;
-		int i;
-
-		for( i = 0; i < rs.padl; i++ )
+		else
+		if( sizeof( op[ 0 ]) == 2 )
 		{
-			op[ 0 ] = ip[ 0 ];
-			op[ 1 ] = ip[ 1 ];
-			op[ 2 ] = ip[ 2 ];
-			op += 3;
+			while( l4 != 0 )
+			{
+				const float32x4_t cv = vmaxq_f32( vminq_f32(
+					vmulq_f32( vld1q_f32( ip ), om ), maxv ), minv );
+
+				const uint32x4_t v32 = vcvtq_u32_f32( vaddq_f32( cv, v05 ));
+				const uint16x4_t v16 = vmovn_u32( v32 );
+
+				vst1_u16( (uint16_t*) op, v16 );
+
+				ip += 4;
+				op += 4;
+				l4--;
+			}
 		}
-
-		for( i = 0; i < l - 1; i++ )
+		else
 		{
-			op[ 0 ] = ip[ 0 ];
-			op[ 1 ] = ip[ 1 ];
-			op[ 2 ] = ip[ 2 ];
-			ip += ipinc;
-			op += 3;
-		}
+			while( l4 != 0 )
+			{
+				const float32x4_t cv = vmaxq_f32( vminq_f32(
+					vmulq_f32( vld1q_f32( ip ), om ), maxv ), minv );
 
-		for( i = 0; i <= rs.padr; i++ )
-		{
-			op[ 0 ] = ip[ 0 ];
-			op[ 1 ] = ip[ 1 ];
-			op[ 2 ] = ip[ 2 ];
-			op += 3;
-		}
-	}
+				const uint32x4_t v32 = vcvtq_u32_f32( vaddq_f32( cv, v05 ));
+				const uint16x4_t v16 = vmovn_u32( v32 );
+				const uint8x8_t v8 = vmovn_u16( vcombine_u16( v16, v16 ));
 
-	template< class T >
-	static void copyScanline4v( const T* ip, CResizeScanline& rs, const int l,
-		const int ipinc )
-	{
-		float* op = rs.sp;
-		int i;
+				*(uint32_t*) op = vget_lane_u32( (uint32x2_t) v8, 0 );
 
-		for( i = 0; i < rs.padl; i++ )
-		{
-			op[ 0 ] = ip[ 0 ];
-			op[ 1 ] = ip[ 1 ];
-			op[ 2 ] = ip[ 2 ];
-			op[ 3 ] = ip[ 3 ];
-			op += 4;
-		}
-
-		for( i = 0; i < l - 1; i++ )
-		{
-			op[ 0 ] = ip[ 0 ];
-			op[ 1 ] = ip[ 1 ];
-			op[ 2 ] = ip[ 2 ];
-			op[ 3 ] = ip[ 3 ];
-			ip += ipinc;
-			op += 4;
+				ip += 4;
+				op += 4;
+				l4--;
+			}
 		}
 
-		for( i = 0; i <= rs.padr; i++ )
+	#else // defined( LANCIR_NEON )
+
+		if( IsUnityMul )
 		{
-			op[ 0 ] = ip[ 0 ];
-			op[ 1 ] = ip[ 1 ];
-			op[ 2 ] = ip[ 2 ];
-			op[ 3 ] = ip[ 3 ];
-			op += 4;
+			while( l4 != 0 )
+			{
+				op[ 0 ] = (T) roundclamp( ip[ 0 ], Clamp );
+				op[ 1 ] = (T) roundclamp( ip[ 1 ], Clamp );
+				op[ 2 ] = (T) roundclamp( ip[ 2 ], Clamp );
+				op[ 3 ] = (T) roundclamp( ip[ 3 ], Clamp );
+				ip += 4;
+				op += 4;
+				l4--;
+			}
+		}
+		else
+		{
+			while( l4 != 0 )
+			{
+				op[ 0 ] = (T) roundclamp( ip[ 0 ] * OutMul, Clamp );
+				op[ 1 ] = (T) roundclamp( ip[ 1 ] * OutMul, Clamp );
+				op[ 2 ] = (T) roundclamp( ip[ 2 ] * OutMul, Clamp );
+				op[ 3 ] = (T) roundclamp( ip[ 3 ] * OutMul, Clamp );
+				ip += 4;
+				op += 4;
+				l4--;
+			}
+		}
+
+	#endif // defined( LANCIR_NEON )
+
+		if( IsUnityMul )
+		{
+			while( l != 0 )
+			{
+				*op = (T) roundclamp( *ip, Clamp );
+				ip++;
+				op++;
+				l--;
+			}
+		}
+		else
+		{
+			while( l != 0 )
+			{
+				*op = (T) roundclamp( *ip * OutMul, Clamp );
+				ip++;
+				op++;
+				l--;
+			}
 		}
 	}
 
 	#define LANCIR_LF_PRE \
-			CResizePos* const rpe = rp + DstLen; \
-			while( rp < rpe ) \
+			const CResizePos* const rpe = rp + DstLen; \
+			while( rp != rpe ) \
 			{ \
 				const float* ip = rp -> ip; \
-				const float* const flt = rp -> flt;
+				const float* flt = rp -> flt;
 
 	#define LANCIR_LF_POST \
 				rp++; \
@@ -1260,174 +1656,482 @@ protected:
 	 * images.
 	 *
 	 * @param op Destination buffer.
+	 * @param opinc "op" increment.
 	 * @param DstLen Destination length, in pixels.
 	 * @param rp Resizing positions and filters.
 	 * @param kl Filter kernel length, in taps.
 	 */
 
-	static void resize1( float* op, int DstLen, CResizePos* rp, const int kl )
+	static void resize1( float* op, const size_t opinc, const int DstLen,
+		const CResizePos* rp, const int kl )
 	{
-		if( kl == 6 )
-		{
-			LANCIR_LF_PRE
-			op[ 0 ] =
-				flt[ 0 ] * ip[ 0 ] +
-				flt[ 1 ] * ip[ 1 ] +
-				flt[ 2 ] * ip[ 2 ] +
-				flt[ 3 ] * ip[ 3 ] +
-				flt[ 4 ] * ip[ 4 ] +
-				flt[ 5 ] * ip[ 5 ];
+		const int cir = kl & 3;
+		const int ci = kl >> 2;
 
-			op++;
-			LANCIR_LF_POST
-		}
-		else
-		{
-			LANCIR_LF_PRE
-			float sum = 0.0;
-			int i;
-
-			for( i = 0; i < kl; i++ )
-			{
-				sum += flt[ i ] * ip[ i ];
-			}
-
-			op[ 0 ] = sum;
-			op++;
-			LANCIR_LF_POST
-		}
-	}
-
-	static void resize2( float* op, int DstLen, CResizePos* rp, const int kl )
-	{
-		if( kl == 6 )
-		{
-			LANCIR_LF_PRE
-			op[ 0 ] =
-				flt[ 0 ] * ip[ 0 ] +
-				flt[ 1 ] * ip[ 2 ] +
-				flt[ 2 ] * ip[ 4 ] +
-				flt[ 3 ] * ip[ 6 ] +
-				flt[ 4 ] * ip[ 8 ] +
-				flt[ 5 ] * ip[ 10 ];
-
-			op[ 1 ] =
-				flt[ 0 ] * ip[ 1 ] +
-				flt[ 1 ] * ip[ 3 ] +
-				flt[ 2 ] * ip[ 5 ] +
-				flt[ 3 ] * ip[ 7 ] +
-				flt[ 4 ] * ip[ 9 ] +
-				flt[ 5 ] * ip[ 11 ];
-
-			op += 2;
-			LANCIR_LF_POST
-		}
-		else
-		{
-			LANCIR_LF_PRE
-			float sum[ 2 ];
-			sum[ 0 ] = 0.0;
-			sum[ 1 ] = 0.0;
-			int i;
-
-			for( i = 0; i < kl; i++ )
-			{
-				const float xx = flt[ i ];
-				sum[ 0 ] += xx * ip[ 0 ];
-				sum[ 1 ] += xx * ip[ 1 ];
-				ip += 2;
-			}
-
-			op[ 0 ] = sum[ 0 ];
-			op[ 1 ] = sum[ 1 ];
-			op += 2;
-			LANCIR_LF_POST
-		}
-	}
-
-	static void resize3( float* op, int DstLen, CResizePos* rp, const int kl )
-	{
-		if( kl == 6 )
-		{
-			LANCIR_LF_PRE
-			op[ 0 ] =
-				flt[ 0 ] * ip[ 0 ] +
-				flt[ 1 ] * ip[ 3 ] +
-				flt[ 2 ] * ip[ 6 ] +
-				flt[ 3 ] * ip[ 9 ] +
-				flt[ 4 ] * ip[ 12 ] +
-				flt[ 5 ] * ip[ 15 ];
-
-			op[ 1 ] =
-				flt[ 0 ] * ip[ 1 ] +
-				flt[ 1 ] * ip[ 4 ] +
-				flt[ 2 ] * ip[ 7 ] +
-				flt[ 3 ] * ip[ 10 ] +
-				flt[ 4 ] * ip[ 13 ] +
-				flt[ 5 ] * ip[ 16 ];
-
-			op[ 2 ] =
-				flt[ 0 ] * ip[ 2 ] +
-				flt[ 1 ] * ip[ 5 ] +
-				flt[ 2 ] * ip[ 8 ] +
-				flt[ 3 ] * ip[ 11 ] +
-				flt[ 4 ] * ip[ 14 ] +
-				flt[ 5 ] * ip[ 17 ];
-
-			op += 3;
-			LANCIR_LF_POST
-		}
-		else
-		{
-			LANCIR_LF_PRE
-			float sum[ 3 ];
-			sum[ 0 ] = 0.0;
-			sum[ 1 ] = 0.0;
-			sum[ 2 ] = 0.0;
-			int i;
-
-			for( i = 0; i < kl; i++ )
-			{
-				const float xx = flt[ i ];
-				sum[ 0 ] += xx * ip[ 0 ];
-				sum[ 1 ] += xx * ip[ 1 ];
-				sum[ 2 ] += xx * ip[ 2 ];
-				ip += 3;
-			}
-
-			op[ 0 ] = sum[ 0 ];
-			op[ 1 ] = sum[ 1 ];
-			op[ 2 ] = sum[ 2 ];
-			op += 3;
-			LANCIR_LF_POST
-		}
-	}
-
-	static void resize4( float* op, int DstLen, CResizePos* rp, const int kl )
-	{
 		LANCIR_LF_PRE
-		float sum[ 4 ];
-		sum[ 0 ] = 0.0;
-		sum[ 1 ] = 0.0;
-		sum[ 2 ] = 0.0;
-		sum[ 3 ] = 0.0;
-		int i;
 
-		for( i = 0; i < kl; i++ )
+		int c = ci;
+
+	#if defined( LANCIR_SSE2 )
+
+		__m128 sum = _mm_mul_ps( _mm_load_ps( flt ), _mm_loadu_ps( ip ));
+
+		while( --c != 0 )
 		{
-			const float xx = flt[ i ];
-			sum[ 0 ] += xx * ip[ 0 ];
-			sum[ 1 ] += xx * ip[ 1 ];
-			sum[ 2 ] += xx * ip[ 2 ];
-			sum[ 3 ] += xx * ip[ 3 ];
+			flt += 4;
 			ip += 4;
+			sum = _mm_add_ps( sum, _mm_mul_ps( _mm_load_ps( flt ),
+				_mm_loadu_ps( ip )));
 		}
 
-		op[ 0 ] = sum[ 0 ];
-		op[ 1 ] = sum[ 1 ];
-		op[ 2 ] = sum[ 2 ];
-		op[ 3 ] = sum[ 3 ];
-		op += 4;
+		sum = _mm_add_ps( sum, _mm_movehl_ps( sum, sum ));
+
+		if( cir == 2 )
+		{
+			const __m128 sum2 = _mm_mul_ps( _mm_loadu_ps( flt + 2 ),
+				_mm_loadu_ps( ip + 2 ));
+
+			sum = _mm_add_ps( sum, _mm_movehl_ps( sum2, sum2 ));
+		}
+
+		float res = _mm_cvtss_f32( _mm_add_ss( sum,
+			_mm_shuffle_ps( sum, sum, 1 )));
+
+	#elif defined( LANCIR_NEON )
+
+		float32x4_t sum = vmulq_f32( vld1q_f32( flt ), vld1q_f32( ip ));
+
+		while( --c != 0 )
+		{
+			flt += 4;
+			ip += 4;
+			sum = vmlaq_f32( sum, vld1q_f32( flt ), vld1q_f32( ip ));
+		}
+
+		float res;
+
+		if( cir == 2 )
+		{
+			const float32x2_t sum2 = vadd_f32( vget_high_f32( sum ),
+				vget_low_f32( sum ));
+
+			res = vaddv_f32( vmla_f32( sum2, vld1_f32( flt + 4 ),
+				vld1_f32( ip + 4 )));
+		}
+		else
+		{
+			res = vaddvq_f32( sum );
+		}
+
+	#else // defined( LANCIR_NEON )
+
+		float sum0 = flt[ 0 ] * ip[ 0 ];
+		float sum1 = flt[ 1 ] * ip[ 1 ];
+		float sum2 = flt[ 2 ] * ip[ 2 ];
+		float sum3 = flt[ 3 ] * ip[ 3 ];
+
+		while( --c != 0 )
+		{
+			flt += 4;
+			ip += 4;
+			sum0 += flt[ 0 ] * ip[ 0 ];
+			sum1 += flt[ 1 ] * ip[ 1 ];
+			sum2 += flt[ 2 ] * ip[ 2 ];
+			sum3 += flt[ 3 ] * ip[ 3 ];
+		}
+
+		float res = ( sum0 + sum1 ) + ( sum2 + sum3 );
+
+		if( cir == 2 )
+		{
+			res += flt[ 4 ] * ip[ 4 ] + flt[ 5 ] * ip[ 5 ];
+		}
+
+	#endif // defined( LANCIR_NEON )
+
+		op[ 0 ] = res;
+		op += opinc;
+
+		LANCIR_LF_POST
+	}
+
+	static void resize2( float* op, const size_t opinc, const int DstLen,
+		const CResizePos* rp, const int kl )
+	{
+	#if LANCIR_ALIGN > 4
+		const int cir = kl & 3;
+		const int ci = kl >> 2;
+	#else // LANCIR_ALIGN > 4
+		const int ci = kl >> 1;
+	#endif // LANCIR_ALIGN > 4
+
+		LANCIR_LF_PRE
+
+		int c = ci;
+
+	#if defined( LANCIR_AVX )
+
+		__m256 sum = _mm256_mul_ps( _mm256_load_ps( flt ),
+			_mm256_loadu_ps( ip ));
+
+		while( --c != 0 )
+		{
+			flt += 8;
+			ip += 8;
+			sum = _mm256_add_ps( sum, _mm256_mul_ps( _mm256_load_ps( flt ),
+				_mm256_loadu_ps( ip )));
+		}
+
+		__m128 res = _mm_add_ps( _mm256_extractf128_ps( sum, 0 ),
+			_mm256_extractf128_ps( sum, 1 ));
+
+		if( cir == 2 )
+		{
+			res = _mm_add_ps( res, _mm_mul_ps( _mm_load_ps( flt + 8 ),
+				_mm_loadu_ps( ip + 8 )));
+		}
+
+		res = _mm_add_ps( res, _mm_movehl_ps( res, res ));
+
+		_mm_store_ss( op, res );
+		_mm_store_ss( op + 1, _mm_shuffle_ps( res, res, 1 ));
+
+	#elif defined( LANCIR_SSE2 )
+
+		__m128 sumA = _mm_mul_ps( _mm_load_ps( flt ), _mm_loadu_ps( ip ));
+		__m128 sumB = _mm_mul_ps( _mm_load_ps( flt + 4 ),
+			_mm_loadu_ps( ip + 4 ));
+
+		while( --c != 0 )
+		{
+			flt += 8;
+			ip += 8;
+			sumA = _mm_add_ps( sumA, _mm_mul_ps( _mm_load_ps( flt ),
+				_mm_loadu_ps( ip )));
+
+			sumB = _mm_add_ps( sumB, _mm_mul_ps( _mm_load_ps( flt + 4 ),
+				_mm_loadu_ps( ip + 4 )));
+		}
+
+		sumA = _mm_add_ps( sumA, sumB );
+
+		if( cir == 2 )
+		{
+			sumA = _mm_add_ps( sumA, _mm_mul_ps( _mm_load_ps( flt + 8 ),
+				_mm_loadu_ps( ip + 8 )));
+		}
+
+		sumA = _mm_add_ps( sumA, _mm_movehl_ps( sumA, sumA ));
+
+		_mm_store_ss( op, sumA );
+		_mm_store_ss( op + 1, _mm_shuffle_ps( sumA, sumA, 1 ));
+
+	#elif defined( LANCIR_NEON )
+
+		float32x4_t sumA = vmulq_f32( vld1q_f32( flt ), vld1q_f32( ip ));
+		float32x4_t sumB = vmulq_f32( vld1q_f32( flt + 4 ),
+			vld1q_f32( ip + 4 ));
+
+		while( --c != 0 )
+		{
+			flt += 8;
+			ip += 8;
+			sumA = vmlaq_f32( sumA, vld1q_f32( flt ), vld1q_f32( ip ));
+			sumB = vmlaq_f32( sumB, vld1q_f32( flt + 4 ),
+				vld1q_f32( ip + 4 ));
+		}
+
+		sumA = vaddq_f32( sumA, sumB );
+
+		if( cir == 2 )
+		{
+			sumA = vmlaq_f32( sumA, vld1q_f32( flt + 8 ),
+				vld1q_f32( ip + 8 ));
+		}
+
+		vst1_f32( op, vadd_f32( vget_high_f32( sumA ), vget_low_f32( sumA )));
+
+	#else // defined( LANCIR_NEON )
+
+		const float xx = flt[ 0 ];
+		const float xx2 = flt[ 1 ];
+		float sum0 = xx * ip[ 0 ];
+		float sum1 = xx * ip[ 1 ];
+		float sum2 = xx2 * ip[ 2 ];
+		float sum3 = xx2 * ip[ 3 ];
+
+		while( --c != 0 )
+		{
+			flt += 2;
+			ip += 4;
+			const float xx = flt[ 0 ];
+			const float xx2 = flt[ 1 ];
+			sum0 += xx * ip[ 0 ];
+			sum1 += xx * ip[ 1 ];
+			sum2 += xx2 * ip[ 2 ];
+			sum3 += xx2 * ip[ 3 ];
+		}
+
+		op[ 0 ] = sum0 + sum2;
+		op[ 1 ] = sum1 + sum3;
+
+	#endif // defined( LANCIR_NEON )
+
+		op += opinc;
+
+		LANCIR_LF_POST
+	}
+
+	static void resize3( float* op, const size_t opinc, const int DstLen,
+		const CResizePos* rp, const int kl )
+	{
+	#if LANCIR_ALIGN > 4
+
+		const int cir = kl & 3;
+		const int ci = kl >> 2;
+
+		LANCIR_LF_PRE
+
+		float res[ 12 ];
+		int c = ci;
+
+		#if defined( LANCIR_AVX )
+
+		__m128 sumA = _mm_mul_ps( _mm_load_ps( flt ), _mm_loadu_ps( ip ));
+		__m256 sumB = _mm256_mul_ps( _mm256_loadu_ps( flt + 4 ),
+			_mm256_loadu_ps( ip + 4 ));
+
+		while( --c != 0 )
+		{
+			flt += 12;
+			ip += 12;
+			sumA = _mm_add_ps( sumA, _mm_mul_ps( _mm_load_ps( flt ),
+				_mm_loadu_ps( ip )));
+
+			sumB = _mm256_add_ps( sumB, _mm256_mul_ps(
+				_mm256_loadu_ps( flt + 4 ), _mm256_loadu_ps( ip + 4 )));
+		}
+
+		if( cir == 2 )
+		{
+			sumA = _mm_add_ps( sumA, _mm_mul_ps( _mm_load_ps( flt + 12 ),
+				_mm_loadu_ps( ip + 12 )));
+		}
+
+		_mm_storeu_ps( res, sumA );
+		_mm256_storeu_ps( res + 4, sumB );
+
+		#elif defined( LANCIR_SSE2 )
+
+		__m128 sumA = _mm_mul_ps( _mm_load_ps( flt ), _mm_loadu_ps( ip ));
+		__m128 sumB = _mm_mul_ps( _mm_load_ps( flt + 4 ),
+			_mm_loadu_ps( ip + 4 ));
+
+		__m128 sumC = _mm_mul_ps( _mm_load_ps( flt + 8 ),
+			_mm_loadu_ps( ip + 8 ));
+
+		while( --c != 0 )
+		{
+			flt += 12;
+			ip += 12;
+			sumA = _mm_add_ps( sumA, _mm_mul_ps( _mm_load_ps( flt ),
+				_mm_loadu_ps( ip )));
+
+			sumB = _mm_add_ps( sumB, _mm_mul_ps( _mm_load_ps( flt + 4 ),
+				_mm_loadu_ps( ip + 4 )));
+
+			sumC = _mm_add_ps( sumC, _mm_mul_ps( _mm_load_ps( flt + 8 ),
+				_mm_loadu_ps( ip + 8 )));
+		}
+
+		if( cir == 2 )
+		{
+			sumA = _mm_add_ps( sumA, _mm_mul_ps( _mm_load_ps( flt + 12 ),
+				_mm_loadu_ps( ip + 12 )));
+		}
+
+		_mm_storeu_ps( res, sumA );
+		_mm_storeu_ps( res + 4, sumB );
+		_mm_storeu_ps( res + 8, sumC );
+
+		#elif defined( LANCIR_NEON )
+
+		float32x4_t sumA = vmulq_f32( vld1q_f32( flt ), vld1q_f32( ip ));
+		float32x4_t sumB = vmulq_f32( vld1q_f32( flt + 4 ),
+			vld1q_f32( ip + 4 ));
+
+		float32x4_t sumC = vmulq_f32( vld1q_f32( flt + 8 ),
+			vld1q_f32( ip + 8 ));
+
+		while( --c != 0 )
+		{
+			flt += 12;
+			ip += 12;
+			sumA = vmlaq_f32( sumA, vld1q_f32( flt ), vld1q_f32( ip ));
+			sumB = vmlaq_f32( sumB, vld1q_f32( flt + 4 ),
+				vld1q_f32( ip + 4 ));
+
+			sumC = vmlaq_f32( sumC, vld1q_f32( flt + 8 ),
+				vld1q_f32( ip + 8 ));
+		}
+
+		if( cir == 2 )
+		{
+			sumA = vmlaq_f32( sumA, vld1q_f32( flt + 12 ),
+				vld1q_f32( ip + 12 ));
+		}
+
+		vst1q_f32( res, sumA );
+		vst1q_f32( res + 4, sumB );
+		vst1q_f32( res + 8, sumC );
+
+		#endif // defined( LANCIR_NEON )
+
+		op[ 0 ] = ( res[ 0 ] + res[ 3 ]) + ( res[ 6 ] + res[ 9 ]);
+		op[ 1 ] = ( res[ 1 ] + res[ 4 ]) + ( res[ 7 ] + res[ 10 ]);
+		op[ 2 ] = ( res[ 2 ] + res[ 5 ]) + ( res[ 8 ] + res[ 11 ]);
+
+		if( cir == 2 )
+		{
+			op[ 1 ] += flt[ 16 ] * ip[ 16 ];
+			op[ 2 ] += flt[ 17 ] * ip[ 17 ];
+		}
+
+	#else // LANCIR_ALIGN > 4
+
+		const int ci = kl >> 1;
+
+		LANCIR_LF_PRE
+
+		int c = ci;
+
+		const float xx = flt[ 0 ];
+		float sum0 = xx * ip[ 0 ];
+		float sum1 = xx * ip[ 1 ];
+		float sum2 = xx * ip[ 2 ];
+		const float xx2 = flt[ 1 ];
+		float sum3 = xx2 * ip[ 3 ];
+		float sum4 = xx2 * ip[ 4 ];
+		float sum5 = xx2 * ip[ 5 ];
+
+		while( --c != 0 )
+		{
+			flt += 2;
+			ip += 6;
+			const float xx = flt[ 0 ];
+			sum0 += xx * ip[ 0 ];
+			sum1 += xx * ip[ 1 ];
+			sum2 += xx * ip[ 2 ];
+			const float xx2 = flt[ 1 ];
+			sum3 += xx2 * ip[ 3 ];
+			sum4 += xx2 * ip[ 4 ];
+			sum5 += xx2 * ip[ 5 ];
+		}
+
+		op[ 0 ] = sum0 + sum3;
+		op[ 1 ] = sum1 + sum4;
+		op[ 2 ] = sum2 + sum5;
+
+	#endif // LANCIR_ALIGN > 4
+
+		op += opinc;
+
+		LANCIR_LF_POST
+	}
+
+	static void resize4( float* op, const size_t opinc, const int DstLen,
+		const CResizePos* rp, const int kl )
+	{
+	#if LANCIR_ALIGN > 4
+		const int ci = kl >> 1;
+	#else // LANCIR_ALIGN > 4
+		const int ci = kl;
+	#endif // LANCIR_ALIGN > 4
+
+		LANCIR_LF_PRE
+
+		int c = ci;
+
+	#if defined( LANCIR_AVX )
+
+		__m256 sum = _mm256_mul_ps( _mm256_load_ps( flt ),
+			_mm256_loadu_ps( ip ));
+
+		while( --c != 0 )
+		{
+			flt += 8;
+			ip += 8;
+			sum = _mm256_add_ps( sum, _mm256_mul_ps( _mm256_load_ps( flt ),
+				_mm256_loadu_ps( ip )));
+		}
+
+		_mm_store_ps( op, _mm_add_ps( _mm256_extractf128_ps( sum, 0 ),
+			_mm256_extractf128_ps( sum, 1 )));
+
+	#elif defined( LANCIR_SSE2 )
+
+		__m128 sumA = _mm_mul_ps( _mm_load_ps( flt ), _mm_load_ps( ip ));
+		__m128 sumB = _mm_mul_ps( _mm_load_ps( flt + 4 ),
+			_mm_load_ps( ip + 4 ));
+
+		while( --c != 0 )
+		{
+			flt += 8;
+			ip += 8;
+			sumA = _mm_add_ps( sumA, _mm_mul_ps( _mm_load_ps( flt ),
+				_mm_load_ps( ip )));
+
+			sumB = _mm_add_ps( sumB, _mm_mul_ps( _mm_load_ps( flt + 4 ),
+				_mm_load_ps( ip + 4 )));
+		}
+
+		_mm_store_ps( op, _mm_add_ps( sumA, sumB ));
+
+	#elif defined( LANCIR_NEON )
+
+		float32x4_t sumA = vmulq_f32( vld1q_f32( flt ), vld1q_f32( ip ));
+		float32x4_t sumB = vmulq_f32( vld1q_f32( flt + 4 ),
+			vld1q_f32( ip + 4 ));
+
+		while( --c != 0 )
+		{
+			flt += 8;
+			ip += 8;
+			sumA = vmlaq_f32( sumA, vld1q_f32( flt ), vld1q_f32( ip ));
+			sumB = vmlaq_f32( sumB, vld1q_f32( flt + 4 ),
+				vld1q_f32( ip + 4 ));
+		}
+
+		vst1q_f32( op, vaddq_f32( sumA, sumB ));
+
+	#else // defined( LANCIR_NEON )
+
+		const float xx = flt[ 0 ];
+		float sum0 = xx * ip[ 0 ];
+		float sum1 = xx * ip[ 1 ];
+		float sum2 = xx * ip[ 2 ];
+		float sum3 = xx * ip[ 3 ];
+
+		while( --c != 0 )
+		{
+			flt++;
+			ip += 4;
+			const float xx = flt[ 0 ];
+			sum0 += xx * ip[ 0 ];
+			sum1 += xx * ip[ 1 ];
+			sum2 += xx * ip[ 2 ];
+			sum3 += xx * ip[ 3 ];
+		}
+
+		op[ 0 ] = sum0;
+		op[ 1 ] = sum1;
+		op[ 2 ] = sum2;
+		op[ 3 ] = sum3;
+
+	#endif // defined( LANCIR_NEON )
+
+		op += opinc;
+
 		LANCIR_LF_POST
 	}
 
@@ -1436,6 +2140,7 @@ protected:
 };
 
 #undef LANCIR_PI
+#undef LANCIR_ALIGN
 
 } // namespace avir
 

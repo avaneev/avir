@@ -4,7 +4,7 @@
 #include "../avir.h"
 #include "../lancir.h"
 
-#include "/libvox/Sources/Core/CWorkerThreadPool.h"
+#include "../../../../libvox/Sources/Core/CWorkerThreadPool.h"
 using namespace vox;
 
 #define IS_AVIR 1 // Use AVIR resizer, LancIR otherwise.
@@ -111,7 +111,7 @@ protected:
 		#else // IS_AVIR
 			ImageResizer.resizeImage( &SrcImg[ 0 ], SrcImageWidth,
 				SrcImageHeight, 0, &DstImg[ 0 ], DstImageWidth,
-				DstImageHeight, 1, -k, -k, 0.0, 0.0 );
+				DstImageHeight, 0, 1, -k, -k, 0.0, 0.0 );
 		#endif // IS_AVIR
 
 		CFixedBuffer< float > DstImg2( SrcImageWidth * SrcImageHeight );
@@ -123,7 +123,7 @@ protected:
 		#else // IS_AVIR
 			ImageResizer.resizeImage( &DstImg[ 0 ], DstImageWidth,
 				DstImageHeight, 0, &DstImg2[ 0 ], SrcImageWidth,
-				SrcImageHeight, 1, -1.0 / k, -1.0 / k, 0.0, 0.0 );
+				SrcImageHeight, 0, 1, -1.0 / k, -1.0 / k, 0.0, 0.0 );
 		#endif // IS_AVIR
 
 		const double r = calcRMS( &DstImg[ Offs ], DstImageWidth - Offs * 2 );

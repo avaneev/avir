@@ -37,9 +37,9 @@ filtering techniques. EWA-like technique is not implemented in AVIR, because
 it requires considerably more computing resources and may produce a blurred
 image.
 
-As a bonus, a faster `LANCIR` image resizing algorithm is also offered as a
-part of this library. But the main focus of this documentation is the original
-AVIR image resizing algorithm.
+As a bonus, a much faster `LANCIR` image resizing algorithm is also offered as
+a part of this library. But the main focus of this documentation is the
+original AVIR image resizing algorithm.
 
 *AVIR is devoted to women. Your digital photos can look good at any size!*
 
@@ -335,9 +335,11 @@ image resizing filter. This class has a similar programmatic interface to
 AVIR, but it is not thread-safe: each executing thread should have its own
 `CLancIR` object. This class was designed for cases of batch processing of
 same-sized frames like in video encoding, or for just-in-time resizing of
-an application's assets.
+an application's assets. This Lanczos implementation is likely one of the
+fastest available for CPUs; it features a radical AVX, SSE2, and NEON
+optimizations.
 
-LANCIR offers up to two times faster image resizing in comparison to AVIR.
+LANCIR offers up to three times faster image resizing in comparison to AVIR.
 The quality difference is, however, debatable. Note that while LANCIR can
 take 8- and 16-bit and float image buffers, its precision is limited to
 8-bit resizing.
