@@ -41,7 +41,7 @@ As a bonus, a much faster `LANCIR` image resizing algorithm is also offered as
 a part of this library. But the main focus of this documentation is the
 original AVIR image resizing algorithm.
 
-*AVIR is devoted to women. Your digital photos can look good at any size!*
+*AVIR is dedicated to women. Your digital photos can look good in any size!*
 
 P.S. Please credit the author of this library in your documentation in the
 following way: "AVIR image resizing algorithm designed by Aleksey Vaneev".
