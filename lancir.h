@@ -21,7 +21,7 @@
  *
  * @section license License
  *
- * MIT License
+ * License
  *
  * Copyright (c) 2015-2021 Aleksey Vaneev
  *
@@ -43,7 +43,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  *
- * @version 3.0.4
+ * @version 3.0.5
  */
 
 #ifndef AVIR_CLANCIR_INCLUDED
@@ -149,10 +149,7 @@ inline void reallocBuf( Tb*& buf, Tl& len, const Tl newlen )
  * The object of this class can be used to resize 1-4 channel images to any
  * required size. Resizing is performed by utilizing Lanczos filters, with
  * 8-bit precision. This class offers a kind of "optimal" Lanczos resampling
- * implementation. Beside that, it implements the "virtual oversampling"
- * technique that, while requiring a modest amount of additional memory (to
- * store more filters), increases resampling precision without added
- * computational cost.
+ * implementation.
  *
  * Object of this class can be allocated on stack.
  *
@@ -293,7 +290,7 @@ public:
 			ky = -ky0;
 		}
 
-		if( rfv.update( la, ky, OSShift, ElCount ))
+		if( rfv.update( la, ky, ElCount ))
 		{
 			rsv.reset();
 			rsh.reset();
@@ -310,7 +307,7 @@ public:
 		{
 			rfh = &rfh0;
 
-			if( rfh0.update( la, kx, OSShift, ElCount ))
+			if( rfh0.update( la, kx, ElCount ))
 			{
 				rsh.reset();
 			}
@@ -527,9 +524,6 @@ public:
 	}
 
 protected:
-	static const int OSShift = 2; ///< Virtual oversampling power-of-2 shift,
-		///< 0 - no oversampling.
-		///<
 	float* FltBuf0; ///< Intermediate resizing buffer.
 		///<
 	size_t FltBuf0Len; ///< Length of "FltBuf0".
@@ -565,7 +559,6 @@ protected:
 			, FiltersLen( 0 )
 			, la( 0.0 )
 			, k( 0.0 )
-			, os( 0 )
 			, ElCount( 0 )
 		{
 			memset( Bufs0, 0, sizeof( Bufs0 ));
@@ -589,27 +582,21 @@ protected:
 		 *
 		 * @param la0 Lanczos "a" parameter value (>=2.0), can be fractional.
 		 * @param k0 Resizing step.
-		 * @param oss0 Oversampling power-of-2 shift (>=0).
 		 * @param ElCount0 Image's element count, may be used for SIMD filter
 		 * tap replication.
 		 * @return "True" if an update occured and scanline resizing positions
 		 * should be updated unconditionally.
 		 */
 
-		bool update( const double la0, const double k0, const int oss0,
-			const int ElCount0 )
+		bool update( const double la0, const double k0, const int ElCount0 )
 		{
-			if( la0 == la && k0 == k && oss0 == oss && ElCount0 == ElCount )
+			if( la0 == la && k0 == k && ElCount0 == ElCount )
 			{
 				return( true );
 			}
 
 			la = la0;
 			k = k0;
-			oss = oss0;
-			os = 1 << oss;
-			osi = 1.0 / os;
-			osm = os - 1;
 			ElCount = ElCount0;
 
 			NormFreq = ( k <= 1.0 ? 1.0 : 1.0 / k );
@@ -637,12 +624,11 @@ protected:
 
 			#endif // LANCIR_ALIGN > 4
 
-			FracCount = 500; // Enough for Lanczos-3 implicit 8-bit precision.
+			FracCount = 1000; // Enough for Lanczos-3 implicit 8-bit precision.
 
-			const int fc1os = FracCount * os + 1; // Add +1 to cover cases of
-				// fractional delay == "os" due to rounding.
+			reallocBuf( Filters, FiltersLen, FracCount + 1 ); // Add +1 to
+				// cover cases of fractional delay == 1.0 due to rounding.
 
-			reallocBuf( Filters, FiltersLen, fc1os );
 			memset( Filters, 0, FiltersLen * sizeof( Filters[ 0 ]));
 
 			setBuf( 0 );
@@ -654,7 +640,7 @@ protected:
 		 * Function returns filter at the specified fractional offset. This
 		 * function can only be called after a prior update() function call.
 		 *
-		 * @param x Fractional offset, [0; os].
+		 * @param x Fractional offset, [0; 1].
 		 */
 
 		const float* getFilter( const double x )
@@ -676,7 +662,7 @@ protected:
 				setBuf( CurBuf + 1 );
 			}
 
-			makeFilterNorm( flt, os - (double) Frac / FracCount );
+			makeFilterNorm( flt, 1.0 - (double) Frac / FracCount );
 
 			if( ElRepl > 1 )
 			{
@@ -705,12 +691,12 @@ protected:
 			///<
 		int ElRepl; ///< The number of repetitions of each filter tap.
 			///<
-		static const int BufCount = 8; ///< The maximal number of buffers that
+		static const int BufCount = 4; ///< The maximal number of buffers that
 			///< can be in use.
 			///<
 		static const int BufLen = 256; ///< The number of fractional filters
 			///< a single buffer may contain. Both "BufLen" and "BufCount"
-			///< should correspond to the "FracCount" and oversampling used.
+			///< should correspond to the "FracCount" used.
 			///<
 		float* Bufs0[ BufCount ]; ///< Buffers that hold all filters,
 			///< original.
@@ -734,14 +720,6 @@ protected:
 		double la; ///< Current "la".
 			///<
 		double k; ///< Current "k".
-			///<
-		int oss; ///< Current "oss".
-			///<
-		int os; ///< Oversampling multiplier (=1<<oss).
-			///<
-		double osi; ///< =1.0 / os.
-			///<
-		int osm; ///< "os" mask (=os-1).
 			///<
 		int ElCount; ///< Current "ElCount".
 			///<
@@ -812,38 +790,36 @@ protected:
 		};
 
 		/**
-		 * Function creates a filter for the specified fractional delay and
-		 * sampling offset (if virtual oversampling is used). The update()
-		 * function should be called prior to calling this function. The
-		 * created filter is normalized.
+		 * Function creates a filter for the specified fractional delay. The
+		 * update() function should be called prior to calling this function.
+		 * The created filter is normalized.
 		 *
 		 * @param[out] op Output filter buffer.
-		 * @param FracDelay Fractional delay, 0 to "os", inclusive.
+		 * @param FracDelay Fractional delay, 0 to 1, inclusive.
 		 */
 
 		void makeFilterNorm( float* op, const double FracDelay ) const
 		{
-			CSineGen f( Freq, Freq * ( FracDelay * osi - fl2 ));
-			CSineGen fw( FreqA, FreqA * ( FracDelay * osi - fl2 ));
+			CSineGen f( Freq, Freq * ( FracDelay - fl2 ));
+			CSineGen fw( FreqA, FreqA * ( FracDelay - fl2 ));
 
 			float* op0 = op;
 			double s = 0.0;
 			double ut;
 
-			const int ti = os;
-			int t = -( fl2 << oss );
+			int t = -fl2;
 
-			if( t + FracDelay < -Len2 * ti )
+			if( t + FracDelay < -Len2 )
 			{
 				f.generate();
 				fw.generate();
 				*op = (float) 0;
 				op++;
-				t += ti;
+				t++;
 			}
 
-			int IsZeroX = ( fabs( FracDelay - ti ) < 0x1p-42 );
-			int mt = 0 - ( IsZeroX << oss );
+			int IsZeroX = ( fabs( FracDelay - 1.0 ) < 0x1p-42 );
+			int mt = 0 - IsZeroX;
 			IsZeroX = ( IsZeroX || fabs( FracDelay ) < 0x1p-42 );
 
 			while( t < mt )
@@ -852,12 +828,12 @@ protected:
 				*op = (float) ( f.generate() * fw.generate() / ( ut * ut ));
 				s += *op;
 				op++;
-				t += ti;
+				t++;
 			}
 
 			if( IsZeroX ) // t+FracDelay==0
 			{
-				*op = (float) (( Freq * osi ) * ( FreqA * osi ));
+				*op = (float) ( Freq * FreqA );
 				s += *op;
 				f.generate();
 				fw.generate();
@@ -869,21 +845,21 @@ protected:
 				s += *op;
 			}
 
-			mt = ( fl2 - 2 ) << oss;
+			mt = fl2 - 2;
 
 			while( t < mt )
 			{
 				op++;
-				t += ti;
+				t++;
 				ut = t + FracDelay;
 				*op = (float) ( f.generate() * fw.generate() / ( ut * ut ));
 				s += *op;
 			}
 
 			op++;
-			ut = t + ti + FracDelay;
+			ut = t + 1 + FracDelay;
 
-			if( ut > Len2 * ti )
+			if( ut > Len2 )
 			{
 				*op = (float) 0;
 			}
@@ -1033,7 +1009,7 @@ protected:
 		 * @param rf Resizing filters object.
 		 */
 
-		void update( const int SrcLen0, const int DstLen0, double o0,
+		void update( const int SrcLen0, const int DstLen0, const double o0,
 			CResizeFilters& rf )
 		{
 			if( SrcLen0 == SrcLen && DstLen0 == DstLen && o0 == o )
@@ -1057,16 +1033,12 @@ protected:
 			// offset in advance.
 
 			const double k = rf.k;
-			const int oss = rf.oss;
-			const int os = rf.os;
-			o0 *= os;
 
-			const int DstLen_m1 = ( DstLen - 1 ) << oss;
+			const int DstLen_m1 = DstLen - 1;
 			const double oe = o0 + k * DstLen_m1;
 			const int ie = (int) floor( oe );
-			const int ied = ie >> oss;
 
-			padr = ied + rf.fl2 + 1 - SrcLen;
+			padr = ie + rf.fl2 + 1 - SrcLen;
 
 			if( padr < 0 )
 			{
@@ -1076,25 +1048,24 @@ protected:
 			reallocBuf( pos, poslen, DstLen );
 
 			const size_t ElCountF = rf.ElCount * sizeof( float );
-			const int osm = rf.osm;
 			const int so = padl - fl2m1;
 			CResizePos* rp = pos;
 			int i;
 
-			for( i = 0; i < DstLen_m1; i += os )
+			for( i = 0; i < DstLen_m1; i++ )
 			{
 				const double ox = o0 + k * i;
 				const int ix = (int) floor( ox );
 
-				rp -> so = so + ( ix >> oss );
+				rp -> so = so + ix;
 				rp -> spo = rp -> so * ElCountF;
-				rp -> flt = rf.getFilter( ox - ix + ( ix & osm ));
+				rp -> flt = rf.getFilter( ox - ix );
 				rp++;
 			}
 
-			rp -> so = so + ied;
+			rp -> so = so + ie;
 			rp -> spo = rp -> so * ElCountF;
-			rp -> flt = rf.getFilter( oe - ie + ( ie & osm ));
+			rp -> flt = rf.getFilter( oe - ie );
 		}
 
 	protected:
