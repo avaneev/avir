@@ -8,8 +8,8 @@
  *
  * This is the self-contained inclusion file for the "LANCIR" image resizer,
  * a part of the AVIR library. Features scalar, AVX, SSE2, and NEON
- * optimizations as well as progressive resizing technique providing a better
- * CPU cache performance.
+ * optimizations as well as progressive resizing technique which provides a
+ * better CPU cache performance.
  *
  * AVIR Copyright (c) 2015-2021 Aleksey Vaneev
  *
@@ -43,7 +43,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  *
- * @version 3.0.3
+ * @version 3.0.4
  */
 
 #ifndef AVIR_CLANCIR_INCLUDED
@@ -193,7 +193,8 @@ public:
 	}
 
 	/**
-	 * Function resizes an image.
+	 * Function resizes an image and performs input-to-output type conversion,
+	 * if necessary.
 	 *
 	 * @param[in] SrcBuf Source image buffer.
 	 * @param SrcWidth Source image width, in pixels.
@@ -229,7 +230,7 @@ public:
 	 * @tparam Tout Output buffer element's type, treated like "Tin". If "Tin"
 	 * and "Tout" types do not match, an output value scaling will be applied.
 	 * Floating-point output will not clamped/clipped/saturated, integer
-	 * output is always clamped.
+	 * output is always rounded and clamped.
 	 */
 
 	template< typename Tin, typename Tout >
@@ -363,14 +364,14 @@ public:
 			float* const sp = spv + so * ElCount;
 
 			int cc = ( rp + bc - 1 ) -> so - so + kl; // Pixel copy count.
-			int rl = 0; // Left-most pixel replication count.
-			int rr = 0; // Right-most pixel replication count.
+			int rl = 0; // Leftmost pixel's replication count.
+			int rr = 0; // Rightmost pixel's replication count.
 
 			const int socc = so + cc;
 			const int spe = rsv.padl + SrcHeight;
 
 			// Calculate scanline copying and padding parameters, depending on
-			// the batch's size and vertical offset.
+			// the batch's size and its vertical offset.
 
 			if( so < rsv.padl )
 			{
@@ -531,14 +532,14 @@ protected:
 		///<
 	float* FltBuf0; ///< Intermediate resizing buffer.
 		///<
-	size_t FltBuf0Len; ///< Intermediate resizing buffer length.
+	size_t FltBuf0Len; ///< Length of "FltBuf0".
 		///<
 	float* FltBuf; ///< Address-aligned "FltBuf0".
 		///<
-	float* spv0; ///< Scanline buffer for vertical resizing, also used at
-		///< output.
+	float* spv0; ///< Scanline buffer for vertical resizing, also used at the
+		///< output stage.
 		///<
-	int spv0len; ///< Length of "spv".
+	int spv0len; ///< Length of "spv0".
 		///<
 	float* spv; ///< Address-aligned "spv0".
 		///<
@@ -586,12 +587,13 @@ protected:
 		/**
 		 * Function updates the resizing filter bank.
 		 *
-		 * @param la0 Lanczos "a" parameter value.
+		 * @param la0 Lanczos "a" parameter value (>=2.0), can be fractional.
 		 * @param k0 Resizing step.
 		 * @param oss0 Oversampling power-of-2 shift (>=0).
-		 * @param ElCount0 Image element count, may be used for alignment.
-		 * @return "True" if update occured and resizing positions should be
-		 * updated unconditionally.
+		 * @param ElCount0 Image's element count, may be used for SIMD filter
+		 * tap replication.
+		 * @return "True" if an update occured and scanline resizing positions
+		 * should be updated unconditionally.
 		 */
 
 		bool update( const double la0, const double k0, const int oss0,
@@ -638,7 +640,7 @@ protected:
 			FracCount = 500; // Enough for Lanczos-3 implicit 8-bit precision.
 
 			const int fc1os = FracCount * os + 1; // Add +1 to cover cases of
-				// fractional delay == 1.0 due to rounding.
+				// fractional delay == "os" due to rounding.
 
 			reallocBuf( Filters, FiltersLen, fc1os );
 			memset( Filters, 0, FiltersLen * sizeof( Filters[ 0 ]));
@@ -650,8 +652,7 @@ protected:
 
 		/**
 		 * Function returns filter at the specified fractional offset. This
-		 * function can only be called before the prior update() function
-		 * call.
+		 * function can only be called after a prior update() function call.
 		 *
 		 * @param x Fractional offset, [0; os].
 		 */
@@ -704,8 +705,8 @@ protected:
 			///<
 		int ElRepl; ///< The number of repetitions of each filter tap.
 			///<
-		static const int BufCount = 8; ///< The maximal number of buffers in
-			///< use.
+		static const int BufCount = 8; ///< The maximal number of buffers that
+			///< can be in use.
 			///<
 		static const int BufLen = 256; ///< The number of fractional filters
 			///< a single buffer may contain. Both "BufLen" and "BufCount"
@@ -726,7 +727,7 @@ protected:
 			///<
 		float** Filters; ///< Fractional delay filters for all positions.
 			///< A particular pointer equals NULL if a filter for such
-			///< position was not created yet.
+			///< position has not been created yet.
 			///<
 		int FiltersLen; ///< Allocated length of Filters, in elements.
 			///<
@@ -747,7 +748,7 @@ protected:
 
 		/**
 		 * Function changes the buffer currently being filled, check its
-		 * size and reallocates it if necessary, and resets fill counter.
+		 * size and reallocates it if necessary, then resets its fill counter.
 		 *
 		 * @param bi New current buffer index.
 		 */
@@ -773,7 +774,7 @@ protected:
 		{
 		public:
 			/**
-			 * Constructor initializes *this sine signal generator.
+			 * Constructor initializes *this sine-wave signal generator.
 			 *
 			 * @param si Sine function increment, in radians.
 			 * @param ph Starting phase, in radians. Add 0.5 * LANCIR_PI for
@@ -788,7 +789,7 @@ protected:
 			}
 
 			/**
-			 * @return The next value of the sine function, without biasing.
+			 * @return The next value of the sine-wave, without biasing.
 			 */
 
 			double generate()
@@ -911,7 +912,7 @@ protected:
 		 * @param[in,out] p Filter buffer pointer, should be sized to contain
 		 * "kl * erp" elements.
 		 * @param kl Filter kernel's length, in taps.
-		 * @param erp The number of replications to apply.
+		 * @param erp The number of repetitions to apply.
 		 */
 
 		static void replicateFilter( float* const p, const int kl,
@@ -971,31 +972,29 @@ protected:
 
 	struct CResizePos
 	{
-		uintptr_t spo; ///< Source scanline pixel offset, in bytes.
+		uintptr_t spo; ///< Source scanline's pixel offset, in bytes.
 			///<
 		const float* flt; ///< Fractional delay filter.
 			///<
-		int so; ///< Offset within source scanline, in pixels.
+		int so; ///< Offset within the source scanline, in pixels.
 			///<
 	};
 
 	/**
 	 * Class contains resizing positions, and prepares source scanline
-	 * positions for resize filtering.
+	 * positions for resize filtering. The public variables become available
+	 * after the update() function call.
 	 */
 
 	class CResizeScanline
 	{
 	public:
 		int padl; ///< Left-padding (in pixels) required for source scanline.
-			///< Available after the update() function call.
 			///<
 		int padr; ///< Right-padding (in pixels) required for source scanline.
-			///< Available after the update() function call.
 			///<
 		CResizePos* pos; ///< Source scanline positions (offsets) and filters
-			///< for each destination pixel position. Available after the
-			///< update() function call.
+			///< for each destination pixel position.
 			///<
 
 		CResizeScanline()
@@ -1054,7 +1053,7 @@ protected:
 				padl = 0;
 			}
 
-			// Make sure "padr" and "pos" are in sync: calculate ending pos
+			// Make sure "padr" and "pos" are in sync: calculate ending "pos"
 			// offset in advance.
 
 			const double k = rf.k;
@@ -1099,7 +1098,7 @@ protected:
 		}
 
 	protected:
-		int poslen; ///< Allocated "pos" buffer length.
+		int poslen; ///< Allocated "pos" buffer's length.
 			///<
 		int SrcLen; ///< Current SrcLen.
 			///<
@@ -1120,16 +1119,17 @@ protected:
 		///<
 
 	/**
-	 * Function copies scanline (fully or partially) from the source buffer in
-	 * its native format to the internal scanline buffer, in preparation for
-	 * vertical resizing. Variants for 1-4-channel images.
+	 * Function copies scanline (fully or partially) from the source buffer,
+	 * in its native format, to the internal scanline buffer, in preparation
+	 * for vertical resizing. Variants for 1-4-channel images.
 	 *
 	 * @param ip Source scanline buffer pointer.
 	 * @param ipinc "ip" increment per pixel.
 	 * @param op Output scanline pointer.
 	 * @param cc Source pixel copy count.
-	 * @param repl Left-most pixel replication count.
-	 * @param repr Right-most pixel replication count.
+	 * @param repl Leftmost pixel's replication count.
+	 * @param repr Rightmost pixel's replication count.
+	 * @tparam T Source buffer's element type.
 	 */
 
 	template< typename T >
@@ -1329,7 +1329,7 @@ protected:
 	 *
 	 * @param[in,out] op Scanline buffer to pad.
 	 * @param rs Scanline resizing positions object.
-	 * @param l Source scanline length, in pixels.
+	 * @param l Source scanline's length, in pixels.
 	 */
 
 	static void padScanline1h( float* op, CResizeScanline& rs, const int l )
@@ -1482,12 +1482,12 @@ protected:
 	 *
 	 * @param[in] ip Input resized scanline.
 	 * @param[out] op Output image buffer.
-	 * @param l Output scanline size (not pixel count).
+	 * @param l Output scanline's size (not pixel count).
 	 * @param Clamp Clamp high level, used if "IsOutFloat" is "false".
-	 * @param IsOutFloat "True" if floating-point output: no clamping is
+	 * @param IsOutFloat "True" if floating-point output, and no clamping is
 	 * necessary.
 	 * @param OutMul Output multiplier, for value range conversion.
-	 * @tparam T Output buffer element's type.
+	 * @tparam T Output buffer's element type.
 	 */
 
 	template< typename T >
@@ -2059,7 +2059,15 @@ protected:
 		}
 
 		_mm_storeu_ps( res, sumA );
+
+		float o0 = res[ 0 ] + res[ 3 ];
+		float o1 = res[ 1 ];
+		float o2 = res[ 2 ];
+
 		_mm256_storeu_ps( res + 4, sumB );
+
+		o1 += res[ 4 ];
+		o2 += res[ 5 ];
 
 		#elif defined( LANCIR_SSE2 )
 
@@ -2092,6 +2100,11 @@ protected:
 
 		_mm_storeu_ps( res, sumA );
 		_mm_storeu_ps( res + 4, sumB );
+
+		float o0 = res[ 0 ] + res[ 3 ];
+		float o1 = res[ 1 ] + res[ 4 ];
+		float o2 = res[ 2 ] + res[ 5 ];
+
 		_mm_storeu_ps( res + 8, sumC );
 
 		#elif defined( LANCIR_NEON )
@@ -2123,19 +2136,28 @@ protected:
 
 		vst1q_f32( res, sumA );
 		vst1q_f32( res + 4, sumB );
+
+		float o0 = res[ 0 ] + res[ 3 ];
+		float o1 = res[ 1 ] + res[ 4 ];
+		float o2 = res[ 2 ] + res[ 5 ];
+
 		vst1q_f32( res + 8, sumC );
 
 		#endif // defined( LANCIR_NEON )
 
-		op[ 0 ] = ( res[ 0 ] + res[ 3 ]) + ( res[ 6 ] + res[ 9 ]);
-		op[ 1 ] = ( res[ 1 ] + res[ 4 ]) + ( res[ 7 ] + res[ 10 ]);
-		op[ 2 ] = ( res[ 2 ] + res[ 5 ]) + ( res[ 8 ] + res[ 11 ]);
+		o0 += res[ 6 ] + res[ 9 ];
+		o1 += res[ 7 ] + res[ 10 ];
+		o2 += res[ 8 ] + res[ 11 ];
 
 		if( cir == 2 )
 		{
-			op[ 1 ] += flt[ 16 ] * ip[ 16 ];
-			op[ 2 ] += flt[ 17 ] * ip[ 17 ];
+			o1 += flt[ 16 ] * ip[ 16 ];
+			o2 += flt[ 17 ] * ip[ 17 ];
 		}
+
+		op[ 0 ] = o0;
+		op[ 1 ] = o1;
+		op[ 2 ] = o2;
 
 	#else // LANCIR_ALIGN > 4
 
