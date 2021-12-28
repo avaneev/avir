@@ -21,7 +21,7 @@
  *
  * @section license License
  *
- * License
+ * MIT License
  *
  * Copyright (c) 2015-2021 Aleksey Vaneev
  *
@@ -43,7 +43,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  *
- * @version 3.0.5
+ * @version 3.0.6
  */
 
 #ifndef AVIR_CLANCIR_INCLUDED
@@ -337,9 +337,9 @@ public:
 
 		int BatchSize = (int) ( NewHeight * CacheSize / ( OpSize + 1.0 ));
 
-		if( BatchSize < 20 )
+		if( BatchSize < 16 )
 		{
-			BatchSize = 20;
+			BatchSize = 16;
 		}
 
 		// Perform vertical resizing.
@@ -592,7 +592,7 @@ protected:
 		{
 			if( la0 == la && k0 == k && ElCount0 == ElCount )
 			{
-				return( true );
+				return( false );
 			}
 
 			la = la0;
@@ -645,7 +645,7 @@ protected:
 
 		const float* getFilter( const double x )
 		{
-			const int Frac = (int) floor( x * FracCount + 0.5 );
+			const int Frac = (int) ( x * FracCount + 0.5 );
 			float* flt = Filters[ Frac ];
 
 			if( flt != NULL )
@@ -1478,7 +1478,7 @@ protected:
 				}
 
 				int l4 = l >> 2;
-				l = l & 3;
+				l &= 3;
 
 				while( l4 != 0 )
 				{
@@ -1503,7 +1503,7 @@ protected:
 			}
 
 			int l4 = l >> 2;
-			l = l & 3;
+			l &= 3;
 			bool DoScalar = true;
 
 			if( sizeof( op[ 0 ]) == sizeof( ip[ 0 ]))
@@ -1567,7 +1567,7 @@ protected:
 		}
 
 		int l4 = l >> 2;
-		l = l & 3;
+		l &= 3;
 
 	#if defined( LANCIR_SSE2 )
 
