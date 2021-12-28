@@ -373,7 +373,9 @@ The following graph displays a comparison of an average dynamic range over a
 set of resizing factors. The dynamic range is estimated by performing
 two-way resizing, followed by deviation/error estimation relative to the
 original image. As you can see here, aliasing artifacts visibly reduce dynamic
-range above 0.5\*Nyquist.
+range above 0.5\*Nyquist. An interesting aspect of this measurement method is
+that it reflects modes of visual ringing very well: they correspond to the
+points on frequency response where differential approaches zero.
 
 ![DR plot](https://github.com/avaneev/avir/blob/master/other/_dr_up.png)
 
