@@ -107,6 +107,11 @@ constructor. AVIR's algorithm does not discern between channel packing order
 (`RGBA`, `ARGB`, `BGRA`, etc.), so if the `BGRA` ordered elements were passed
 to it, the result will be also `BGRA`.
 
+If the graphics library you are using returns a `uint32_t*` pointer to a raw
+4-channel packed pixel data, you will need to cast both the input and output
+pointers to the `uint8_t*` type when supplying them to the resizing function,
+and set the ElCount to 4.
+
 For low-ringing performance:
 
     avir :: CImageResizer<> ImageResizer( 8, 0, avir :: CImageResizerParamsLR() );
