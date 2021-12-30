@@ -21,7 +21,7 @@
  *
  * @section license License
  *
- * MIT License
+ * License
  *
  * Copyright (c) 2015-2021 Aleksey Vaneev
  *
@@ -43,7 +43,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  *
- * @version 3.0.6
+ * @version 3.0.7
  */
 
 #ifndef AVIR_CLANCIR_INCLUDED
@@ -220,11 +220,11 @@ public:
 	 * Positive offset moves the image to the left.
 	 * @param oy Start Y pixel offset within source image (can be negative).
 	 * Positive offset moves the image to the top.
-	 * @tparam Tin Input buffer element's type. Can be uint8_t (0-255 value
+	 * @tparam Tin Input buffer's element type. Can be uint8_t (0-255 value
 	 * range), uint16_t (0-65535 value range), float (0-1 value range), double
 	 * (0-1 value range). uint32_t type is treated as uint16_t. Signed integer
 	 * types and larger integer types are unsupported.
-	 * @tparam Tout Output buffer element's type, treated like "Tin". If "Tin"
+	 * @tparam Tout Output buffer's element type, treated like "Tin". If "Tin"
 	 * and "Tout" types do not match, an output value scaling will be applied.
 	 * Floating-point output will not clamped/clipped/saturated, integer
 	 * output is always rounded and clamped.
@@ -792,7 +792,7 @@ protected:
 		/**
 		 * Function creates a filter for the specified fractional delay. The
 		 * update() function should be called prior to calling this function.
-		 * The created filter is normalized.
+		 * The created filter is normalized (DC gain=1).
 		 *
 		 * @param[out] op Output filter buffer.
 		 * @param FracDelay Fractional delay, 0 to 1, inclusive.
@@ -1777,93 +1777,142 @@ protected:
 		const CResizePos* rp, const int kl, const int DstLen )
 	{
 		const int ci = kl >> 2;
-		const int cir = kl & 3;
 
-		LANCIR_LF_PRE
-
-		int c = ci;
-
-	#if defined( LANCIR_SSE2 )
-
-		__m128 sum = _mm_mul_ps( _mm_load_ps( flt ), _mm_loadu_ps( ip ));
-
-		while( --c != 0 )
+		if(( kl & 3 ) == 0 )
 		{
-			flt += 4;
-			ip += 4;
-			sum = _mm_add_ps( sum, _mm_mul_ps( _mm_load_ps( flt ),
-				_mm_loadu_ps( ip )));
+			LANCIR_LF_PRE
+
+			int c = ci;
+
+		#if defined( LANCIR_SSE2 )
+
+			__m128 sum = _mm_mul_ps( _mm_load_ps( flt ), _mm_loadu_ps( ip ));
+
+			while( --c != 0 )
+			{
+				flt += 4;
+				ip += 4;
+				sum = _mm_add_ps( sum, _mm_mul_ps( _mm_load_ps( flt ),
+					_mm_loadu_ps( ip )));
+			}
+
+			sum = _mm_add_ps( sum, _mm_movehl_ps( sum, sum ));
+
+			float res = _mm_cvtss_f32( _mm_add_ss( sum,
+				_mm_shuffle_ps( sum, sum, 1 )));
+
+		#elif defined( LANCIR_NEON )
+
+			float32x4_t sum = vmulq_f32( vld1q_f32( flt ), vld1q_f32( ip ));
+
+			while( --c != 0 )
+			{
+				flt += 4;
+				ip += 4;
+				sum = vmlaq_f32( sum, vld1q_f32( flt ), vld1q_f32( ip ));
+			}
+
+			float res = vaddvq_f32( sum );
+
+		#else // defined( LANCIR_NEON )
+
+			float sum0 = flt[ 0 ] * ip[ 0 ];
+			float sum1 = flt[ 1 ] * ip[ 1 ];
+			float sum2 = flt[ 2 ] * ip[ 2 ];
+			float sum3 = flt[ 3 ] * ip[ 3 ];
+
+			while( --c != 0 )
+			{
+				flt += 4;
+				ip += 4;
+				sum0 += flt[ 0 ] * ip[ 0 ];
+				sum1 += flt[ 1 ] * ip[ 1 ];
+				sum2 += flt[ 2 ] * ip[ 2 ];
+				sum3 += flt[ 3 ] * ip[ 3 ];
+			}
+
+			float res = ( sum0 + sum1 ) + ( sum2 + sum3 );
+
+		#endif // defined( LANCIR_NEON )
+
+			op[ 0 ] = res;
+			op += opinc;
+
+			LANCIR_LF_POST
 		}
-
-		sum = _mm_add_ps( sum, _mm_movehl_ps( sum, sum ));
-
-		if( cir == 2 )
+		else
 		{
+			LANCIR_LF_PRE
+
+			int c = ci;
+
+		#if defined( LANCIR_SSE2 )
+
+			__m128 sum = _mm_mul_ps( _mm_load_ps( flt ), _mm_loadu_ps( ip ));
+
+			while( --c != 0 )
+			{
+				flt += 4;
+				ip += 4;
+				sum = _mm_add_ps( sum, _mm_mul_ps( _mm_load_ps( flt ),
+					_mm_loadu_ps( ip )));
+			}
+
+			sum = _mm_add_ps( sum, _mm_movehl_ps( sum, sum ));
+
 			const __m128 sum2 = _mm_mul_ps( _mm_loadu_ps( flt + 2 ),
 				_mm_loadu_ps( ip + 2 ));
 
 			sum = _mm_add_ps( sum, _mm_movehl_ps( sum2, sum2 ));
-		}
 
-		float res = _mm_cvtss_f32( _mm_add_ss( sum,
-			_mm_shuffle_ps( sum, sum, 1 )));
+			float res = _mm_cvtss_f32( _mm_add_ss( sum,
+				_mm_shuffle_ps( sum, sum, 1 )));
 
-	#elif defined( LANCIR_NEON )
+		#elif defined( LANCIR_NEON )
 
-		float32x4_t sum = vmulq_f32( vld1q_f32( flt ), vld1q_f32( ip ));
+			float32x4_t sum = vmulq_f32( vld1q_f32( flt ), vld1q_f32( ip ));
 
-		while( --c != 0 )
-		{
-			flt += 4;
-			ip += 4;
-			sum = vmlaq_f32( sum, vld1q_f32( flt ), vld1q_f32( ip ));
-		}
+			while( --c != 0 )
+			{
+				flt += 4;
+				ip += 4;
+				sum = vmlaq_f32( sum, vld1q_f32( flt ), vld1q_f32( ip ));
+			}
 
-		float res;
-
-		if( cir == 2 )
-		{
 			const float32x2_t sum2 = vadd_f32( vget_high_f32( sum ),
 				vget_low_f32( sum ));
 
-			res = vaddv_f32( vmla_f32( sum2, vld1_f32( flt + 4 ),
+			float res = vaddv_f32( vmla_f32( sum2, vld1_f32( flt + 4 ),
 				vld1_f32( ip + 4 )));
-		}
-		else
-		{
-			res = vaddvq_f32( sum );
-		}
 
-	#else // defined( LANCIR_NEON )
+		#else // defined( LANCIR_NEON )
 
-		float sum0 = flt[ 0 ] * ip[ 0 ];
-		float sum1 = flt[ 1 ] * ip[ 1 ];
-		float sum2 = flt[ 2 ] * ip[ 2 ];
-		float sum3 = flt[ 3 ] * ip[ 3 ];
+			float sum0 = flt[ 0 ] * ip[ 0 ];
+			float sum1 = flt[ 1 ] * ip[ 1 ];
+			float sum2 = flt[ 2 ] * ip[ 2 ];
+			float sum3 = flt[ 3 ] * ip[ 3 ];
 
-		while( --c != 0 )
-		{
-			flt += 4;
-			ip += 4;
-			sum0 += flt[ 0 ] * ip[ 0 ];
-			sum1 += flt[ 1 ] * ip[ 1 ];
-			sum2 += flt[ 2 ] * ip[ 2 ];
-			sum3 += flt[ 3 ] * ip[ 3 ];
-		}
+			while( --c != 0 )
+			{
+				flt += 4;
+				ip += 4;
+				sum0 += flt[ 0 ] * ip[ 0 ];
+				sum1 += flt[ 1 ] * ip[ 1 ];
+				sum2 += flt[ 2 ] * ip[ 2 ];
+				sum3 += flt[ 3 ] * ip[ 3 ];
+			}
 
-		float res = ( sum0 + sum1 ) + ( sum2 + sum3 );
+			float res = ( sum0 + sum1 ) + ( sum2 + sum3 );
 
-		if( cir == 2 )
-		{
 			res += flt[ 4 ] * ip[ 4 ] + flt[ 5 ] * ip[ 5 ];
+
+		#endif // defined( LANCIR_NEON )
+
+			op[ 0 ] = res;
+			op += opinc;
+
+			LANCIR_LF_POST
 		}
-
-	#endif // defined( LANCIR_NEON )
-
-		op[ 0 ] = res;
-		op += opinc;
-
-		LANCIR_LF_POST
 	}
 
 	static void resize2( const float* const sp, float* op, const size_t opinc,
