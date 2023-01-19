@@ -332,6 +332,10 @@ being the "golden standard" for filter length per decibel of stop-band
 attenuation). This is a price that should be paid for stable spectral
 characteristics.
 
+This waterfall graph depicts the windowing function, at varying Alpha values.
+
+<img src="other/_peaked_cosine.png" width="550">
+
 ## LANCIR ##
 
 As a part of AVIR library, the `CLancIR` class is also offered which is an
@@ -380,13 +384,6 @@ points on frequency response where differential approaches zero.
 ![DR plot](https://github.com/avaneev/avir/blob/master/other/_dr_up.png)
 
 Note that on downsizing the response graphs look similar to these.
-
-## Peaked Cosine Windowing Function ##
-
-This waterfall graph depicts the windowing function used by AVIR, at varying
-Alpha values.
-
-<img src="other/_peaked_cosine.png" width="600">
 
 ## Users ##
 
