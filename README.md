@@ -381,6 +381,13 @@ points on frequency response where differential approaches zero.
 
 Note that on downsizing the response graphs look similar to these.
 
+## Peaked Cosine Windowing Function ##
+
+This waterfall graph depicts the windowing function used by AVIR, at varying
+Alpha values.
+
+<img src="other/_peaked_cosine.png" width="600">
+
 ## Users ##
 
 This library is used by:
