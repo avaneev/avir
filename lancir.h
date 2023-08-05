@@ -11,7 +11,7 @@
  * optimizations as well as progressive resizing technique which provides a
  * better CPU cache performance.
  *
- * AVIR Copyright (c) 2015-2021 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2023 Aleksey Vaneev
  *
  * @mainpage
  *
@@ -23,7 +23,7 @@
  *
  * License
  *
- * Copyright (c) 2015-2021 Aleksey Vaneev
+ * Copyright (c) 2015-2023 Aleksey Vaneev
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -43,7 +43,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  *
- * @version 3.0.7
+ * @version 3.0.8
  */
 
 #ifndef AVIR_CLANCIR_INCLUDED
@@ -63,10 +63,14 @@
 
 #elif defined( __SSE4_2__ ) || defined( __SSE4_1__ ) || \
 	defined( __SSSE3__ ) || defined( __SSE3__ ) || defined( __SSE2__ ) || \
-	defined( __x86_64__ ) || defined( _M_AMD64 ) || defined( _M_X64 ) || \
-	defined( __amd64 )
+	defined( __x86_64__ ) || defined( __amd64 ) || defined( _M_X64 ) || \
+	defined( _M_AMD64 ) || ( defined( _M_IX86_FP ) && _M_IX86_FP == 2 )
 
-	#include <immintrin.h>
+	#if defined( _MSC_VER )
+		#include <intrin.h>
+	#else // defined( _MSC_VER )
+		#include <emmintrin.h>
+	#endif // defined( _MSC_VER )
 
 	#define LANCIR_SSE2
 	#define LANCIR_ALIGN 16
@@ -525,18 +529,12 @@ public:
 
 protected:
 	float* FltBuf0; ///< Intermediate resizing buffer.
-		///<
 	size_t FltBuf0Len; ///< Length of "FltBuf0".
-		///<
 	float* FltBuf; ///< Address-aligned "FltBuf0".
-		///<
 	float* spv0; ///< Scanline buffer for vertical resizing, also used at the
 		///< output stage.
-		///<
 	int spv0len; ///< Length of "spv0".
-		///<
 	float* spv; ///< Address-aligned "spv0".
-		///<
 
 	class CResizeScanline;
 
@@ -552,7 +550,6 @@ protected:
 		int KernelLen; ///< Resampling filter kernel's length, taps. Available
 			///< after the update() function call. Always an even value,
 			///< should not be lesser than 4.
-			///<
 
 		CResizeFilters()
 			: Filters( NULL )
@@ -674,55 +671,35 @@ protected:
 
 	protected:
 		double NormFreq; ///< Normalized frequency of the filter.
-			///<
 		double Freq; ///< Circular frequency of the filter.
-			///<
 		double FreqA; ///< Circular frequency of the window function.
-			///<
 		double Len2; ///< Half resampling filter's length, unrounded.
-			///<
 		int fl2; ///< Half resampling filter's length, integer.
-			///<
 		int FracCount; ///< The number of fractional positions for which
 			///< filters can be created.
-			///<
 		int KernelLenA; ///< SIMD-aligned and replicated filter kernel's
 			///< length.
-			///<
 		int ElRepl; ///< The number of repetitions of each filter tap.
-			///<
 		static const int BufCount = 4; ///< The maximal number of buffers that
 			///< can be in use.
-			///<
 		static const int BufLen = 256; ///< The number of fractional filters
 			///< a single buffer may contain. Both "BufLen" and "BufCount"
 			///< should correspond to the "FracCount" used.
-			///<
 		float* Bufs0[ BufCount ]; ///< Buffers that hold all filters,
 			///< original.
-			///<
 		int Bufs0Len[ BufCount ]; ///< Allocated lengthes in "Bufs0", in
 			///< "float" elements.
-			///<
 		float* Bufs[ BufCount ]; ///< Address-aligned "Bufs0".
-			///<
 		int CurBuf; ///< Filter buffer currently being filled.
-			///<
 		int CurBufFill; ///< The number of fractional positions filled in the
 			///< current filter buffer.
-			///<
 		float** Filters; ///< Fractional delay filters for all positions.
 			///< A particular pointer equals NULL if a filter for such
 			///< position has not been created yet.
-			///<
 		int FiltersLen; ///< Allocated length of Filters, in elements.
-			///<
 		double la; ///< Current "la".
-			///<
 		double k; ///< Current "k".
-			///<
 		int ElCount; ///< Current "ElCount".
-			///<
 
 		/**
 		 * Function changes the buffer currently being filled, check its
@@ -782,11 +759,8 @@ protected:
 
 		private:
 			double svalue1; ///< Current sine value.
-				///<
 			double svalue2; ///< Previous sine value.
-				///<
 			double sincr; ///< Sine value increment.
-				///<
 		};
 
 		/**
@@ -949,11 +923,8 @@ protected:
 	struct CResizePos
 	{
 		uintptr_t spo; ///< Source scanline's pixel offset, in bytes.
-			///<
 		const float* flt; ///< Fractional delay filter.
-			///<
 		int so; ///< Offset within the source scanline, in pixels.
-			///<
 	};
 
 	/**
@@ -966,12 +937,9 @@ protected:
 	{
 	public:
 		int padl; ///< Left-padding (in pixels) required for source scanline.
-			///<
 		int padr; ///< Right-padding (in pixels) required for source scanline.
-			///<
 		CResizePos* pos; ///< Source scanline positions (offsets) and filters
 			///< for each destination pixel position.
-			///<
 
 		CResizeScanline()
 			: pos( NULL )
@@ -1070,24 +1038,16 @@ protected:
 
 	protected:
 		int poslen; ///< Allocated "pos" buffer's length.
-			///<
 		int SrcLen; ///< Current SrcLen.
-			///<
 		int DstLen; ///< Current DstLen.
-			///<
 		double o; ///< Current "o".
-			///<
 	};
 
 	CResizeFilters rfv; ///< Resizing filters for vertical resizing.
-		///<
 	CResizeFilters rfh0; ///< Resizing filters for horizontal resizing (may
 		///< not be in use).
-		///<
 	CResizeScanline rsv; ///< Vertical resize scanline.
-		///<
 	CResizeScanline rsh; ///< Horizontal resize scanline.
-		///<
 
 	/**
 	 * Function copies scanline (fully or partially) from the source buffer,
@@ -1476,30 +1436,32 @@ protected:
 					memcpy( op, ip, l * sizeof( op[ 0 ]));
 					return;
 				}
-
-				int l4 = l >> 2;
-				l &= 3;
-
-				while( l4 != 0 )
+				else
 				{
-					op[ 0 ] = (T) ip[ 0 ];
-					op[ 1 ] = (T) ip[ 1 ];
-					op[ 2 ] = (T) ip[ 2 ];
-					op[ 3 ] = (T) ip[ 3 ];
-					ip += 4;
-					op += 4;
-					l4--;
-				}
+					int l4 = l >> 2;
+					l &= 3;
 
-				while( l != 0 )
-				{
-					*op = (T) *ip;
-					ip++;
-					op++;
-					l--;
-				}
+					while( l4 != 0 )
+					{
+						op[ 0 ] = (T) ip[ 0 ];
+						op[ 1 ] = (T) ip[ 1 ];
+						op[ 2 ] = (T) ip[ 2 ];
+						op[ 3 ] = (T) ip[ 3 ];
+						ip += 4;
+						op += 4;
+						l4--;
+					}
 
-				return;
+					while( l != 0 )
+					{
+						*op = (T) *ip;
+						ip++;
+						op++;
+						l--;
+					}
+
+					return;
+				}
 			}
 
 			int l4 = l >> 2;
@@ -1629,7 +1591,7 @@ protected:
 				const __m128i v16 = _mm_shuffle_epi32( v16s, 0 | 2 << 2 );
 				const __m128i v8 = _mm_packus_epi16( v16, v16 );
 
-				*(uint32_t*) op = _mm_cvtsi128_si32( v8 );
+				*(uint32_t*) op = (uint32_t) _mm_cvtsi128_si32( v8 );
 
 				ip += 4;
 				op += 4;
@@ -1798,7 +1760,7 @@ protected:
 
 			sum = _mm_add_ps( sum, _mm_movehl_ps( sum, sum ));
 
-			float res = _mm_cvtss_f32( _mm_add_ss( sum,
+			_mm_store_ss( op, _mm_add_ss( sum,
 				_mm_shuffle_ps( sum, sum, 1 )));
 
 		#elif defined( LANCIR_NEON )
@@ -1812,7 +1774,7 @@ protected:
 				sum = vmlaq_f32( sum, vld1q_f32( flt ), vld1q_f32( ip ));
 			}
 
-			float res = vaddvq_f32( sum );
+			op[ 0 ] = vaddvq_f32( sum );
 
 		#else // defined( LANCIR_NEON )
 
@@ -1831,11 +1793,10 @@ protected:
 				sum3 += flt[ 3 ] * ip[ 3 ];
 			}
 
-			float res = ( sum0 + sum1 ) + ( sum2 + sum3 );
+			op[ 0 ] = ( sum0 + sum1 ) + ( sum2 + sum3 );
 
 		#endif // defined( LANCIR_NEON )
 
-			op[ 0 ] = res;
 			op += opinc;
 
 			LANCIR_LF_POST
@@ -1865,7 +1826,7 @@ protected:
 
 			sum = _mm_add_ps( sum, _mm_movehl_ps( sum2, sum2 ));
 
-			float res = _mm_cvtss_f32( _mm_add_ss( sum,
+			_mm_store_ss( op, _mm_add_ss( sum,
 				_mm_shuffle_ps( sum, sum, 1 )));
 
 		#elif defined( LANCIR_NEON )
@@ -1882,7 +1843,7 @@ protected:
 			const float32x2_t sum2 = vadd_f32( vget_high_f32( sum ),
 				vget_low_f32( sum ));
 
-			float res = vaddv_f32( vmla_f32( sum2, vld1_f32( flt + 4 ),
+			op[ 0 ] = vaddv_f32( vmla_f32( sum2, vld1_f32( flt + 4 ),
 				vld1_f32( ip + 4 )));
 
 		#else // defined( LANCIR_NEON )
@@ -1902,13 +1863,11 @@ protected:
 				sum3 += flt[ 3 ] * ip[ 3 ];
 			}
 
-			float res = ( sum0 + sum1 ) + ( sum2 + sum3 );
-
-			res += flt[ 4 ] * ip[ 4 ] + flt[ 5 ] * ip[ 5 ];
+			op[ 0 ] = ( sum0 + sum1 ) + ( sum2 + sum3 ) +
+				flt[ 4 ] * ip[ 4 ] + flt[ 5 ] * ip[ 5 ];
 
 		#endif // defined( LANCIR_NEON )
 
-			op[ 0 ] = res;
 			op += opinc;
 
 			LANCIR_LF_POST
