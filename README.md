@@ -335,6 +335,10 @@ This waterfall graph depicts the windowing function, at varying Alpha values.
 
 <img src="other/_peaked_cosine.png" width="550">
 
+Note that since mathematical formulas cannot be patented nor copyrighted, you
+are free to adopt this windowing function in your applications and research.
+Just consider giving it a proper credit.
+
 ## LANCIR ##
 
 As a part of AVIR library, the `CLancIR` class is also offered which is an
