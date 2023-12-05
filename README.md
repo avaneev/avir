@@ -1,4 +1,4 @@
-# AVIR - Image Resizing Algorithm #
+# AVIR - Image Resizing Algorithm (in C++) #
 
 ## Introduction ##
 
@@ -70,15 +70,13 @@ mantissa) type support. This library can also internally use the "double" and
 SIMD floating-point types during resizing if needed. This library does not
 have dependencies beside the standard C library.
 
-## Links ##
-
-* [Documentation](https://www.voxengo.com/public/avir/Documentation/)
-
 ## Usage Information ##
 
 The image resizer is represented by the `avir::CImageResizer<>` class, which
 is a single front-end class for the whole library. Basically, you do not need
 to use nor understand any other classes beside this class.
+
+* [Documentation](https://www.voxengo.com/public/avir/Documentation/)
 
 The code of the library resides in the "avir" C++ namespace, effectively
 isolating it from all other code. The code is thread-safe. You need just
@@ -396,8 +394,8 @@ This library is used by:
   * [MLV App](https://mlv.app/)
 
 [This video](https://www.youtube.com/watch?v=oNF-c6YX7-8) was "unsqueezed"
-with AVIR by a factor of 3 from ML RAW video, and at a final stage downsampled
-to 4K resolution.
+with AVIR by a factor of 3 from ML RAW video, and at the final stage was
+downsampled to 4K resolution.
 
 Please drop me a note at aleksey.vaneev@gmail.com and I will include a link to
 your software product to the list of users. This list is important at
