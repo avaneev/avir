@@ -43,7 +43,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  *
- * @version 3.0.8
+ * @version 3.0.9
  */
 
 #ifndef AVIR_CLANCIR_INCLUDED
@@ -792,9 +792,9 @@ protected:
 				t++;
 			}
 
-			int IsZeroX = ( fabs( FracDelay - 1.0 ) < 0x1p-42 );
+			int IsZeroX = ( fabs( FracDelay - 1.0 ) < 2.3e-13 );
 			int mt = 0 - IsZeroX;
-			IsZeroX = ( IsZeroX || fabs( FracDelay ) < 0x1p-42 );
+			IsZeroX = ( IsZeroX || fabs( FracDelay ) < 2.3e-13 );
 
 			while( t < mt )
 			{
