@@ -88,10 +88,12 @@ To resize images in your application, simply add 3 lines of code (note that
 you may need to change `ImageResizer( 8 )` here, to specify your image's true
 bit resolution, which may be 10 or even 16):
 
-    #include "avir.h"
-    avir :: CImageResizer<> ImageResizer( 8 );
-    ImageResizer.resizeImage( InBuf, 640, 480, 0, OutBuf, 1024, 768, 3, 0 );
-    (multi-threaded operation requires additional coding, see the documentation)
+```c++
+#include "avir.h"
+avir :: CImageResizer<> ImageResizer( 8 );
+ImageResizer.resizeImage( InBuf, 640, 480, 0, OutBuf, 1024, 768, 3, 0 );
+```
+(multi-threaded operation requires additional coding, see the documentation)
 
 AVIR works with header-less "raw" image buffers. If you are not too familiar
 with the low-level "packed interleaved" image storage format, the `InBuf` is
@@ -113,7 +115,9 @@ and set the ElCount to 4.
 
 For low-ringing performance:
 
-    avir :: CImageResizer<> ImageResizer( 8, 0, avir :: CImageResizerParamsLR() );
+```c++
+avir :: CImageResizer<> ImageResizer( 8, 0, avir :: CImageResizerParamsLR() );
+```
 
 To use the built-in gamma correction, which is disabled by default, an object
 of the `avir::CImageResizerVars` class with its variable `UseSRGBGamma` set to
@@ -121,15 +125,19 @@ of the `avir::CImageResizerVars` class with its variable `UseSRGBGamma` set to
 enabled, the gamma correction is applied to all channels (e.g. alpha-channel)
 in the current implementation.
 
-    avir :: CImageResizerVars Vars;
-    Vars.UseSRGBGamma = true;
+```c++
+avir :: CImageResizerVars Vars;
+Vars.UseSRGBGamma = true;
+```
 
 Dithering (error-diffusion dither which is perceptually good) can be enabled
 this way:
 
-    typedef avir :: fpclass_def< float, float,
-        avir :: CImageResizerDithererErrdINL< float > > fpclass_dith;
-    avir :: CImageResizer< fpclass_dith > ImageResizer( 8 );
+```c++
+typedef avir :: fpclass_def< float, float,
+    avir :: CImageResizerDithererErrdINL< float > > fpclass_dith;
+avir :: CImageResizer< fpclass_dith > ImageResizer( 8 );
+```
 
 The library is able to process images of any bit depth: this includes 8-bit,
 16-bit, float and double types. Larger integer and signed integer types are
@@ -163,8 +171,10 @@ parallel. Since the default interleaved processing algorithm itself remains
 non-SIMD, the use of SIMD internal types is not practical for 1- and 2-channel
 image resizing (due to overhead). SIMD internal type can be used this way:
 
-    #include "avir_float4_sse.h"
-    avir :: CImageResizer< avir :: fpclass_float4 > ImageResizer( 8 );
+```c++
+#include "avir_float4_sse.h"
+avir :: CImageResizer< avir :: fpclass_float4 > ImageResizer( 8 );
+```
 
 For 1-channel and 2-channel image resizing when AVX instructions are allowed
 it may be reasonable to utilize de-interleaved SIMD processing algorithm.
@@ -175,8 +185,10 @@ the dithering stage since recursive dithering cannot be parallelized). The
 internal type remains non-SIMD "float". De-interleaved algorithm can be used
 this way:
 
-    #include "avir_float8_avx.h"
-    avir :: CImageResizer< avir :: fpclass_float8_dil > ImageResizer( 8 );
+```c++
+#include "avir_float8_avx.h"
+avir :: CImageResizer< avir :: fpclass_float8_dil > ImageResizer( 8 );
+```
 
 It's important to note that on the latest Intel processors (i7-7700K and
 probably later) the use of the aforementioned SIMD-specific resizing code may
