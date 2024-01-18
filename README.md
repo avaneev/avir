@@ -6,7 +6,7 @@ Me, Aleksey Vaneev, is happy to offer you an open source image resizing /
 scaling library which has reached a production level of quality, and is
 ready to be incorporated into any project. This library features routines
 for both down- and upsizing of 8- and 16-bit, 1 to 4-channel images. Image
-resizing routines were implemented in a portable, multi-platform, header-only
+resizing routines were implemented in a portable, cross-platform, header-only
 C++ code, and have a high level of optimality. Beside resizing, this library
 offers a sub-pixel shift operation. Built-in sRGB gamma correction is
 available.
@@ -88,10 +88,12 @@ To resize images in your application, simply add 3 lines of code (note that
 you may need to change `ImageResizer( 8 )` here, to specify your image's true
 bit resolution, which may be 10 or even 16):
 
-    #include "avir.h"
-    avir :: CImageResizer<> ImageResizer( 8 );
-    ImageResizer.resizeImage( InBuf, 640, 480, 0, OutBuf, 1024, 768, 3, 0 );
-    (multi-threaded operation requires additional coding, see the documentation)
+```c++
+#include "avir.h"
+avir :: CImageResizer<> ImageResizer( 8 );
+ImageResizer.resizeImage( InBuf, 640, 480, 0, OutBuf, 1024, 768, 3, 0 );
+(multi-threaded operation requires additional coding, see the documentation)
+```
 
 AVIR works with header-less "raw" image buffers. If you are not too familiar
 with the low-level "packed interleaved" image storage format, the `InBuf` is
@@ -113,7 +115,9 @@ and set the ElCount to 4.
 
 For low-ringing performance:
 
-    avir :: CImageResizer<> ImageResizer( 8, 0, avir :: CImageResizerParamsLR() );
+```c++
+avir :: CImageResizer<> ImageResizer( 8, 0, avir :: CImageResizerParamsLR() );
+```
 
 To use the built-in gamma correction, which is disabled by default, an object
 of the `avir::CImageResizerVars` class with its variable `UseSRGBGamma` set to
@@ -121,15 +125,19 @@ of the `avir::CImageResizerVars` class with its variable `UseSRGBGamma` set to
 enabled, the gamma correction is applied to all channels (e.g. alpha-channel)
 in the current implementation.
 
-    avir :: CImageResizerVars Vars;
-    Vars.UseSRGBGamma = true;
+```c++
+avir :: CImageResizerVars Vars;
+Vars.UseSRGBGamma = true;
+```
 
 Dithering (error-diffusion dither which is perceptually good) can be enabled
 this way:
 
-    typedef avir :: fpclass_def< float, float,
-        avir :: CImageResizerDithererErrdINL< float > > fpclass_dith;
-    avir :: CImageResizer< fpclass_dith > ImageResizer( 8 );
+```c++
+typedef avir :: fpclass_def< float, float,
+    avir :: CImageResizerDithererErrdINL< float > > fpclass_dith;
+avir :: CImageResizer< fpclass_dith > ImageResizer( 8 );
+```
 
 The library is able to process images of any bit depth: this includes 8-bit,
 16-bit, float and double types. Larger integer and signed integer types are
@@ -163,8 +171,10 @@ parallel. Since the default interleaved processing algorithm itself remains
 non-SIMD, the use of SIMD internal types is not practical for 1- and 2-channel
 image resizing (due to overhead). SIMD internal type can be used this way:
 
-    #include "avir_float4_sse.h"
-    avir :: CImageResizer< avir :: fpclass_float4 > ImageResizer( 8 );
+```c++
+#include "avir_float4_sse.h"
+avir :: CImageResizer< avir :: fpclass_float4 > ImageResizer( 8 );
+```
 
 For 1-channel and 2-channel image resizing when AVX instructions are allowed
 it may be reasonable to utilize de-interleaved SIMD processing algorithm.
@@ -175,8 +185,10 @@ the dithering stage since recursive dithering cannot be parallelized). The
 internal type remains non-SIMD "float". De-interleaved algorithm can be used
 this way:
 
-    #include "avir_float8_avx.h"
-    avir :: CImageResizer< avir :: fpclass_float8_dil > ImageResizer( 8 );
+```c++
+#include "avir_float8_avx.h"
+avir :: CImageResizer< avir :: fpclass_float8_dil > ImageResizer( 8 );
+```
 
 It's important to note that on the latest Intel processors (i7-7700K and
 probably later) the use of the aforementioned SIMD-specific resizing code may
@@ -348,7 +360,7 @@ AVIR, but it is not thread-safe: each executing thread should have its own
 `CLancIR` object. This class was designed for cases of batch processing of
 same-sized frames like in video encoding, or for just-in-time resizing of
 an application's assets. This Lanczos implementation is likely one of the
-fastest available for CPUs; it features a radical AVX, SSE2, and NEON
+fastest available for CPUs; it features radical AVX, SSE2, and NEON
 optimizations.
 
 LANCIR offers up to three times faster image resizing in comparison to AVIR.
@@ -357,8 +369,8 @@ take 8- and 16-bit and float image buffers, its precision is limited to
 8-bit resizing.
 
 LANCIR should be seen as a bonus and as an "industrial standard" reference
-for comparison. LANCIR uses Lanczos filter "a" parameter equal to 3 which is
-similar to AVIR's default setting.
+for comparison. By default, LANCIR uses Lanczos filter's `a` parameter equal
+to 3 which is similar to AVIR's default setting.
 
 ## Comparison ##
 

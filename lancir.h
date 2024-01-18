@@ -4,14 +4,16 @@
 /**
  * @file lancir.h
  *
- * @brief The self-contained "lancir" inclusion file.
+ * @version 3.0.10
+ *
+ * @brief The self-contained header-only "LANCIR" image resizing algorithm.
  *
  * This is the self-contained inclusion file for the "LANCIR" image resizer,
  * a part of the AVIR library. Features scalar, AVX, SSE2, and NEON
- * optimizations as well as progressive resizing technique which provides a
- * better CPU cache performance.
+ * optimizations as well as batched resizing technique which provides a better
+ * CPU cache performance.
  *
- * AVIR Copyright (c) 2015-2023 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2024 Aleksey Vaneev
  *
  * @mainpage
  *
@@ -21,9 +23,9 @@
  *
  * @section license License
  *
- * License
+ * LICENSE:
  *
- * Copyright (c) 2015-2023 Aleksey Vaneev
+ * Copyright (c) 2015-2024 Aleksey Vaneev
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -42,8 +44,6 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
- *
- * @version 3.0.9
  */
 
 #ifndef AVIR_CLANCIR_INCLUDED
@@ -75,7 +75,7 @@
 	#define LANCIR_SSE2
 	#define LANCIR_ALIGN 16
 
-#elif defined( __aarch64__ ) || defined( __arm64__ ) || defined( __ARM_NEON )
+#elif defined( __aarch64__ ) || defined( __arm64 ) || defined( __ARM_NEON )
 
 	#include <arm_neon.h>
 
@@ -91,61 +91,71 @@
 namespace avir {
 
 /**
- * The macro equals to "pi" constant, fills 53-bit floating point mantissa.
+ * The macro equals to `pi` constant, fills 53-bit floating point mantissa.
  * Undefined at the end of file.
  */
 
 #define LANCIR_PI 3.1415926535897932
 
 /**
- * Function reallocates a typed buffer if its current length is smaller than
- * the required length.
+ * @brief LANCIR resizing parameters class.
  *
- * @param buf0 Reference to the pointer of the previously allocated buffer.
- * @param buf Reference to address-aligned "buf0" pointer.
- * @param len The current length of the "buf0".
- * @param newlen A new required length.
- * @tparam Tb Buffer element type.
- * @tparam Tl Length variable type.
+ * An object of this class, which can be allocated on stack, can be used to
+ * pass non-default parameters to the resizing algorithm. See the constructor
+ * for the default values.
  */
 
-template< typename Tb, typename Tl >
-inline void reallocBuf( Tb*& buf0, Tb*& buf, Tl& len, Tl newlen )
+class CLancIRParams
 {
-	newlen += LANCIR_ALIGN;
+public:
+	int SrcSSize; ///< Physical size of the source scanline, in elements (not
+		///< bytes). If this value is below 1, SrcWidth * ElCount will be
+		///< used.
+	int NewSSize; ///< Physical size of the destination scanline, in elements
+		///< (not bytes). If this value is below 1, NewWidth * ElCount will be
+		///< used.
+	double kx; ///< Resizing step - horizontal (one output pixel corresponds
+		///< to `k` input pixels). A downsizing factor if greater than 1.0;
+		///< upsizing factor if below or equal to 1.0. Multiply by -1 if you
+		///< would like to bypass `ox` and `oy` adjustment which is done by
+		///< default to produce a centered image. If this step value equals 0,
+		///< the step value will be chosen automatically.
+	double ky; ///< Resizing step - vertical. Same as `kx`.
+	double ox; ///< Start X pixel offset within the source image, can be
+		///< negative. A positive offset moves the image to the left.
+		///<
+	double oy; ///< Start Y pixel offset within the source image, can be
+		///< negative. A positive offset moves the image to the top.
+		///<
+	double la; ///< Lanczos window function's `a` parameter, greater or equal
+		///< to 2.0.
+		///<
 
-	if( newlen > len )
+	/**
+	 * Default constructor, with optional arguments that correspond to class
+	 * variables.
+	 *
+	 * @param aSrcSSize Physical size of the source scanline.
+	 * @param aNewSSize Physical size of the destination scanline.
+	 * @param akx Resizing step - horizontal.
+	 * @param aky Resizing step - vertical.
+	 * @param aox Start X pixel offset.
+	 * @param aoy Start Y pixel offset.
+	 */
+
+	CLancIRParams( const int aSrcSSize = 0, const int aNewSSize = 0,
+		const double akx = 0.0, const double aky = 0.0,
+		const double aox = 0.0, const double aoy = 0.0 )
+		: SrcSSize( aSrcSSize )
+		, NewSSize( aNewSSize )
+		, kx( akx )
+		, ky( aky )
+		, ox( aox )
+		, oy( aoy )
+		, la( 3.0 )
 	{
-		delete[] buf0;
-		len = newlen;
-		buf0 = new Tb[ newlen ];
-		buf = (Tb*) (( (uintptr_t) buf0 + LANCIR_ALIGN - 1 ) &
-			~(uintptr_t) ( LANCIR_ALIGN - 1 ));
 	}
-}
-
-/**
- * Function reallocates a typed buffer if its current length is smaller than
- * the required length.
- *
- * @param buf Reference to the pointer of the previously allocated buffer;
- * address alignment will not be applied.
- * @param len The current length of the "buf0".
- * @param newlen A new required length.
- * @tparam Tb Buffer element type.
- * @tparam Tl Length variable type.
- */
-
-template< typename Tb, typename Tl >
-inline void reallocBuf( Tb*& buf, Tl& len, const Tl newlen )
-{
-	if( newlen > len )
-	{
-		delete[] buf;
-		len = newlen;
-		buf = new Tb[ newlen ];
-	}
-}
+};
 
 /**
  * @brief LANCIR image resizer class.
@@ -184,6 +194,7 @@ public:
 		, FltBuf0Len( 0 )
 		, spv0( NULL )
 		, spv0len( 0 )
+		, spv( NULL )
 	{
 	}
 
@@ -194,114 +205,111 @@ public:
 	}
 
 	/**
-	 * Function resizes an image and performs input-to-output type conversion,
-	 * if necessary.
+	 * @brief Function resizes an image.
+	 *
+	 * Performs input-to-output type conversion, if necessary.
 	 *
 	 * @param[in] SrcBuf Source image buffer.
 	 * @param SrcWidth Source image width, in pixels.
 	 * @param SrcHeight Source image height, in pixels.
-	 * @param SrcSSize Physical size of the source scanline, in elements (not
-	 * bytes). If this value is below 1, SrcWidth * ElCount will be used.
-	 * @param[out] NewBuf Buffer to accept the resized image. Can be equal to
-	 * SrcBuf if the size of the resized image is smaller or equal to the
-	 * SrcBuf in size. Specifying a correctly-sized SrcBuf here may be an
-	 * efficient approach for just-in-time resizing of small graphical assets,
-	 * right after they were loaded: this may provide a better CPU cache
-	 * performance, and reduce the number of memory allocations.
+	 * @param[out] NewBuf Buffer to accept the resized image. Cannot be equal
+	 * to SrcBuf.
 	 * @param NewWidth New image width, in pixels.
 	 * @param NewHeight New image height, in pixels.
-	 * @param NewSSize Physical size of the destination scanline, in elements
-	 * (not bytes). If this value is below 1, NewWidth * ElCount will be used.
 	 * @param ElCount The number of elements (channels) used to store each
 	 * source and destination pixel (1-4).
-	 * @param kx0 Resizing step - horizontal (one output pixel corresponds to
-	 * "k" input pixels). A downsizing factor if > 1.0; upsizing factor
-	 * if <= 1.0. Multiply by -1 if you would like to bypass "ox" and "oy"
-	 * adjustment which is done by default to produce a centered image. If
-	 * the step value equals 0, the step value will be chosen automatically.
-	 * @param ky0 Resizing step - vertical. Same as "kx0".
-	 * @param ox Start X pixel offset within source image (can be negative).
-	 * Positive offset moves the image to the left.
-	 * @param oy Start Y pixel offset within source image (can be negative).
-	 * Positive offset moves the image to the top.
 	 * @tparam Tin Input buffer's element type. Can be uint8_t (0-255 value
 	 * range), uint16_t (0-65535 value range), float (0-1 value range), double
 	 * (0-1 value range). uint32_t type is treated as uint16_t. Signed integer
 	 * types and larger integer types are unsupported.
-	 * @tparam Tout Output buffer's element type, treated like "Tin". If "Tin"
-	 * and "Tout" types do not match, an output value scaling will be applied.
+	 * @tparam Tout Output buffer's element type, treated like `Tin`. If `Tin`
+	 * and `Tout` types do not match, an output value scaling will be applied.
 	 * Floating-point output will not clamped/clipped/saturated, integer
 	 * output is always rounded and clamped.
+	 * @return The number of available output scanlines. Equals to NewHeight,
+	 * or 0 on function parameters error.
 	 */
 
 	template< typename Tin, typename Tout >
-	void resizeImage( const Tin* const SrcBuf, const int SrcWidth,
-		const int SrcHeight, const int SrcSSize, Tout* const NewBuf,
-		const int NewWidth, const int NewHeight, const int NewSSize,
-		const int ElCount, const double kx0 = 0.0, const double ky0 = 0.0,
-		double ox = 0.0, double oy = 0.0 )
+	int resizeImage( const Tin* const SrcBuf, const int SrcWidth,
+		const int SrcHeight, Tout* const NewBuf, const int NewWidth,
+		const int NewHeight, const int ElCount,
+		const CLancIRParams* const aParams = NULL )
 	{
-		if( NewWidth <= 0 || NewHeight <= 0 )
+		if(( SrcWidth < 0 ) | ( SrcHeight < 0 ) | ( NewWidth <= 0 ) |
+			( NewHeight <= 0 ) | ( SrcBuf == NULL ) | ( NewBuf == NULL ) |
+			( (const void*) SrcBuf == (const void*) NewBuf ))
 		{
-			return;
+			return( 0 );
+		}
+
+		static const CLancIRParams DefParams;
+		const CLancIRParams& Params = ( aParams != NULL ?
+			*aParams : DefParams );
+
+		if( Params.la < 2.0 )
+		{
+			return( 0 );
 		}
 
 		const int OutSSize = NewWidth * ElCount;
-		const size_t NewScanlineSize = ( NewSSize < 1 ? OutSSize : NewSSize );
+		const size_t NewScanlineSize = ( Params.NewSSize < 1 ?
+			OutSSize : Params.NewSSize );
 
-		if( SrcWidth <= 0 || SrcHeight <= 0 )
+		if(( SrcWidth == 0 ) | ( SrcHeight == 0 ))
 		{
-			memset( NewBuf, 0, NewScanlineSize * NewHeight * sizeof( Tout ));
-			return;
+			Tout* op = NewBuf;
+			int i;
+
+			for( i = 0; i < NewHeight; i++ )
+			{
+				memset( op, 0, OutSSize * sizeof( Tout ));
+				op += NewScanlineSize;
+			}
+
+			return( NewHeight );
 		}
 
-		const size_t SrcScanlineSize = ( SrcSSize < 1 ?
-			SrcWidth * ElCount : SrcSSize );
+		const size_t SrcScanlineSize = ( Params.SrcSSize < 1 ?
+			SrcWidth * ElCount : Params.SrcSSize );
 
-		const double la = 3.0; // Lanczos "a" parameter.
+		double ox = Params.ox;
+		double oy = Params.oy;
 		double kx;
 		double ky;
 
-		if( kx0 == 0.0 )
+		if( Params.kx >= 0.0 )
 		{
-			kx = (double) SrcWidth / NewWidth;
+			kx = ( Params.kx == 0.0 ?
+				(double) SrcWidth / NewWidth : Params.kx );
+
 			ox += ( kx - 1.0 ) * 0.5;
 		}
 		else
-		if( kx0 > 0.0 )
 		{
-			kx = kx0;
-			ox += ( kx0 - 1.0 ) * 0.5;
-		}
-		else
-		{
-			kx = -kx0;
+			kx = -Params.kx;
 		}
 
-		if( ky0 == 0.0 )
+		if( Params.ky >= 0.0 )
 		{
-			ky = (double) SrcHeight / NewHeight;
+			ky = ( Params.ky == 0.0 ?
+				(double) SrcHeight / NewHeight : Params.ky );
+
 			oy += ( ky - 1.0 ) * 0.5;
 		}
 		else
-		if( ky0 > 0.0 )
 		{
-			ky = ky0;
-			oy += ( ky0 - 1.0 ) * 0.5;
-		}
-		else
-		{
-			ky = -ky0;
+			ky = -Params.ky;
 		}
 
-		if( rfv.update( la, ky, ElCount ))
+		if( rfv.update( Params.la, ky, ElCount ))
 		{
 			rsv.reset();
 			rsh.reset();
 		}
 
 		CResizeFilters* rfh; // Pointer to resizing filters for horizontal
-			// resizing, may equal to "rfv" if the same stepping is in use.
+			// resizing, may equal to `rfv` if the same stepping is in use.
 
 		if( kx == ky )
 		{
@@ -311,22 +319,14 @@ public:
 		{
 			rfh = &rfh0;
 
-			if( rfh0.update( la, kx, ElCount ))
+			if( rfh0.update( Params.la, kx, ElCount ))
 			{
 				rsh.reset();
 			}
 		}
 
-		rsv.update( SrcHeight, NewHeight, oy, rfv );
+		rsv.update( SrcHeight, NewHeight, oy, rfv, spv );
 		rsh.update( SrcWidth, NewWidth, ox, *rfh );
-
-		// Allocate/resize intermediate buffers.
-
-		const int svs = ( rsv.padl + SrcHeight + rsv.padr ) * ElCount;
-		reallocBuf( spv0, spv, spv0len, ( svs > OutSSize ? svs : OutSSize ));
-
-		const size_t FltWidthE = ( rsh.padl + SrcWidth + rsh.padr ) * ElCount;
-		reallocBuf( FltBuf0, FltBuf, FltBuf0Len, FltWidthE * NewHeight );
 
 		// Calculate vertical progressive resizing's batch size. Progressive
 		// batching is used to try to keep addressing within the cache
@@ -335,36 +335,60 @@ public:
 		// for multi-threaded resizing, or in a system-wide high-load
 		// situations.
 
+		const size_t FltWidthE = ( rsh.padl + SrcWidth + rsh.padr ) * ElCount;
 		const double CacheSize = 5500000.0; // Tuned for various CPUs.
 		const double OpSize = (double) SrcScanlineSize * SrcHeight *
 			sizeof( Tin ) + (double) FltWidthE * NewHeight * sizeof( float );
 
 		int BatchSize = (int) ( NewHeight * CacheSize / ( OpSize + 1.0 ));
 
-		if( BatchSize < 16 )
+		if( BatchSize < 8 )
 		{
-			BatchSize = 16;
+			BatchSize = 8;
 		}
 
-		// Perform vertical resizing.
+		if( BatchSize > NewHeight )
+		{
+			BatchSize = NewHeight;
+		}
 
-		float* opf = FltBuf + rsh.padl * ElCount;
-		const CResizePos* rp = rsv.pos;
+		// Allocate/resize intermediate buffers.
+
+		const int svs = ( rsv.padl + SrcHeight + rsv.padr ) * ElCount;
+		float* const pspv0 = spv0;
+		reallocBuf( spv0, spv, spv0len, ( svs > OutSSize ? svs : OutSSize ));
+		reallocBuf( FltBuf0, FltBuf, FltBuf0Len, FltWidthE * BatchSize );
+
+		if( spv0 != pspv0 )
+		{
+			rsv.updateSPO( rfv, spv );
+		}
+
+		// Prepare output-related constants.
+
+		const bool IsOutFloat = ( (Tout) 0.25 != 0 );
+		const int Clamp = ( sizeof( Tout ) == 1 ? 255 : 65535 );
+		const float OutMul = ( IsOutFloat ? 1.0f : (float) Clamp ) /
+			( (Tin) 0.25 != 0 ? 1 : ( sizeof( Tin ) == 1 ? 255 : 65535 ));
+
+		// Perform batched resizing.
+
+		const CResizePos* rpv = rsv.pos;
+		Tout* opn = NewBuf;
 		int bl = NewHeight;
-		int i;
 
 		while( bl > 0 )
 		{
 			const int bc = ( bl > BatchSize ? BatchSize : bl );
 
-			const int kl = rfv.KernelLen;
+			int kl = rfv.KernelLen;
 			const Tin* ip = SrcBuf;
-			float* op = opf;
+			float* op = FltBuf + rsh.padl * ElCount;
 
-			const int so = rp -> so;
+			const int so = (int) rpv[ 0 ].so;
 			float* const sp = spv + so * ElCount;
 
-			int cc = ( rp + bc - 1 ) -> so - so + kl; // Pixel copy count.
+			int cc = (int) rpv[ bc - 1 ].so - so + kl; // Pixel copy count.
 			int rl = 0; // Leftmost pixel's replication count.
 			int rr = 0; // Rightmost pixel's replication count.
 
@@ -415,12 +439,14 @@ public:
 
 			// Batched vertical resizing.
 
+			int i;
+
 			if( ElCount == 1 )
 			{
 				for( i = 0; i < SrcWidth; i++ )
 				{
 					copyScanline1v( ip, SrcScanlineSize, sp, cc, rl, rr );
-					resize1( spv, op, FltWidthE, rp, kl, bc );
+					resize1< false >( NULL, op, FltWidthE, rpv, kl, bc );
 					ip += 1;
 					op += 1;
 				}
@@ -431,7 +457,7 @@ public:
 				for( i = 0; i < SrcWidth; i++ )
 				{
 					copyScanline2v( ip, SrcScanlineSize, sp, cc, rl, rr );
-					resize2( spv, op, FltWidthE, rp, kl, bc );
+					resize2< false >( NULL, op, FltWidthE, rpv, kl, bc );
 					ip += 2;
 					op += 2;
 				}
@@ -442,7 +468,7 @@ public:
 				for( i = 0; i < SrcWidth; i++ )
 				{
 					copyScanline3v( ip, SrcScanlineSize, sp, cc, rl, rr );
-					resize3( spv, op, FltWidthE, rp, kl, bc );
+					resize3< false >( NULL, op, FltWidthE, rpv, kl, bc );
 					ip += 3;
 					op += 3;
 				}
@@ -452,89 +478,193 @@ public:
 				for( i = 0; i < SrcWidth; i++ )
 				{
 					copyScanline4v( ip, SrcScanlineSize, sp, cc, rl, rr );
-					resize4( spv, op, FltWidthE, rp, kl, bc );
+					resize4< false >( NULL, op, FltWidthE, rpv, kl, bc );
 					ip += 4;
 					op += 4;
 				}
 			}
 
-			opf += bc * FltWidthE;
-			rp += bc;
+			// Perform horizontal resizing batch, and produce final output.
+
+			float* ipf = FltBuf;
+			kl = rfh -> KernelLen;
+
+			if( ElCount == 1 )
+			{
+				for( i = 0; i < bc; i++ )
+				{
+					padScanline1h( ipf, rsh, SrcWidth );
+					resize1< true >( ipf, spv, 1, rsh.pos, kl, NewWidth );
+					copyToOutput( spv, opn, OutSSize, Clamp, IsOutFloat,
+						OutMul );
+
+					ipf += FltWidthE;
+					opn += NewScanlineSize;
+				}
+			}
+			else
+			if( ElCount == 2 )
+			{
+				for( i = 0; i < bc; i++ )
+				{
+					padScanline2h( ipf, rsh, SrcWidth );
+					resize2< true >( ipf, spv, 2, rsh.pos, kl, NewWidth );
+					copyToOutput( spv, opn, OutSSize, Clamp, IsOutFloat,
+						OutMul );
+
+					ipf += FltWidthE;
+					opn += NewScanlineSize;
+				}
+			}
+			else
+			if( ElCount == 3 )
+			{
+				for( i = 0; i < bc; i++ )
+				{
+					padScanline3h( ipf, rsh, SrcWidth );
+					resize3< true >( ipf, spv, 3, rsh.pos, kl, NewWidth );
+					copyToOutput( spv, opn, OutSSize, Clamp, IsOutFloat,
+						OutMul );
+
+					ipf += FltWidthE;
+					opn += NewScanlineSize;
+				}
+			}
+			else // ElCount == 4
+			{
+				for( i = 0; i < bc; i++ )
+				{
+					padScanline4h( ipf, rsh, SrcWidth );
+					resize4< true >( ipf, spv, 4, rsh.pos, kl, NewWidth );
+					copyToOutput( spv, opn, OutSSize, Clamp, IsOutFloat,
+						OutMul );
+
+					ipf += FltWidthE;
+					opn += NewScanlineSize;
+				}
+			}
+
+			rpv += bc;
 			bl -= bc;
 		}
 
-		// Prepare output-related constants.
+		return( NewHeight );
+	}
 
-		const bool IsOutFloat = ( (Tout) 0.25 != 0 );
-		const int Clamp = ( sizeof( Tout ) == 1 ? 255 : 65535 );
-		float OutMul = ( IsOutFloat ? 1.0f : (float) Clamp );
+	/**
+	 * @brief Legacy resizing function. Not recommended for new projects.
+	 *
+	 * See the prior resizeImage() function and CLancIRParams class for
+	 * details.
+	 *
+	 * @param[in] SrcBuf Source image buffer.
+	 * @param SrcWidth Source image width, in pixels.
+	 * @param SrcHeight Source image height, in pixels.
+	 * @param SrcSSize Physical size of the source scanline, in elements (not
+	 * bytes).
+	 * @param[out] NewBuf Buffer to accept the resized image. Cannot be equal
+	 * to SrcBuf.
+	 * @param NewWidth New image width, in pixels.
+	 * @param NewHeight New image height, in pixels.
+	 * @param NewSSize Physical size of the destination scanline, in elements
+	 * (not bytes).
+	 * @param ElCount The number of elements (channels) used to store each
+	 * source and destination pixel (1-4).
+	 * @param kx0 Resizing step - horizontal.
+	 * @param ky0 Resizing step - vertical. Same as `kx0`.
+	 * @param ox Start X pixel offset within the source image.
+	 * @param oy Start Y pixel offset within the source image.
+	 * @tparam Tin Input buffer's element type.
+	 * @tparam Tout Output buffer's element type.
+	 * @return The number of available output scanlines. Equals to NewHeight,
+	 * or 0 on function parameters error.
+	 */
 
-		if( (Tin) 0.25 == 0 )
-		{
-			OutMul /= ( sizeof( Tin ) == 1 ? 255 : 65535 );
-		}
+	template< typename Tin, typename Tout >
+	int resizeImage( const Tin* const SrcBuf, const int SrcWidth,
+		const int SrcHeight, const int SrcSSize, Tout* const NewBuf,
+		const int NewWidth, const int NewHeight, const int NewSSize,
+		const int ElCount, const double kx0 = 0.0, const double ky0 = 0.0,
+		double ox = 0.0, double oy = 0.0 )
+	{
+		CLancIRParams Params( SrcSSize, NewSSize, kx0, ky0, ox, oy );
 
-		// Perform horizontal resizing and produce final output.
-
-		float* ip = FltBuf;
-		Tout* opn = NewBuf;
-
-		if( ElCount == 1 )
-		{
-			for( i = 0; i < NewHeight; i++ )
-			{
-				padScanline1h( ip, rsh, SrcWidth );
-				resize1( ip, spv, 1, rsh.pos, rfh -> KernelLen, NewWidth );
-				copyToOutput( spv, opn, OutSSize, Clamp, IsOutFloat, OutMul );
-				ip += FltWidthE;
-				opn += NewScanlineSize;
-			}
-		}
-		else
-		if( ElCount == 2 )
-		{
-			for( i = 0; i < NewHeight; i++ )
-			{
-				padScanline2h( ip, rsh, SrcWidth );
-				resize2( ip, spv, 2, rsh.pos, rfh -> KernelLen, NewWidth );
-				copyToOutput( spv, opn, OutSSize, Clamp, IsOutFloat, OutMul );
-				ip += FltWidthE;
-				opn += NewScanlineSize;
-			}
-		}
-		else
-		if( ElCount == 3 )
-		{
-			for( i = 0; i < NewHeight; i++ )
-			{
-				padScanline3h( ip, rsh, SrcWidth );
-				resize3( ip, spv, 3, rsh.pos, rfh -> KernelLen, NewWidth );
-				copyToOutput( spv, opn, OutSSize, Clamp, IsOutFloat, OutMul );
-				ip += FltWidthE;
-				opn += NewScanlineSize;
-			}
-		}
-		else // ElCount == 4
-		{
-			for( i = 0; i < NewHeight; i++ )
-			{
-				padScanline4h( ip, rsh, SrcWidth );
-				resize4( ip, spv, 4, rsh.pos, rfh -> KernelLen, NewWidth );
-				copyToOutput( spv, opn, OutSSize, Clamp, IsOutFloat, OutMul );
-				ip += FltWidthE;
-				opn += NewScanlineSize;
-			}
-		}
+		return( resizeImage( SrcBuf, SrcWidth, SrcHeight, NewBuf, NewWidth,
+			NewHeight, ElCount, &Params ));
 	}
 
 protected:
 	float* FltBuf0; ///< Intermediate resizing buffer.
-	size_t FltBuf0Len; ///< Length of "FltBuf0".
-	float* FltBuf; ///< Address-aligned "FltBuf0".
+	size_t FltBuf0Len; ///< Length of `FltBuf0`.
+	float* FltBuf; ///< Address-aligned `FltBuf0`.
 	float* spv0; ///< Scanline buffer for vertical resizing, also used at the
 		///< output stage.
-	int spv0len; ///< Length of "spv0".
-	float* spv; ///< Address-aligned "spv0".
+		///<
+	int spv0len; ///< Length of `spv0`.
+	float* spv; ///< Address-aligned `spv0`.
+
+	/**
+	 * Function reallocates a typed buffer if its current length is smaller
+	 * than the required length.
+	 *
+	 * @param buf0 Reference to the pointer of the previously allocated
+	 * buffer.
+	 * @param buf Reference to address-aligned `buf0` pointer.
+	 * @param len The current length of the `buf0`.
+	 * @param newlen A new required length.
+	 * @tparam Tb Buffer element type.
+	 * @tparam Tl Length variable type.
+	 */
+
+	template< typename Tb, typename Tl >
+	static void reallocBuf( Tb*& buf0, Tb*& buf, Tl& len, Tl newlen )
+	{
+		newlen += LANCIR_ALIGN;
+
+		if( newlen > len )
+		{
+			if( buf0 != NULL )
+			{
+				delete[] buf0;
+				buf0 = NULL;
+				len = 0;
+			}
+
+			buf0 = new Tb[ newlen ];
+			len = newlen;
+			buf = (Tb*) (( (uintptr_t) buf0 + LANCIR_ALIGN - 1 ) &
+				~(uintptr_t) ( LANCIR_ALIGN - 1 ));
+		}
+	}
+
+	/**
+	 * Function reallocates a typed buffer if its current length is smaller
+	 * than the required length.
+	 *
+	 * @param buf Reference to the pointer of the previously allocated buffer;
+	 * address alignment will not be applied.
+	 * @param len The current length of the `buf0`.
+	 * @param newlen A new required length.
+	 * @tparam Tb Buffer element type.
+	 * @tparam Tl Length variable type.
+	 */
+
+	template< typename Tb, typename Tl >
+	static void reallocBuf( Tb*& buf, Tl& len, const Tl newlen )
+	{
+		if( newlen > len )
+		{
+			if( buf != NULL )
+			{
+				delete[] buf;
+				buf = NULL;
+				len = 0;
+			}
+
+			buf = new Tb[ newlen ];
+			len = newlen;
+		}
+	}
 
 	class CResizeScanline;
 
@@ -555,8 +685,6 @@ protected:
 			: Filters( NULL )
 			, FiltersLen( 0 )
 			, la( 0.0 )
-			, k( 0.0 )
-			, ElCount( 0 )
 		{
 			memset( Bufs0, 0, sizeof( Bufs0 ));
 			memset( Bufs0Len, 0, sizeof( Bufs0Len ));
@@ -577,11 +705,12 @@ protected:
 		/**
 		 * Function updates the resizing filter bank.
 		 *
-		 * @param la0 Lanczos "a" parameter value (>=2.0), can be fractional.
+		 * @param la0 Lanczos `a` parameter value (greater or equal to 2.0),
+		 * can be fractional.
 		 * @param k0 Resizing step.
 		 * @param ElCount0 Image's element count, may be used for SIMD filter
 		 * tap replication.
-		 * @return "True" if an update occured and scanline resizing positions
+		 * @return `true` if an update occured and scanline resizing positions
 		 * should be updated unconditionally.
 		 */
 
@@ -592,21 +721,17 @@ protected:
 				return( false );
 			}
 
-			la = la0;
-			k = k0;
-			ElCount = ElCount0;
-
-			NormFreq = ( k <= 1.0 ? 1.0 : 1.0 / k );
+			NormFreq = ( k0 <= 1.0 ? 1.0 : 1.0 / k0 );
 			Freq = LANCIR_PI * NormFreq;
-			FreqA = LANCIR_PI * NormFreq / la;
+			FreqA = LANCIR_PI * NormFreq / la0;
 
-			Len2 = la / NormFreq;
+			Len2 = la0 / NormFreq;
 			fl2 = (int) ceil( Len2 );
 			KernelLen = fl2 + fl2;
 
 			#if LANCIR_ALIGN > 4
 
-				ElRepl = ElCount;
+				ElRepl = ElCount0;
 				KernelLenA = KernelLen * ElRepl;
 
 				const int elalign =
@@ -621,14 +746,18 @@ protected:
 
 			#endif // LANCIR_ALIGN > 4
 
-			FracCount = 1000; // Enough for Lanczos-3 implicit 8-bit precision.
+			FracCount = 1000; // Enough for Lanczos implicit 8-bit precision.
 
-			reallocBuf( Filters, FiltersLen, FracCount + 1 ); // Add +1 to
-				// cover cases of fractional delay == 1.0 due to rounding.
+			la = 0.0;
+			reallocBuf( Filters, FiltersLen, FracCount + 1 );
 
 			memset( Filters, 0, FiltersLen * sizeof( Filters[ 0 ]));
 
 			setBuf( 0 );
+
+			la = la0;
+			k = k0;
+			ElCount = ElCount0;
 
 			return( true );
 		}
@@ -677,29 +806,35 @@ protected:
 		int fl2; ///< Half resampling filter's length, integer.
 		int FracCount; ///< The number of fractional positions for which
 			///< filters can be created.
+			///<
 		int KernelLenA; ///< SIMD-aligned and replicated filter kernel's
 			///< length.
+			///<
 		int ElRepl; ///< The number of repetitions of each filter tap.
 		static const int BufCount = 4; ///< The maximal number of buffers that
 			///< can be in use.
+			///<
 		static const int BufLen = 256; ///< The number of fractional filters
-			///< a single buffer may contain. Both "BufLen" and "BufCount"
-			///< should correspond to the "FracCount" used.
+			///< a single buffer may contain. Both `BufLen` and `BufCount`
+			///< should correspond to the `FracCount` used.
 		float* Bufs0[ BufCount ]; ///< Buffers that hold all filters,
 			///< original.
-		int Bufs0Len[ BufCount ]; ///< Allocated lengthes in "Bufs0", in
-			///< "float" elements.
-		float* Bufs[ BufCount ]; ///< Address-aligned "Bufs0".
+			///<
+		int Bufs0Len[ BufCount ]; ///< Allocated lengthes in `Bufs0`, in
+			///< `float` elements.
+			///<
+		float* Bufs[ BufCount ]; ///< Address-aligned `Bufs0`.
 		int CurBuf; ///< Filter buffer currently being filled.
 		int CurBufFill; ///< The number of fractional positions filled in the
 			///< current filter buffer.
+			///<
 		float** Filters; ///< Fractional delay filters for all positions.
 			///< A particular pointer equals NULL if a filter for such
 			///< position has not been created yet.
 		int FiltersLen; ///< Allocated length of Filters, in elements.
-		double la; ///< Current "la".
-		double k; ///< Current "k".
-		int ElCount; ///< Current "ElCount".
+		double la; ///< Current `la`.
+		double k; ///< Current `k`.
+		int ElCount; ///< Current `ElCount`.
 
 		/**
 		 * Function changes the buffer currently being filled, check its
@@ -722,14 +857,14 @@ protected:
 		 *
 		 * Class implements sine-wave signal generator without biasing, with
 		 * constructor-based initialization only. This generator uses an
-		 * oscillator instead of the "sin" function.
+		 * oscillator instead of the `sin` function.
 		 */
 
 		class CSineGen
 		{
 		public:
 			/**
-			 * Constructor initializes *this sine-wave signal generator.
+			 * Constructor initializes `this` sine-wave signal generator.
 			 *
 			 * @param si Sine function increment, in radians.
 			 * @param ph Starting phase, in radians. Add 0.5 * LANCIR_PI for
@@ -860,7 +995,7 @@ protected:
 		 * "in-place".
 		 *
 		 * @param[in,out] p Filter buffer pointer, should be sized to contain
-		 * "kl * erp" elements.
+		 * `kl * erp` elements.
 		 * @param kl Filter kernel's length, in taps.
 		 * @param erp The number of repetitions to apply.
 		 */
@@ -922,9 +1057,11 @@ protected:
 
 	struct CResizePos
 	{
-		uintptr_t spo; ///< Source scanline's pixel offset, in bytes.
 		const float* flt; ///< Fractional delay filter.
-		int so; ///< Offset within the source scanline, in pixels.
+		intptr_t spo; ///< Source scanline's pixel offset, in bytes, or
+			///< a direct pointer to scanline buffer.
+			///<
+		intptr_t so; ///< Offset within the source scanline, in pixels.
 	};
 
 	/**
@@ -940,13 +1077,12 @@ protected:
 		int padr; ///< Right-padding (in pixels) required for source scanline.
 		CResizePos* pos; ///< Source scanline positions (offsets) and filters
 			///< for each destination pixel position.
+			///<
 
 		CResizeScanline()
 			: pos( NULL )
 			, poslen( 0 )
 			, SrcLen( 0 )
-			, DstLen( 0 )
-			, o( 0.0 )
 		{
 		}
 
@@ -956,8 +1092,8 @@ protected:
 		}
 
 		/**
-		 * Function "resets" *this object so that the next update() call fully
-		 * updates the position buffer. Reset is necessary if the filter
+		 * Function "resets" `this` object so that the next update() call
+		 * fully updates the position buffer. Reset is necessary if the filter
 		 * object was updated.
 		 */
 
@@ -967,27 +1103,25 @@ protected:
 		}
 
 		/**
-		 * Function updates resizing positions, updates "padl", "padr" and
-		 * "pos" buffer.
+		 * Function updates resizing positions, updates `padl`, `padr`, and
+		 * `pos` buffer.
 		 *
 		 * @param SrcLen0 Source image scanline length, used to create a
 		 * scanline buffer without length pre-calculation.
 		 * @param DstLen0 Destination image scanline length.
 		 * @param o0 Initial source image offset.
 		 * @param rf Resizing filters object.
+		 * @param sp A pointer to scanline buffer, to use for absolute
+		 * scanline positioning, can be NULL.
 		 */
 
 		void update( const int SrcLen0, const int DstLen0, const double o0,
-			CResizeFilters& rf )
+			CResizeFilters& rf, float* const sp = NULL )
 		{
 			if( SrcLen0 == SrcLen && DstLen0 == DstLen && o0 == o )
 			{
 				return;
 			}
-
-			SrcLen = SrcLen0;
-			DstLen = DstLen0;
-			o = o0;
 
 			const int fl2m1 = rf.fl2 - 1;
 			padl = fl2m1 - (int) floor( o0 );
@@ -997,27 +1131,29 @@ protected:
 				padl = 0;
 			}
 
-			// Make sure "padr" and "pos" are in sync: calculate ending "pos"
+			// Make sure `padr` and `pos` are in sync: calculate ending `pos`
 			// offset in advance.
 
 			const double k = rf.k;
 
-			const int DstLen_m1 = DstLen - 1;
+			const int DstLen_m1 = DstLen0 - 1;
 			const double oe = o0 + k * DstLen_m1;
 			const int ie = (int) floor( oe );
 
-			padr = ie + rf.fl2 + 1 - SrcLen;
+			padr = ie + rf.fl2 + 1 - SrcLen0;
 
 			if( padr < 0 )
 			{
 				padr = 0;
 			}
 
-			reallocBuf( pos, poslen, DstLen );
+			SrcLen = 0;
+			reallocBuf( pos, poslen, DstLen0 );
 
-			const size_t ElCountF = rf.ElCount * sizeof( float );
+			const intptr_t ElCountF = rf.ElCount * sizeof( float );
 			const int so = padl - fl2m1;
 			CResizePos* rp = pos;
+			intptr_t rpso;
 			int i;
 
 			for( i = 0; i < DstLen_m1; i++ )
@@ -1025,27 +1161,54 @@ protected:
 				const double ox = o0 + k * i;
 				const int ix = (int) floor( ox );
 
-				rp -> so = so + ix;
-				rp -> spo = rp -> so * ElCountF;
 				rp -> flt = rf.getFilter( ox - ix );
+				rpso = so + ix;
+				rp -> spo = (intptr_t) sp + rpso * ElCountF;
+				rp -> so = rpso;
 				rp++;
 			}
 
-			rp -> so = so + ie;
-			rp -> spo = rp -> so * ElCountF;
 			rp -> flt = rf.getFilter( oe - ie );
+			rpso = so + ie;
+			rp -> spo = (intptr_t) sp + rpso * ElCountF;
+			rp -> so = rpso;
+
+			SrcLen = SrcLen0;
+			DstLen = DstLen0;
+			o = o0;
+		}
+
+		/**
+		 * Function updates `pos` buffer's `spo` values.
+		 *
+		 * @param rf Resizing filters object.
+		 * @param sp A pointer to scanline buffer, to use for absolute
+		 * scanline positioning, can be NULL.
+		 */
+
+		void updateSPO( CResizeFilters& rf, float* const sp )
+		{
+			const intptr_t ElCountF = rf.ElCount * sizeof( float );
+			CResizePos* const rp = pos;
+			int i;
+
+			for( i = 0; i < DstLen; i++ )
+			{
+				rp[ i ].spo = (intptr_t) sp + rp[ i ].so * ElCountF;
+			}
 		}
 
 	protected:
-		int poslen; ///< Allocated "pos" buffer's length.
-		int SrcLen; ///< Current SrcLen.
-		int DstLen; ///< Current DstLen.
-		double o; ///< Current "o".
+		int poslen; ///< Allocated `pos` buffer's length.
+		int SrcLen; ///< Current `SrcLen`.
+		int DstLen; ///< Current `DstLen`.
+		double o; ///< Current `o`.
 	};
 
 	CResizeFilters rfv; ///< Resizing filters for vertical resizing.
 	CResizeFilters rfh0; ///< Resizing filters for horizontal resizing (may
 		///< not be in use).
+		///<
 	CResizeScanline rsv; ///< Vertical resize scanline.
 	CResizeScanline rsh; ///< Horizontal resize scanline.
 
@@ -1055,7 +1218,7 @@ protected:
 	 * for vertical resizing. Variants for 1-4-channel images.
 	 *
 	 * @param ip Source scanline buffer pointer.
-	 * @param ipinc "ip" increment per pixel.
+	 * @param ipinc `ip` increment per pixel.
 	 * @param op Output scanline pointer.
 	 * @param cc Source pixel copy count.
 	 * @param repl Leftmost pixel's replication count.
@@ -1414,8 +1577,8 @@ protected:
 	 * @param[in] ip Input resized scanline.
 	 * @param[out] op Output image buffer.
 	 * @param l Output scanline's size (not pixel count).
-	 * @param Clamp Clamp high level, used if "IsOutFloat" is "false".
-	 * @param IsOutFloat "True" if floating-point output, and no clamping is
+	 * @param Clamp Clamp high level, used if `IsOutFloat` is `false`.
+	 * @param IsOutFloat `true` if floating-point output, and no clamping is
 	 * necessary.
 	 * @param OutMul Output multiplier, for value range conversion.
 	 * @tparam T Output buffer's element type.
@@ -1717,8 +1880,16 @@ protected:
 			const CResizePos* const rpe = rp + DstLen; \
 			while( rp != rpe ) \
 			{ \
-				const float* ip = (float*) ( (uintptr_t) sp + rp -> spo ); \
-				const float* flt = rp -> flt;
+				const float* flt = rp -> flt; \
+				const float* ip; \
+				if( UseSP ) \
+				{ \
+					ip = (float*) ( (intptr_t) sp + rp -> spo ); \
+				} \
+				else \
+				{ \
+					ip = (float*) rp -> spo; \
+				}
 
 	#define LANCIR_LF_POST \
 				rp++; \
@@ -1729,12 +1900,14 @@ protected:
 	 *
 	 * @param[in] sp Source scanline buffer.
 	 * @param[out] op Destination buffer.
-	 * @param opinc "op" increment.
+	 * @param opinc `op` increment.
 	 * @param rp Source scanline offsets and resizing filters.
 	 * @param kl Filter kernel's length, in taps (always an even value).
 	 * @param DstLen Destination length, in pixels.
+	 * @tparam UseSP `true` if `sp` pointer should be added to `spo`.
 	 */
 
+	template< bool UseSP >
 	static void resize1( const float* const sp, float* op, const size_t opinc,
 		const CResizePos* rp, const int kl, const int DstLen )
 	{
@@ -1874,6 +2047,7 @@ protected:
 		}
 	}
 
+	template< bool UseSP >
 	static void resize2( const float* const sp, float* op, const size_t opinc,
 		const CResizePos* rp, const int kl, const int DstLen )
 	{
@@ -2001,6 +2175,7 @@ protected:
 		LANCIR_LF_POST
 	}
 
+	template< bool UseSP >
 	static void resize3( const float* const sp, float* op, const size_t opinc,
 		const CResizePos* rp, const int kl, const int DstLen )
 	{
@@ -2180,6 +2355,7 @@ protected:
 		LANCIR_LF_POST
 	}
 
+	template< bool UseSP >
 	static void resize4( const float* const sp, float* op, const size_t opinc,
 		const CResizePos* rp, const int kl, const int DstLen )
 	{
