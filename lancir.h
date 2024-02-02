@@ -4,7 +4,7 @@
 /**
  * @file lancir.h
  *
- * @version 3.0.10
+ * @version 3.0.11
  *
  * @brief The self-contained header-only "LANCIR" image resizing algorithm.
  *
@@ -89,13 +89,6 @@
 #endif // NEON
 
 namespace avir {
-
-/**
- * The macro equals to `pi` constant, fills 53-bit floating point mantissa.
- * Undefined at the end of file.
- */
-
-#define LANCIR_PI 3.1415926535897932
 
 /**
  * @brief LANCIR resizing parameters class.
@@ -587,7 +580,7 @@ public:
 		const int ElCount, const double kx0 = 0.0, const double ky0 = 0.0,
 		double ox = 0.0, double oy = 0.0 )
 	{
-		CLancIRParams Params( SrcSSize, NewSSize, kx0, ky0, ox, oy );
+		const CLancIRParams Params( SrcSSize, NewSSize, kx0, ky0, ox, oy );
 
 		return( resizeImage( SrcBuf, SrcWidth, SrcHeight, NewBuf, NewWidth,
 			NewHeight, ElCount, &Params ));
@@ -721,9 +714,9 @@ protected:
 				return( false );
 			}
 
-			NormFreq = ( k0 <= 1.0 ? 1.0 : 1.0 / k0 );
-			Freq = LANCIR_PI * NormFreq;
-			FreqA = LANCIR_PI * NormFreq / la0;
+			const double NormFreq = ( k0 <= 1.0 ? 1.0 : 1.0 / k0 );
+			Freq = 3.1415926535897932 * NormFreq;
+			FreqA = Freq / la0;
 
 			Len2 = la0 / NormFreq;
 			fl2 = (int) ceil( Len2 );
@@ -799,7 +792,6 @@ protected:
 		}
 
 	protected:
-		double NormFreq; ///< Normalized frequency of the filter.
 		double Freq; ///< Circular frequency of the filter.
 		double FreqA; ///< Circular frequency of the window function.
 		double Len2; ///< Half resampling filter's length, unrounded.
@@ -867,7 +859,7 @@ protected:
 			 * Constructor initializes `this` sine-wave signal generator.
 			 *
 			 * @param si Sine function increment, in radians.
-			 * @param ph Starting phase, in radians. Add 0.5 * LANCIR_PI for
+			 * @param ph Starting phase, in radians. Add `0.5 x PI` for a
 			 * cosine function.
 			 */
 
@@ -929,7 +921,7 @@ protected:
 
 			int IsZeroX = ( fabs( FracDelay - 1.0 ) < 2.3e-13 );
 			int mt = 0 - IsZeroX;
-			IsZeroX = ( IsZeroX || fabs( FracDelay ) < 2.3e-13 );
+			IsZeroX |= ( fabs( FracDelay ) < 2.3e-13 );
 
 			while( t < mt )
 			{
@@ -1892,6 +1884,7 @@ protected:
 				}
 
 	#define LANCIR_LF_POST \
+				op += opinc; \
 				rp++; \
 			}
 
@@ -1970,8 +1963,6 @@ protected:
 
 		#endif // defined( LANCIR_NEON )
 
-			op += opinc;
-
 			LANCIR_LF_POST
 		}
 		else
@@ -2040,8 +2031,6 @@ protected:
 				flt[ 4 ] * ip[ 4 ] + flt[ 5 ] * ip[ 5 ];
 
 		#endif // defined( LANCIR_NEON )
-
-			op += opinc;
 
 			LANCIR_LF_POST
 		}
@@ -2169,8 +2158,6 @@ protected:
 		op[ 1 ] = sum1 + sum3;
 
 	#endif // defined( LANCIR_NEON )
-
-		op += opinc;
 
 		LANCIR_LF_POST
 	}
@@ -2350,8 +2337,6 @@ protected:
 
 	#endif // LANCIR_ALIGN > 4
 
-		op += opinc;
-
 		LANCIR_LF_POST
 	}
 
@@ -2447,8 +2432,6 @@ protected:
 
 	#endif // defined( LANCIR_NEON )
 
-		op += opinc;
-
 		LANCIR_LF_POST
 	}
 
@@ -2456,7 +2439,6 @@ protected:
 	#undef LANCIR_LF_POST
 };
 
-#undef LANCIR_PI
 #undef LANCIR_ALIGN
 
 } // namespace avir
