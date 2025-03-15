@@ -4,7 +4,7 @@
 /**
  * @file lancir.h
  *
- * @version 3.0.11
+ * @version 3.0.12
  *
  * @brief The self-contained header-only "LANCIR" image resizing algorithm.
  *
@@ -13,7 +13,7 @@
  * optimizations as well as batched resizing technique which provides a better
  * CPU cache performance.
  *
- * AVIR Copyright (c) 2015-2024 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2025 Aleksey Vaneev
  *
  * @mainpage
  *
@@ -25,7 +25,7 @@
  *
  * LICENSE:
  *
- * Copyright (c) 2015-2024 Aleksey Vaneev
+ * Copyright (c) 2015-2025 Aleksey Vaneev
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -63,8 +63,9 @@
 
 #elif defined( __SSE4_2__ ) || defined( __SSE4_1__ ) || \
 	defined( __SSSE3__ ) || defined( __SSE3__ ) || defined( __SSE2__ ) || \
-	defined( __x86_64__ ) || defined( __amd64 ) || defined( _M_X64 ) || \
-	defined( _M_AMD64 ) || ( defined( _M_IX86_FP ) && _M_IX86_FP == 2 )
+	defined( __x86_64__ ) || defined( __amd64 ) || defined( __amd64__ ) || \
+	defined( _M_X64 ) || defined( _M_AMD64 ) || \
+	( defined( _M_IX86_FP ) && _M_IX86_FP == 2 )
 
 	#if defined( _MSC_VER )
 		#include <intrin.h>
@@ -75,7 +76,8 @@
 	#define LANCIR_SSE2
 	#define LANCIR_ALIGN 16
 
-#elif defined( __aarch64__ ) || defined( __arm64 ) || defined( __ARM_NEON )
+#elif defined( __aarch64__ ) || defined( __arm64__ ) || \
+	defined( __ARM_NEON ) || defined( __ARM_NEON__ )
 
 	#include <arm_neon.h>
 
