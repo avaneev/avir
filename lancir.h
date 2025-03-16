@@ -4,7 +4,7 @@
 /**
  * @file lancir.h
  *
- * @version 3.0.12
+ * @version 3.0.13
  *
  * @brief The self-contained header-only "LANCIR" image resizing algorithm.
  *
@@ -61,11 +61,19 @@
 	#define LANCIR_SSE2 // Some functions use SSE2; AVX has a higher priority.
 	#define LANCIR_ALIGN 32
 
+#elif defined( __aarch64__ ) || defined( __arm64__ ) || defined( _M_ARM ) || \
+	defined( _M_ARM64 ) || defined( _M_ARM64EC ) || defined( __ARM_NEON ) || \
+	defined( __ARM_NEON__ )
+
+	#include <arm_neon.h>
+
+	#define LANCIR_NEON
+	#define LANCIR_ALIGN 16
+
 #elif defined( __SSE4_2__ ) || defined( __SSE4_1__ ) || \
 	defined( __SSSE3__ ) || defined( __SSE3__ ) || defined( __SSE2__ ) || \
 	defined( __x86_64__ ) || defined( __amd64 ) || defined( __amd64__ ) || \
-	defined( _M_X64 ) || defined( _M_AMD64 ) || \
-	( defined( _M_IX86_FP ) && _M_IX86_FP == 2 )
+	defined( _M_AMD64 ) || ( defined( _M_IX86_FP ) && _M_IX86_FP == 2 )
 
 	#if defined( _MSC_VER )
 		#include <intrin.h>
@@ -76,19 +84,11 @@
 	#define LANCIR_SSE2
 	#define LANCIR_ALIGN 16
 
-#elif defined( __aarch64__ ) || defined( __arm64__ ) || \
-	defined( __ARM_NEON ) || defined( __ARM_NEON__ )
-
-	#include <arm_neon.h>
-
-	#define LANCIR_NEON
-	#define LANCIR_ALIGN 16
-
-#else // NEON
+#else // SSE2
 
 	#define LANCIR_ALIGN 4
 
-#endif // NEON
+#endif // SSE2
 
 namespace avir {
 
