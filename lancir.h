@@ -4,7 +4,7 @@
 /**
  * @file lancir.h
  *
- * @version 3.0.15
+ * @version 3.0.16
  *
  * @brief The self-contained header-only "LANCIR" image resizing algorithm.
  *
@@ -132,6 +132,7 @@ namespace avir {
 	using std :: ceil;
 	using std :: sin;
 	using std :: cos;
+	using std :: size_t;
 	using std :: intptr_t;
 	using std :: uintptr_t;
 
