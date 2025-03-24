@@ -4,7 +4,7 @@
 /**
  * @file lancir.h
  *
- * @version 3.0.14
+ * @version 3.0.15
  *
  * @brief The self-contained header-only "LANCIR" image resizing algorithm.
  *
@@ -51,12 +51,14 @@
 
 #if __cplusplus >= 201103L
 
+	#include <cstddef>
 	#include <cstdint>
 	#include <cstring>
 	#include <cmath>
 
 #else // __cplusplus >= 201103L
 
+	#include <stddef.h>
 	#include <stdint.h>
 	#include <string.h>
 	#include <math.h>
@@ -121,6 +123,20 @@
 
 namespace avir {
 
+#if __cplusplus >= 201103L
+
+	using std :: memset;
+	using std :: memcpy;
+	using std :: fabs;
+	using std :: floor;
+	using std :: ceil;
+	using std :: sin;
+	using std :: cos;
+	using std :: intptr_t;
+	using std :: uintptr_t;
+
+#endif // __cplusplus >= 201103L
+
 /**
  * @brief LANCIR resizing parameters class.
  *
@@ -147,13 +163,10 @@ public:
 	double ky; ///< Resizing step - vertical. Same as `kx`.
 	double ox; ///< Start X pixel offset within the source image, can be
 		///< negative. A positive offset moves the image to the left.
-		///<
 	double oy; ///< Start Y pixel offset within the source image, can be
 		///< negative. A positive offset moves the image to the top.
-		///<
 	double la; ///< Lanczos window function's `a` parameter, greater or equal
 		///< to 2.0.
-		///<
 
 	/**
 	 * @brief Default constructor, with optional arguments that correspond to
@@ -524,7 +537,7 @@ public:
 				{
 					padScanline1h( ipf, rsh, SrcWidth );
 					resize1< true >( ipf, spv, 1, rsh.pos, kl, NewWidth );
-					outputScanline< IsUnityMul, IsOutFloat >( spv, opn,
+					outputScanline< IsOutFloat, IsUnityMul >( spv, opn,
 						OutSLen, Clamp, OutMul );
 
 					ipf += FltWidthE;
@@ -538,7 +551,7 @@ public:
 				{
 					padScanline2h( ipf, rsh, SrcWidth );
 					resize2< true >( ipf, spv, 2, rsh.pos, kl, NewWidth );
-					outputScanline< IsUnityMul, IsOutFloat >( spv, opn,
+					outputScanline< IsOutFloat, IsUnityMul >( spv, opn,
 						OutSLen, Clamp, OutMul );
 
 					ipf += FltWidthE;
@@ -552,7 +565,7 @@ public:
 				{
 					padScanline3h( ipf, rsh, SrcWidth );
 					resize3< true >( ipf, spv, 3, rsh.pos, kl, NewWidth );
-					outputScanline< IsUnityMul, IsOutFloat >( spv, opn,
+					outputScanline< IsOutFloat, IsUnityMul >( spv, opn,
 						OutSLen, Clamp, OutMul );
 
 					ipf += FltWidthE;
@@ -565,7 +578,7 @@ public:
 				{
 					padScanline4h( ipf, rsh, SrcWidth );
 					resize4< true >( ipf, spv, 4, rsh.pos, kl, NewWidth );
-					outputScanline< IsUnityMul, IsOutFloat >( spv, opn,
+					outputScanline< IsOutFloat, IsUnityMul >( spv, opn,
 						OutSLen, Clamp, OutMul );
 
 					ipf += FltWidthE;
@@ -628,7 +641,6 @@ protected:
 	float* FltBuf; ///< Address-aligned `FltBuf0`.
 	float* spv0; ///< Scanline buffer for vertical resizing, also used at the
 		///< output stage.
-		///<
 	int spv0len; ///< Length of `spv0`.
 	float* spv; ///< Address-aligned `spv0`.
 
@@ -842,28 +854,22 @@ protected:
 		int fl2; ///< Half resampling filter's length, integer.
 		int FracCount; ///< The number of fractional positions for which
 			///< filters can be created.
-			///<
 		int KernelLenA; ///< SIMD-aligned and replicated filter kernel's
 			///< length.
-			///<
 		int ElRepl; ///< The number of repetitions of each filter tap.
 		static const int BufCount = 4; ///< The maximal number of buffers
 			///< (filter batches) that can be in use.
-			///<
 		static const int BufLen = 256; ///< The number of fractional filters
 			///< a single buffer (filter batch) may contain. Both the `BufLen`
 			///< and `BufCount` should correspond to the `FracCount` used.
 		float* Bufs0[ BufCount ]; ///< Buffers that hold all filters,
 			///< original.
-			///<
 		int Bufs0Len[ BufCount ]; ///< Allocated lengthes in `Bufs0`, in
 			///< `float` elements.
-			///<
 		float* Bufs[ BufCount ]; ///< Address-aligned `Bufs0`.
 		int CurBuf; ///< Filter buffer currently being filled.
 		int CurBufFill; ///< The number of fractional positions filled in the
 			///< current filter buffer.
-			///<
 		float** Filters; ///< Fractional delay filters for all positions.
 			///< A particular pointer equals NULL if a filter for such
 			///< position has not been created yet.
@@ -902,7 +908,7 @@ protected:
 		{
 		public:
 			/**
-			 * @brief Constructor initializes `this` sine-wave signal
+			 * @brief Constructor initializes *this* sine-wave signal
 			 * generator.
 			 *
 			 * @param si Sine function increment, in radians.
@@ -1104,7 +1110,6 @@ protected:
 		const float* flt; ///< Fractional delay filter.
 		intptr_t spo; ///< Source scanline's pixel offset, in bytes, or
 			///< a direct pointer to scanline buffer.
-			///<
 		intptr_t so; ///< Offset within the source scanline, in pixels.
 	};
 
@@ -1123,7 +1128,6 @@ protected:
 		int padr; ///< Right-padding (in pixels) required for source scanline.
 		CResizePos* pos; ///< Source scanline positions (offsets) and filters
 			///< for each destination pixel position.
-			///<
 
 		CResizeScanline()
 			: pos( NULL )
@@ -1140,7 +1144,7 @@ protected:
 		/**
 		 * @brief Object's reset function.
 		 *
-		 * Function "resets" `this` object so that the next update() call
+		 * Function "resets" *this* object so that the next update() call
 		 * fully updates the position buffer. Reset is necessary if the
 		 * corresponding CResizeFilters object was updated.
 		 */
@@ -1261,7 +1265,6 @@ protected:
 	CResizeFilters rfv; ///< Resizing filters for vertical resizing.
 	CResizeFilters rfh0; ///< Resizing filters for horizontal resizing (may
 		///< not be in use).
-		///<
 	CResizeScanline rsv; ///< Vertical resize scanline.
 	CResizeScanline rsh; ///< Horizontal resize scanline.
 
@@ -1647,14 +1650,14 @@ protected:
 	 * @param Clamp Clamp high level, used if `IsOutFloat` is `false`.
 	 * @param OutMul Output multiplier, for value range conversion, applied
 	 * before clamping.
-	 * @tparam IsUnityMul `true` if multiplication is optional. However, even
-	 * if this parameter was specified as `true`, `OutMul` must be 1.
 	 * @tparam IsOutFloat `true` if floating-point output, and no clamping is
 	 * necessary.
+	 * @tparam IsUnityMul `true` if multiplication is optional. However, even
+	 * if this parameter was specified as `true`, `OutMul` must be 1.
 	 * @tparam T Output buffer's element type. Acquired implicitly.
 	 */
 
-	template< bool IsUnityMul, bool IsOutFloat, typename T >
+	template< bool IsOutFloat, bool IsUnityMul, typename T >
 	static void outputScanline( const float* ip, T* op, int l,
 		const int Clamp, const float OutMul )
 	{
@@ -1826,7 +1829,7 @@ protected:
 					const __m128i v16 = _mm_shuffle_epi32( v16s, 0 | 2 << 2 );
 					const __m128i v8 = _mm_packus_epi16( v16, v16 );
 
-					*(uint32_t*) op = (uint32_t) _mm_cvtsi128_si32( v8 );
+					*(int*) op = _mm_cvtsi128_si32( v8 );
 
 					ip += 4;
 					op += 4;
@@ -1852,7 +1855,7 @@ protected:
 						( IsUnityMul ? v : vmulq_f32( v, om )),
 						maxv ), minv );
 
-					vst1q_u32( (uint32_t*) op, vcvtq_u32_f32( vaddq_f32(
+					vst1q_u32( (unsigned int*) op, vcvtq_u32_f32( vaddq_f32(
 						cv, v05 )));
 
 					ip += 4;
@@ -1875,7 +1878,7 @@ protected:
 
 					const uint16x4_t v16 = vmovn_u32( v32 );
 
-					vst1_u16( (uint16_t*) op, v16 );
+					vst1_u16( (unsigned short*) op, v16 );
 
 					ip += 4;
 					op += 4;
@@ -1897,7 +1900,7 @@ protected:
 					const uint16x4_t v16 = vmovn_u32( v32 );
 					const uint8x8_t v8 = vmovn_u16( vcombine_u16( v16, v16 ));
 
-					*(uint32_t*) op = vget_lane_u32( (uint32x2_t) v8, 0 );
+					*(unsigned int*) op = vget_lane_u32( (uint32x2_t) v8, 0 );
 
 					ip += 4;
 					op += 4;
@@ -1972,11 +1975,11 @@ protected:
 				const float* ip; \
 				if( UseSP ) \
 				{ \
-					ip = (float*) ( (intptr_t) sp + rp -> spo ); \
+					ip = (const float*) ( (intptr_t) sp + rp -> spo ); \
 				} \
 				else \
 				{ \
-					ip = (float*) rp -> spo; \
+					ip = (const float*) rp -> spo; \
 				}
 
 	/**

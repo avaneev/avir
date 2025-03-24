@@ -2,6 +2,7 @@ PROJECT_NAME           = "AVIR"
 PROJECT_BRIEF          = "High-quality pro image resizing library"
 OUTPUT_DIRECTORY       = ./
 SHORT_NAMES            = YES
+EXTRACT_STATIC         = YES
 TAB_SIZE               = 4
 OPTIMIZE_OUTPUT_FOR_C  = NO
 INLINE_INFO            = NO
