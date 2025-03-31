@@ -4,7 +4,7 @@
 /**
  * @file lancir.h
  *
- * @version 3.0.17
+ * @version 3.0.18
  *
  * @brief Self-contained header-only "LANCIR" image resizing algorithm.
  *
@@ -58,7 +58,6 @@
 
 #else // __cplusplus >= 201103L
 
-	#include <cstddef>
 	#include <stdint.h>
 
 #endif // __cplusplus >= 201103L
@@ -134,10 +133,10 @@ using std :: floor;
 using std :: ceil;
 using std :: sin;
 using std :: cos;
+using std :: size_t;
 
 #if __cplusplus >= 201103L
 
-	using std :: size_t;
 	using std :: intptr_t;
 	using std :: uintptr_t;
 
