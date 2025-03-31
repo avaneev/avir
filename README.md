@@ -1,6 +1,6 @@
-# AVIR - Image Resizing Algorithm (in C++) #
+# AVIR - Image Resizing Algorithm (in C++)
 
-## Introduction ##
+## Introduction
 
 Me, Aleksey Vaneev, is happy to offer you an open source image resizing /
 scaling library which has reached a production level of quality, and is
@@ -47,7 +47,7 @@ original AVIR image resizing algorithm.
 P.S. Please credit the author of this library in your documentation in the
 following way: "AVIR image resizing algorithm designed by Aleksey Vaneev".
 
-## Affine and Non-Linear Transformations ##
+## Affine and Non-Linear Transformations
 
 AVIR does not offer affine and non-linear image transformations "out of the
 box". Since upsizing is a relatively fast operation in AVIR (required time
@@ -64,14 +64,14 @@ serious drawback is the increased memory requirement). Note that affine
 transformations that change image proportions should first apply proportion
 change during upsizing.
 
-## Requirements ##
+## Requirements
 
 C++ compiler and system with efficient "float" floating-point (24-bit
 mantissa) type support. This library can also internally use the "double" and
 SIMD floating-point types during resizing if needed. This library does not
 have dependencies beside the standard C library.
 
-## Usage Information ##
+## Usage Information
 
 The image resizer is represented by the `avir::CImageResizer<>` class, which
 is a single front-end class for the whole library. Basically, you do not need
@@ -163,7 +163,7 @@ Multi-threaded operation is not provided by this library "out of the box".
 The multi-threaded (horizontally-threaded) infrastructure is available, but
 requires additional system-specific interfacing code for engagement.
 
-## SIMD Usage Information ##
+## SIMD Usage Information
 
 This library is capable of using SIMD floating-point types for internal
 variables. This means that up to 4 color channels can be processed in
@@ -200,7 +200,7 @@ C++ Compiler 18.2 with /QxSSE4.2, or especially with the /QxCORE-AVX2 option.
 SSE-specific resizing code may still be a little bit more efficient for
 4-channel image resizing.
 
-## Notes ##
+## Notes
 
 This library was tested for compatibility with [GNU C++](http://gcc.gnu.org/),
 [Microsoft Visual C++](http://www.microsoft.com/visualstudio/eng/products/visual-studio-express-products),
@@ -245,7 +245,7 @@ low-amplitude oscillations produced by resizing at object boundaries are
 amplified by gamma correction. This can also have an effect of reduced
 contrast.
 
-## Interpolation Discussion ##
+## Interpolation Discussion
 
 The use of certain low-pass filters and 2X upsampling in this library is
 hardly debatable, because they are needed to attain a certain anti-aliasing
@@ -267,7 +267,7 @@ and maximal low-pass filtering at 0.5 offset). 18-tap filter also offers a
 superior stop-band attenuation which almost guarantees absence of artifacts if
 the image is considerably sharpened afterwards.
 
-## Why 2X upsizing in AVIR? ##
+## Why 2X upsizing in AVIR?
 
 Classic approaches to image resizing do not perform an additional 2X upsizing.
 So, why such upsizing is needed at all in AVIR? Indeed, image resizing can be
@@ -305,7 +305,7 @@ by small "k" factors, in the range 0.5 to 2: resizing approaches that do not
 perform 2X upsizing usually cannot design a good interpolation filter for such
 factors just because there is not enough spectral space available.
 
-## Why Peaked Cosine in AVIR? ##
+## Why Peaked Cosine in AVIR?
 
 First of all, AVIR is a general solution to image resizing problem. That is
 why it should not be directly compared to "spline interpolation" or "Lanczos
@@ -351,7 +351,7 @@ Note that since mathematical formulas cannot be patented nor copyrighted, you
 are free to adopt this windowing function in your applications and research.
 Just consider giving it a proper credit.
 
-## LANCIR ##
+## LANCIR
 
 As a part of AVIR library, the `CLancIR` class is also offered which is an
 optimal implementation of [Lanczos](https://en.wikipedia.org/wiki/Lanczos_resampling)
@@ -372,7 +372,7 @@ LANCIR should be seen as a bonus and as an "industrial standard" reference
 for comparison. By default, LANCIR uses Lanczos filter's `a` parameter equal
 to 3 which is similar to AVIR's default setting.
 
-## Comparison ##
+## Comparison
 
 This graph displays a comparison of AVIR 2.9 (default parameters) and
 Lanczos-3 image resizing algorithm in the area of frequency response.
@@ -400,7 +400,7 @@ points on frequency response where differential approaches zero.
 
 Note that on downsizing the response graphs look similar to these.
 
-## Users ##
+## Users
 
 This library is used by:
 
@@ -418,7 +418,7 @@ Please drop me a note at aleksey.vaneev@gmail.com and I will include a link to
 your software product to the list of users. This list is important at
 maintaining confidence in this library among the interested parties.
 
-## Change Log ##
+## Change Log
 
 Version 3.0:
 

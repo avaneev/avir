@@ -4,11 +4,11 @@
 /**
  * @file lancir.h
  *
- * @version 3.0.16
+ * @version 3.0.17
  *
- * @brief The self-contained header-only "LANCIR" image resizing algorithm.
+ * @brief Self-contained header-only "LANCIR" image resizing algorithm.
  *
- * This is the self-contained inclusion file for the "LANCIR" image resizer,
+ * This is a self-contained inclusion file for the "LANCIR" image resizer,
  * a part of the AVIR library. Features scalar, AVX, SSE2, and NEON
  * optimizations as well as batched resizing technique which provides a better
  * CPU cache performance.
@@ -49,19 +49,17 @@
 #ifndef AVIR_CLANCIR_INCLUDED
 #define AVIR_CLANCIR_INCLUDED
 
+#include <cstring>
+#include <cmath>
+
 #if __cplusplus >= 201103L
 
-	#include <cstddef>
 	#include <cstdint>
-	#include <cstring>
-	#include <cmath>
 
 #else // __cplusplus >= 201103L
 
-	#include <stddef.h>
+	#include <cstddef>
 	#include <stdint.h>
-	#include <string.h>
-	#include <math.h>
 
 #endif // __cplusplus >= 201103L
 
@@ -69,6 +67,12 @@
  * @def LANCIR_ALIGN
  * @brief Address alignment (granularity) used by resizing functions,
  * in bytes.
+ */
+
+/**
+ * @def LANCIR_NULLPTR
+ * @brief Macro is defined, if `nullptr` workaround is in use, for pre-C++11
+ * compilers. Undefined at the end of file.
  */
 
 #if defined( __AVX__ )
@@ -123,18 +127,29 @@
 
 namespace avir {
 
+using std :: memcpy;
+using std :: memset;
+using std :: fabs;
+using std :: floor;
+using std :: ceil;
+using std :: sin;
+using std :: cos;
+
 #if __cplusplus >= 201103L
 
-	using std :: memset;
-	using std :: memcpy;
-	using std :: fabs;
-	using std :: floor;
-	using std :: ceil;
-	using std :: sin;
-	using std :: cos;
 	using std :: size_t;
 	using std :: intptr_t;
 	using std :: uintptr_t;
+
+#else // __cplusplus >= 201103L
+
+	// Workaround for pre-C++11 compilers. `nullptr` is a keyword, and not a
+	// macro, but check if such workaround is already in place.
+
+	#if !defined( nullptr )
+		#define nullptr NULL
+		#define LANCIR_NULLPTR
+	#endif // !defined( nullptr )
 
 #endif // __cplusplus >= 201103L
 
@@ -229,11 +244,11 @@ private:
 
 public:
 	CLancIR()
-		: FltBuf0( NULL )
+		: FltBuf0( nullptr )
 		, FltBuf0Len( 0 )
-		, spv0( NULL )
+		, spv0( nullptr )
 		, spv0len( 0 )
-		, spv( NULL )
+		, spv( nullptr )
 	{
 	}
 
@@ -273,17 +288,18 @@ public:
 	int resizeImage( const Tin* const SrcBuf, const int SrcWidth,
 		const int SrcHeight, Tout* const NewBuf, const int NewWidth,
 		const int NewHeight, const int ElCount,
-		const CLancIRParams* const aParams = NULL )
+		const CLancIRParams* const aParams = nullptr )
 	{
-		if(( SrcWidth < 0 ) | ( SrcHeight < 0 ) | ( NewWidth <= 0 ) |
-			( NewHeight <= 0 ) | ( SrcBuf == NULL ) | ( NewBuf == NULL ) |
+		if(( SrcWidth < 0 ) | ( SrcHeight < 0 ) |
+			( NewWidth <= 0 ) | ( NewHeight <= 0 ) |
+			( SrcBuf == nullptr ) | ( NewBuf == nullptr ) |
 			( (const void*) SrcBuf == (const void*) NewBuf ))
 		{
 			return( 0 );
 		}
 
 		static const CLancIRParams DefParams;
-		const CLancIRParams& Params = ( aParams != NULL ?
+		const CLancIRParams& Params = ( aParams != nullptr ?
 			*aParams : DefParams );
 
 		if( Params.la < 2.0 )
@@ -292,7 +308,7 @@ public:
 		}
 
 		const int OutSLen = NewWidth * ElCount;
-		const size_t NewScanlineSize = ( Params.NewSSize < 1 ?
+		const size_t NewScanlineSize = (size_t) ( Params.NewSSize < 1 ?
 			OutSLen : Params.NewSSize );
 
 		if(( SrcWidth == 0 ) | ( SrcHeight == 0 ))
@@ -302,14 +318,14 @@ public:
 
 			for( i = 0; i < NewHeight; i++ )
 			{
-				memset( op, 0, OutSLen * sizeof( Tout ));
+				memset( op, 0, (size_t) OutSLen * sizeof( Tout ));
 				op += NewScanlineSize;
 			}
 
 			return( NewHeight );
 		}
 
-		const size_t SrcScanlineSize = ( Params.SrcSSize < 1 ?
+		const size_t SrcScanlineSize = (size_t) ( Params.SrcSSize < 1 ?
 			SrcWidth * ElCount : Params.SrcSSize );
 
 		double ox = Params.ox;
@@ -374,7 +390,9 @@ public:
 		// for multi-threaded resizing, or in a system-wide high-load
 		// situations.
 
-		const size_t FltWidthE = ( rsh.padl + SrcWidth + rsh.padr ) * ElCount;
+		const size_t FltWidthE = (size_t) (( rsh.padl + SrcWidth +
+			rsh.padr ) * ElCount );
+
 		const double CacheSize = 5500000.0; // Tuned for various CPUs.
 		const double OpSize = (double) SrcScanlineSize * SrcHeight *
 			sizeof( Tin ) + (double) FltWidthE * NewHeight * sizeof( float );
@@ -396,7 +414,8 @@ public:
 		const int svs = ( rsv.padl + SrcHeight + rsv.padr ) * ElCount;
 		float* const pspv0 = spv0;
 		reallocBuf( spv0, spv, spv0len, ( svs > OutSLen ? svs : OutSLen ));
-		reallocBuf( FltBuf0, FltBuf, FltBuf0Len, FltWidthE * BatchSize );
+		reallocBuf( FltBuf0, FltBuf, FltBuf0Len,
+			FltWidthE * (size_t) BatchSize );
 
 		if( spv0 != pspv0 )
 		{
@@ -466,7 +485,7 @@ public:
 				{
 					rr = cc;
 					cc = 0;
-					ip += SrcHeight * SrcScanlineSize;
+					ip += (size_t) SrcHeight * SrcScanlineSize;
 				}
 				else
 				{
@@ -476,7 +495,7 @@ public:
 						cc -= rr;
 					}
 
-					ip += ( so - rsv.padl ) * SrcScanlineSize;
+					ip += (size_t) ( so - rsv.padl ) * SrcScanlineSize;
 				}
 			}
 
@@ -489,7 +508,7 @@ public:
 				for( i = 0; i < SrcWidth; i++ )
 				{
 					copyScanline1v( ip, SrcScanlineSize, sp, cc, rl, rr );
-					resize1< false >( NULL, op, FltWidthE, rpv, kl, bc );
+					resize1< false >( nullptr, op, FltWidthE, rpv, kl, bc );
 					ip += 1;
 					op += 1;
 				}
@@ -500,7 +519,7 @@ public:
 				for( i = 0; i < SrcWidth; i++ )
 				{
 					copyScanline2v( ip, SrcScanlineSize, sp, cc, rl, rr );
-					resize2< false >( NULL, op, FltWidthE, rpv, kl, bc );
+					resize2< false >( nullptr, op, FltWidthE, rpv, kl, bc );
 					ip += 2;
 					op += 2;
 				}
@@ -511,7 +530,7 @@ public:
 				for( i = 0; i < SrcWidth; i++ )
 				{
 					copyScanline3v( ip, SrcScanlineSize, sp, cc, rl, rr );
-					resize3< false >( NULL, op, FltWidthE, rpv, kl, bc );
+					resize3< false >( nullptr, op, FltWidthE, rpv, kl, bc );
 					ip += 3;
 					op += 3;
 				}
@@ -521,7 +540,7 @@ public:
 				for( i = 0; i < SrcWidth; i++ )
 				{
 					copyScanline4v( ip, SrcScanlineSize, sp, cc, rl, rr );
-					resize4< false >( NULL, op, FltWidthE, rpv, kl, bc );
+					resize4< false >( nullptr, op, FltWidthE, rpv, kl, bc );
 					ip += 4;
 					op += 4;
 				}
@@ -668,10 +687,10 @@ protected:
 
 		if( newlen > len )
 		{
-			if( buf0 != NULL )
+			if( buf0 != nullptr )
 			{
 				delete[] buf0;
-				buf0 = NULL;
+				buf0 = nullptr;
 				len = 0;
 			}
 
@@ -701,10 +720,10 @@ protected:
 	{
 		if( newlen > len )
 		{
-			if( buf != NULL )
+			if( buf != nullptr )
 			{
 				delete[] buf;
-				buf = NULL;
+				buf = nullptr;
 				len = 0;
 			}
 
@@ -729,7 +748,7 @@ protected:
 			///< should not be lesser than 4.
 
 		CResizeFilters()
-			: Filters( NULL )
+			: Filters( nullptr )
 			, FiltersLen( 0 )
 			, la( 0.0 )
 		{
@@ -798,7 +817,7 @@ protected:
 			la = 0.0;
 			reallocBuf( Filters, FiltersLen, FracCount + 1 );
 
-			memset( Filters, 0, FiltersLen * sizeof( Filters[ 0 ]));
+			memset( Filters, 0, (size_t) FiltersLen * sizeof( Filters[ 0 ]));
 
 			setBuf( 0 );
 
@@ -824,7 +843,7 @@ protected:
 			const int Frac = (int) ( x * FracCount + 0.5 );
 			float* flt = Filters[ Frac ];
 
-			if( flt != NULL )
+			if( flt != nullptr )
 			{
 				return( flt );
 			}
@@ -872,7 +891,7 @@ protected:
 		int CurBufFill; ///< The number of fractional positions filled in the
 			///< current filter buffer.
 		float** Filters; ///< Fractional delay filters for all positions.
-			///< A particular pointer equals NULL if a filter for such
+			///< A particular pointer equals `nullptr`, if a filter for such
 			///< position has not been created yet.
 		int FiltersLen; ///< Allocated length of Filters, in elements.
 		double la; ///< Current `la`.
@@ -1131,7 +1150,7 @@ protected:
 			///< for each destination pixel position.
 
 		CResizeScanline()
-			: pos( NULL )
+			: pos( nullptr )
 			, poslen( 0 )
 			, SrcLen( 0 )
 		{
@@ -1167,11 +1186,11 @@ protected:
 		 * @param o0 Initial source image offset.
 		 * @param rf Resizing filters object.
 		 * @param sp A pointer to scanline buffer, to use for absolute
-		 * scanline positioning, can be NULL.
+		 * scanline positioning, can be `nullptr`.
 		 */
 
 		void update( const int SrcLen0, const int DstLen0, const double o0,
-			CResizeFilters& rf, float* const sp = NULL )
+			CResizeFilters& rf, float* const sp = nullptr )
 		{
 			if( SrcLen0 == SrcLen && DstLen0 == DstLen && o0 == o )
 			{
@@ -1205,7 +1224,7 @@ protected:
 			SrcLen = 0;
 			reallocBuf( pos, poslen, DstLen0 );
 
-			const intptr_t ElCountF = rf.ElCount * sizeof( float );
+			const intptr_t ElCountF = rf.ElCount * (intptr_t) sizeof( float );
 			const int so = padl - fl2m1;
 			CResizePos* rp = pos;
 			intptr_t rpso;
@@ -1241,12 +1260,12 @@ protected:
 		 *
 		 * @param rf Resizing filters object.
 		 * @param sp A pointer to scanline buffer, to use for absolute
-		 * scanline positioning, can be NULL.
+		 * scanline positioning, can be `nullptr`.
 		 */
 
 		void updateSPO( CResizeFilters& rf, float* const sp )
 		{
-			const intptr_t ElCountF = rf.ElCount * sizeof( float );
+			const intptr_t ElCountF = rf.ElCount * (intptr_t) sizeof( float );
 			CResizePos* const rp = pos;
 			int i;
 
@@ -1668,7 +1687,7 @@ protected:
 			{
 				if( sizeof( op[ 0 ]) == sizeof( ip[ 0 ]))
 				{
-					memcpy( op, ip, l * sizeof( op[ 0 ]));
+					memcpy( op, ip, (size_t) l * sizeof( op[ 0 ]));
 				}
 				else
 				{
@@ -2559,6 +2578,11 @@ protected:
 	#undef LANCIR_LF_PRE
 	#undef LANCIR_LF_POST
 };
+
+#if defined( LANCIR_NULLPTR )
+	#undef nullptr
+	#undef LANCIR_NULLPTR
+#endif // defined( LANCIR_NULLPTR )
 
 } // namespace avir
 
