@@ -1,15 +1,16 @@
-//$ nobt
-//$ nocpp
-
 /**
  * @file avir_float8_avx.h
+ *
+ * @version 3.1
  *
  * @brief Inclusion file for the "float8" type.
  *
  * This file includes the "float8" AVX-based type used for SIMD variable
  * storage and processing.
  *
- * AVIR Copyright (c) 2015-2020 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2025 Aleksey Vaneev
+ *
+ * See the "LICENSE" file for license.
  */
 
 #ifndef AVIR_FLOAT8_AVX_INCLUDED
@@ -32,6 +33,8 @@ namespace avir {
 class float8
 {
 public:
+	__m256 value; ///< Packed value of 8 floats.
+
 	float8()
 	{
 	}
@@ -46,8 +49,18 @@ public:
 	{
 	}
 
+	float8( const int s )
+		: value( _mm256_set1_ps( (float) s ))
+	{
+	}
+
 	float8( const float s )
 		: value( _mm256_set1_ps( s ))
+	{
+	}
+
+	float8( const double s )
+		: value( _mm256_set1_ps( (float) s ))
 	{
 	}
 
@@ -75,9 +88,11 @@ public:
 	}
 
 	/**
+	 * @brief Returns float8 value loaded from the specified memory location.
+	 *
 	 * @param p Pointer to memory from where the value should be loaded,
 	 * should be 32-byte aligned.
-	 * @return float8 value loaded from the specified memory location.
+	 * @return Loaded value.
 	 */
 
 	static float8 load( const float* const p )
@@ -86,9 +101,11 @@ public:
 	}
 
 	/**
+	 * @brief Returns float8 value loaded from the specified memory location.
+	 *
 	 * @param p Pointer to memory from where the value should be loaded,
 	 * may have any alignment.
-	 * @return float8 value loaded from the specified memory location.
+	 * @return Loaded value.
 	 */
 
 	static float8 loadu( const float* const p )
@@ -97,11 +114,13 @@ public:
 	}
 
 	/**
+	 * @brief Returns float8 value loaded from the specified memory location,
+	 * with elements beyond "lim" set to 0.
+	 *
 	 * @param p Pointer to memory from where the value should be loaded,
 	 * may have any alignment.
-	 * @param lim The maximum number of elements to load, >0.
-	 * @return float8 value loaded from the specified memory location, with
-	 * elements beyond "lim" set to 0.
+	 * @param lim The maximum number of elements to load, greater than 0.
+	 * @return Loaded value.
 	 */
 
 	static float8 loadu( const float* const p, const int lim )
@@ -124,7 +143,7 @@ public:
 	}
 
 	/**
-	 * Function stores *this value to the specified memory location.
+	 * @brief Stores *this* value to the specified memory location.
 	 *
 	 * @param[out] p Output memory location, should be 32-byte aligned.
 	 */
@@ -135,7 +154,7 @@ public:
 	}
 
 	/**
-	 * Function stores *this value to the specified memory location.
+	 * @brief Stores *this* value to the specified memory location.
 	 *
 	 * @param[out] p Output memory location, may have any alignment.
 	 */
@@ -146,11 +165,11 @@ public:
 	}
 
 	/**
-	 * Function stores "lim" lower elements of *this value to the specified
+	 * @brief Stores "lim" lower elements of *this* value to the specified
 	 * memory location.
 	 *
 	 * @param[out] p Output memory location, may have any alignment.
-	 * @param lim The number of lower elements to store, >0.
+	 * @param lim The number of lower elements to store, greater than 0.
 	 */
 
 	void storeu( float* p, int lim ) const
@@ -239,7 +258,7 @@ public:
 	}
 
 	/**
-	 * @return Horizontal sum of elements.
+	 * @brief Returns horizontal sum of elements.
 	 */
 
 	float hadd() const
@@ -249,11 +268,12 @@ public:
 
 		v = _mm_hadd_ps( v, v );
 		v = _mm_hadd_ps( v, v );
+
 		return( _mm_cvtss_f32( v ));
 	}
 
 	/**
-	 * Function performs in-place addition of a value located in memory and
+	 * @brief Performs in-place addition of a value located in memory, and
 	 * the specified value.
 	 *
 	 * @param p Pointer to value where addition happens. May be unaligned.
@@ -266,12 +286,12 @@ public:
 	}
 
 	/**
-	 * Function performs in-place addition of a value located in memory and
+	 * @brief Performs in-place addition of a value located in memory, and
 	 * the specified value. Limited to the specfied number of elements.
 	 *
 	 * @param p Pointer to value where addition happens. May be unaligned.
 	 * @param v Value to add.
-	 * @param lim The element number limit, >0.
+	 * @param lim The element number limit, greater than 0.
 	 */
 
 	static void addu( float* const p, const float8& v, const int lim )
@@ -279,16 +299,15 @@ public:
 		( loadu( p, lim ) + v ).storeu( p, lim );
 	}
 
-	__m256 value; ///< Packed value of 8 floats.
-		///<
-
 private:
 	/**
+	 * @brief Returns __m128 value loaded from the specified memory location,
+	 * with elements beyond "lim" set to 0.
+	 *
 	 * @param p Pointer to memory from where the value should be loaded,
 	 * may have any alignment.
-	 * @param lim The maximum number of elements to load, >0.
-	 * @return __m128 value loaded from the specified memory location, with
-	 * elements beyond "lim" set to 0.
+	 * @param lim The maximum number of elements to load, greater than 0.
+	 * @return Loaded value.
 	 */
 
 	static __m128 loadu4( const float* const p, const int lim )
@@ -319,7 +338,7 @@ private:
 };
 
 /**
- * SIMD rounding function, exact result.
+ * @brief SIMD rounding function, exact result.
  *
  * @param v Value to round.
  * @return Rounded SIMD value.
@@ -332,13 +351,13 @@ inline float8 round( const float8& v )
 }
 
 /**
- * SIMD function "clamps" (clips) the specified packed values so that they are
- * not lesser than "minv", and not greater than "maxv".
+ * @brief SIMD function "clamps" (clips) the specified packed values so that
+ * they are not lesser than "minv", and not greater than "maxv".
  *
  * @param Value Value to clamp.
  * @param minv Minimal allowed value.
  * @param maxv Maximal allowed value.
- * @return The clamped value.
+ * @return Clamped value.
  */
 
 inline float8 clamp( const float8& Value, const float8& minv,
@@ -352,7 +371,6 @@ typedef fpclass_def_dil< float, avir :: float8 > fpclass_float8_dil; ///<
 	///< Class that can be used as the "fpclass" template parameter of the
 	///< avir::CImageResizer class to perform calculation using
 	///< de-interleaved SIMD algorithm, using SIMD float8 type.
-	///<
 
 } // namespace avir
 

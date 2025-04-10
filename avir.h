@@ -1,8 +1,7 @@
-//$ nobt
-//$ nocpp
-
 /**
  * @file avir.h
+ *
+ * @version 3.1
  *
  * @brief The "main" inclusion file with all required classes and functions.
  *
@@ -11,7 +10,7 @@
  * in its entirety. Also includes several classes and functions that can be
  * useful elsewhere.
  *
- * AVIR Copyright (c) 2015-2021 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2025 Aleksey Vaneev
  *
  * @mainpage
  *
@@ -28,7 +27,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2015-2021 Aleksey Vaneev
+ * Copyright (c) 2015-2025 Aleksey Vaneev
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -47,44 +46,71 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
- *
- * @version 3.0
  */
 
 #ifndef AVIR_CIMAGERESIZER_INCLUDED
 #define AVIR_CIMAGERESIZER_INCLUDED
 
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
+#include <cstring>
+#include <cmath>
+
+#if __cplusplus >= 201103L
+
+	#include <cstdint>
+
+#else // __cplusplus >= 201103L
+
+	#include <stdint.h>
+
+#endif // __cplusplus >= 201103L
+
+/**
+ * @def AVIR_NULLPTR
+ * @brief Macro is defined, if `nullptr` workaround is in use, for pre-C++11
+ * compilers. Undefined at the end of file.
+ */
 
 namespace avir {
 
+using std :: memcpy;
+using std :: memset;
+using std :: floor;
+using std :: ceil;
+using std :: sin;
+using std :: cos;
+using std :: size_t;
+
+#if __cplusplus >= 201103L
+
+	using std :: uintptr_t;
+
+#else // __cplusplus >= 201103L
+
+	// Workaround for pre-C++11 compilers. `nullptr` is a keyword, and not a
+	// macro, but check if such workaround is already in place.
+
+	#if !defined( nullptr )
+		#define nullptr NULL
+		#define AVIR_NULLPTR
+	#endif // !defined( nullptr )
+
+#endif // __cplusplus >= 201103L
+
+#define AVIR_VERSION "3.1" ///< The macro defines AVIR version string.
+
+#define AVIR_PI 3.1415926535897932 ///< The macro equals to `pi` constant,
+	///< fills 53-bit floating point mantissa. Undefined at the end of file.
+
+#define AVIR_PId2 1.5707963267948966 ///< The macro equals to `pi divided
+	///< by 2` constant, fills 53-bit floating point mantissa. Undefined at
+	///< the end of file.
+
 /**
- * The macro defines AVIR version string.
- */
-
-#define AVIR_VERSION "3.0"
-
-/**
- * The macro equals to "pi" constant, fills 53-bit floating point mantissa.
- * Undefined at the end of file.
- */
-
-#define AVIR_PI 3.1415926535897932
-
-/**
- * The macro equals to "pi divided by 2" constant, fills 53-bit floating
- * point mantissa. Undefined at the end of file.
- */
-
-#define AVIR_PId2 1.5707963267948966
-
-/**
- * A special macro that defines empty copy-constructor and copy operator with
- * the "private:" prefix. This macro should be used in classes that cannot be
- * copied in a standard C++ way.
+ * @brief Macro that defines empty copy-constructor and copy operator, with
+ * the `private:` prefix.
+ * 
+ * This macro should be used in classes that cannot be copied in a standard
+ * C++ way.
  */
 
 #define AVIR_NOCTOR( ClassName ) \
@@ -93,14 +119,15 @@ namespace avir {
 		ClassName& operator = ( const ClassName& ) { return( *this ); }
 
 /**
- * Rounding function, based on the (int) typecast. Biased result. Not suitable
- * for numbers >= 2^31.
+ * @brief Rounding function, based on the (int) typecast. Biased result. Not
+ * suitable for numbers greater than `2^31 - 1`.
  *
  * @param d Value to round.
  * @return Rounded value. Some bias may be introduced.
+ * @tparam T Value's type.
  */
 
-template< class T >
+template< typename T >
 inline T round( const T d )
 {
 	return( d < (T) 0 ? -(T) (int) ( (T) 0.5 - d ) :
@@ -108,44 +135,35 @@ inline T round( const T d )
 }
 
 /**
- * Template function "clamps" (clips) the specified value so that it is not
- * lesser than "minv", and not greater than "maxv".
+ * @brief "Clamps" (clips) the specified value so that it is not lesser than
+ * `minv`, and not greater than `maxv`.
  *
  * @param Value Value to clamp.
  * @param minv Minimal allowed value.
  * @param maxv Maximal allowed value.
- * @return The clamped value.
+ * @return Clamped value.
+ * @tparam T Value's type.
  */
 
-template< class T >
+template< typename T >
 inline T clamp( const T& Value, const T minv, const T maxv )
 {
-	if( Value < minv )
-	{
-		return( minv );
-	}
-	else
-	if( Value > maxv )
-	{
-		return( maxv );
-	}
-	else
-	{
-		return( Value );
-	}
+	return( Value < minv ? minv : ( Value > maxv ? maxv : Value ));
 }
 
 /**
- * Power 2.4 approximation function, designed for sRGB gamma correction.
+ * @brief Power 2.4 approximation, designed for sRGB gamma correction.
  *
- * @param x Argument, in the range 0.09 to 1.
+ * @param x0 Argument, in the range 0.09 to 1.
  * @return Value raised into power 2.4, approximate.
+ * @tparam T Value's type.
  */
 
-template< class T >
-inline T pow24_sRGB( const T x )
+template< typename T >
+inline T pow24_sRGB( const T x0 )
 {
-	const double x2 = (double) x * x;
+	const double x = (double) x0;
+	const double x2 = x * x;
 	const double x3 = x2 * x;
 	const double x4 = x2 * x2;
 
@@ -156,16 +174,19 @@ inline T pow24_sRGB( const T x )
 }
 
 /**
- * Power 1/2.4 approximation function, designed for sRGB gamma correction.
+ * @brief Power 1/2.4 approximation function, designed for sRGB gamma
+ * correction.
  *
- * @param x Argument, in the range 0.003 to 1.
+ * @param x0 Argument, in the range 0.003 to 1.
  * @return Value raised into power 1/2.4, approximate.
+ * @tparam T Value's type.
  */
 
-template< class T >
-inline T pow24i_sRGB( const T x )
+template< typename T >
+inline T pow24i_sRGB( const T x0 )
 {
-	const double sx = sqrt( (double) x );
+	const double x = (double) x0;
+	const double sx = sqrt( x );
 	const double ssx = sqrt( sx );
 	const double sssx = sqrt( ssx );
 
@@ -175,15 +196,19 @@ inline T pow24i_sRGB( const T x )
 }
 
 /**
- * Function approximately linearizes the sRGB gamma value.
+ * @brief Approximately linearizes the sRGB gamma value.
  *
- * @param s sRGB gamma value, in the range 0 to 1.
+ * @param s0 sRGB gamma value, in the range 0 to 1.
+ * @param m Preliminary multiplier, usually a value equal to input type range.
  * @return Linearized sRGB gamma value, approximated.
+ * @tparam T Output type.
+ * @tparam Tin Input value type.
  */
 
-template< class T >
-inline T convertSRGB2Lin( const T s )
+template< typename T, typename Tin >
+inline T convertSRGB2Lin( const Tin& s0, const T m )
 {
+	const T s = (T) s0 * m;
 	const T a = (T) 0.055;
 
 	if( s <= (T) 0.04045 )
@@ -195,13 +220,83 @@ inline T convertSRGB2Lin( const T s )
 }
 
 /**
- * Function approximately de-linearizes the linear gamma value.
+ * @brief Approximately linearizes the sRGB gamma value. Fast specialization
+ * for `uint8_t` and `unsigned char` input.
+ *
+ * @param s0 sRGB gamma value, in the range 0 to 255.
+ * @return Linearized sRGB gamma value, approximated.
+ * @tparam T Output type.
+ */
+
+template< typename T >
+inline T convertSRGB2Lin( const unsigned char& s0, const T )
+{
+	static const float tbl[ 256 ] = {
+		0.0f, 0.000303527f, 0.000607054f, 0.000910581f, 0.001214108f,
+		0.001517635f, 0.001821162f, 0.002124689f, 0.002428216f, 0.002731743f,
+		0.00303527f, 0.003348383f, 0.003678029f, 0.004025973f, 0.004392482f,
+		0.004777817f, 0.005182236f, 0.005605992f, 0.006049334f, 0.006512507f,
+		0.006995751f, 0.007499306f, 0.008023403f, 0.008568275f, 0.009134147f,
+		0.009721244f, 0.01032979f, 0.01095999f, 0.01161207f, 0.01228625f,
+		0.01298271f, 0.01370169f, 0.01444337f, 0.01520795f, 0.01599565f,
+		0.01680664f, 0.01764113f, 0.01849931f, 0.01938136f, 0.02028748f,
+		0.02121784f, 0.02217263f, 0.02315203f, 0.02415622f, 0.02518537f,
+		0.02623966f, 0.02731927f, 0.02842436f, 0.0295551f, 0.03071166f,
+		0.0318942f, 0.0331029f, 0.03433791f, 0.03559939f, 0.03688751f,
+		0.03820243f, 0.03954429f, 0.04091326f, 0.04230949f, 0.04373313f,
+		0.04518433f, 0.04666325f, 0.04817003f, 0.04970482f, 0.05126777f,
+		0.05285903f, 0.05447873f, 0.05612702f, 0.05780404f, 0.05950994f,
+		0.06124485f, 0.06300892f, 0.06480227f, 0.06662506f, 0.0684774f,
+		0.07035945f, 0.07227132f, 0.07421317f, 0.07618511f, 0.07818728f,
+		0.08021981f, 0.08228283f, 0.08437647f, 0.08650086f, 0.08865612f,
+		0.09084239f, 0.09305977f, 0.09530841f, 0.09758843f, 0.09989995f,
+		0.1022431f, 0.104618f, 0.1070247f, 0.1094634f, 0.1119343f,
+		0.1144373f, 0.1169728f, 0.1195406f, 0.1221411f, 0.1247742f,
+		0.1274402f, 0.1301391f, 0.132871f, 0.1356361f, 0.1384344f,
+		0.1412662f, 0.1441314f, 0.1470303f, 0.1499628f, 0.1529292f,
+		0.1559296f, 0.158964f, 0.1620326f, 0.1651354f, 0.1682726f,
+		0.1714443f, 0.1746506f, 0.1778916f, 0.1811674f, 0.1844781f,
+		0.1878239f, 0.1912047f, 0.1946208f, 0.1980722f, 0.2015591f,
+		0.2050815f, 0.2086396f, 0.2122334f, 0.215863f, 0.2195286f,
+		0.2232303f, 0.2269681f, 0.2307422f, 0.2345526f, 0.2383994f,
+		0.2422828f, 0.2462029f, 0.2501597f, 0.2541534f, 0.258184f,
+		0.2622517f, 0.2663564f, 0.2704985f, 0.2746778f, 0.2788946f,
+		0.2831489f, 0.2874409f, 0.2917705f, 0.296138f, 0.3005433f,
+		0.3049867f, 0.3094681f, 0.3139877f, 0.3185456f, 0.3231419f,
+		0.3277766f, 0.3324498f, 0.3371618f, 0.3419124f, 0.3467019f,
+		0.3515303f, 0.3563977f, 0.3613041f, 0.3662498f, 0.3712348f,
+		0.3762591f, 0.3813228f, 0.3864261f, 0.391569f, 0.3967517f,
+		0.4019741f, 0.4072364f, 0.4125387f, 0.4178811f, 0.4232636f,
+		0.4286864f, 0.4341495f, 0.4396529f, 0.4451969f, 0.4507815f,
+		0.4564067f, 0.4620726f, 0.4677794f, 0.4735271f, 0.4793158f,
+		0.4851456f, 0.4910165f, 0.4969287f, 0.5028822f, 0.5088771f,
+		0.5149135f, 0.5209915f, 0.5271111f, 0.5332725f, 0.5394757f,
+		0.5457208f, 0.5520078f, 0.558337f, 0.5647082f, 0.5711217f,
+		0.5775775f, 0.5840756f, 0.5906162f, 0.5971993f, 0.6038251f,
+		0.6104935f, 0.6172047f, 0.6239587f, 0.6307557f, 0.6375956f,
+		0.6444787f, 0.6514048f, 0.6583742f, 0.665387f, 0.6724431f,
+		0.6795426f, 0.6866857f, 0.6938724f, 0.7011027f, 0.7083769f,
+		0.7156948f, 0.7230567f, 0.7304625f, 0.7379124f, 0.7454064f,
+		0.7529446f, 0.7605271f, 0.7681539f, 0.7758252f, 0.7835409f,
+		0.7913012f, 0.7991061f, 0.8069558f, 0.8148502f, 0.8227894f,
+		0.8307736f, 0.8388028f, 0.846877f, 0.8549964f, 0.8631609f,
+		0.8713707f, 0.8796259f, 0.8879265f, 0.8962726f, 0.9046642f,
+		0.9131014f, 0.9215843f, 0.930113f, 0.9386874f, 0.9473078f,
+		0.9559742f, 0.9646865f, 0.973445f, 0.9822496f, 0.9911004f,
+		0.9999975f };
+
+	return( tbl[ (size_t) s0 ]);
+}
+
+/**
+ * @brief Approximately de-linearizes the linear gamma value.
  *
  * @param s Linear gamma value, in the range 0 to 1.
  * @return sRGB gamma value, approximated.
+ * @tparam T Value's type.
  */
 
-template< class T >
+template< typename T >
 inline T convertLin2SRGB( const T s )
 {
 	const T a = (T) 0.055;
@@ -215,19 +310,20 @@ inline T convertLin2SRGB( const T s )
 }
 
 /**
- * Function converts (via typecast) specified array of type T1 values of
- * length l into array of type T2 values. If T1 is the same as T2, copy
- * operation is performed. When copying data at overlapping address spaces,
- * "op" should be lower than "ip".
+ * @brief Converts (via typecast) specified array of type `T1` values of
+ * length `l` into array of type `T2` values.
+ *
+ * If `T1` is the same as `T2`, copy operation is performed. When copying data
+ * at overlapping address spaces, `op` should be lower than `ip`.
  *
  * @param ip Input buffer.
  * @param[out] op Output buffer.
  * @param l The number of elements to copy.
- * @param ip Input buffer pointer increment.
- * @param op Output buffer pointer increment.
+ * @param ipinc Input buffer pointer increment.
+ * @param opinc Output buffer pointer increment.
  */
 
-template< class T1, class T2 >
+template< typename T1, typename T2 >
 inline void copyArray( const T1* ip, T2* op, int l,
 	const int ipinc = 1, const int opinc = 1 )
 {
@@ -241,16 +337,16 @@ inline void copyArray( const T1* ip, T2* op, int l,
 }
 
 /**
- * Function adds values located in array "ip" to array "op".
+ * @brief Adds values located in array `ip`, to array `op`.
  *
  * @param ip Input buffer.
  * @param[out] op Output buffer.
  * @param l The number of elements to add.
- * @param ip Input buffer pointer increment.
- * @param op Output buffer pointer increment.
+ * @param ipinc Input buffer pointer increment.
+ * @param opinc Output buffer pointer increment.
  */
 
-template< class T1, class T2 >
+template< typename T1, typename T2 >
 inline void addArray( const T1* ip, T2* op, int l,
 	const int ipinc = 1, const int opinc = 1 )
 {
@@ -264,20 +360,21 @@ inline void addArray( const T1* ip, T2* op, int l,
 }
 
 /**
- * Function that replicates a set of adjacent elements several times in a row.
+ * @brief Replicates a set of adjacent elements several times in a row.
+ *
  * This operation is usually used to replicate pixels at the start or end of
  * image's scanline.
  *
  * @param ip Source array.
- * @param ipl Source array length (usually 1..4, but can be any number).
+ * @param ipl Source array length (usually `1..4`, but can be any number).
  * @param[out] op Destination buffer.
  * @param l Number of times the source array should be replicated (the
- * destination buffer should be able to hold ipl * l number of elements).
+ * destination buffer should be able to hold `ipl * l` number of elements).
  * @param opinc Destination buffer position increment after replicating the
- * source array. This value should be equal to at least ipl.
+ * source array. This value should be equal to at least `ipl`.
  */
 
-template< class T1, class T2 >
+template< typename T1, typename T2 >
 inline void replicateArray( const T1* const ip, const int ipl, T2* op, int l,
 	const int opinc )
 {
@@ -344,20 +441,23 @@ inline void replicateArray( const T1* const ip, const int ipl, T2* op, int l,
 }
 
 /**
- * Function calculates frequency response of the specified FIR filter at the
- * specified circular frequency. Phase can be calculated as atan2( im, re ).
- * Function uses computationally-efficient oscillators instead of "cos" and
- * "sin" functions.
+ * @brief Calculates frequency response of the specified FIR filter at the
+ * specified circular frequency.
+ *
+ * Phase can be calculated as `atan2( im, re )`. Function uses
+ * computationally-efficient oscillators instead of `cos()` and `sin()`
+ * functions.
  *
  * @param flt FIR filter's coefficients.
  * @param fltlen Number of coefficients (taps) in the filter.
- * @param th Circular frequency [0; pi].
+ * @param th Circular frequency, [0; pi].
  * @param[out] re0 Resulting real part of the complex frequency response.
  * @param[out] im0 Resulting imaginary part of the complex frequency response.
  * @param fltlat Filter's latency in samples (taps).
+ * @tparam T Filter coefficients' type.
  */
 
-template< class T >
+template< typename T >
 inline void calcFIRFilterResponse( const T* flt, int fltlen,
 	const double th, double& re0, double& im0, const int fltlat = 0 )
 {
@@ -384,8 +484,8 @@ inline void calcFIRFilterResponse( const T* flt, int fltlen,
 
 	while( fltlen > 0 )
 	{
-		re += cvalue1 * flt[ 0 ];
-		im += svalue1 * flt[ 0 ];
+		re += cvalue1 * (double) flt[ 0 ];
+		im += svalue1 * (double) flt[ 0 ];
 		flt++;
 		fltlen--;
 
@@ -403,16 +503,17 @@ inline void calcFIRFilterResponse( const T* flt, int fltlen,
 }
 
 /**
- * Function normalizes FIR filter so that its frequency response at DC is
- * equal to DCGain.
+ * @brief Normalizes FIR filter so that its frequency response at DC is equal
+ * to `DCGain`.
  *
  * @param[in,out] p Filter coefficients.
  * @param l Filter length.
  * @param DCGain Filter's gain at DC.
- * @param pstep "p" array step.
+ * @param pstep `p` array step.
+ * @tparam T Filter coefficients' type.
  */
 
-template< class T >
+template< typename T >
 inline void normalizeFIRFilter( T* const p, const int l, const double DCGain,
 	const int pstep = 1 )
 {
@@ -445,33 +546,35 @@ inline void normalizeFIRFilter( T* const p, const int l, const double DCGain,
  *
  * Allows easier handling of memory blocks allocation and automatic
  * deallocation for arrays (buffers) consisting of elements of specified
- * class. Tracks buffer's capacity in "int" variable; unsuitable for
- * allocation of very large memory blocks (with more than 2 billion elements).
+ * class. By default, tracks buffer's capacity in a `int` variable, which is
+ * unsuitable for allocation of very large memory blocks (with more than 2
+ * billion elements).
  *
- * This class manages memory space only - it does not perform element class
+ * This class manages memory space only - it does not perform element object
  * construction (initialization) operations. Buffer's required memory address
  * alignment specification is supported.
  *
- * Uses standard library to allocate and deallocate memory.
+ * Uses operators `new[]` and `delete[]`, to allocate and deallocate memory.
  *
  * @tparam T Buffer element's type.
- * @tparam capint Buffer capacity's type to use. Use size_t for large buffers.
+ * @tparam capint Buffer capacity's type to use. Use `size_t` for large
+ * buffers.
  */
 
-template< class T, typename capint = int >
+template< typename T, typename capint = int >
 class CBuffer
 {
 public:
 	CBuffer()
-		: Data( NULL )
-		, DataAligned( NULL )
+		: Data( nullptr )
+		, DataAligned( nullptr )
 		, Capacity( 0 )
 		, Alignment( 0 )
 	{
 	}
 
 	/**
-	 * Constructor creates the buffer with the specified capacity.
+	 * @brief Creates the buffer with the specified capacity.
 	 *
 	 * @param aCapacity Buffer's capacity.
 	 * @param aAlignment Buffer's required memory address alignment. 0 - use
@@ -483,13 +586,20 @@ public:
 		allocinit( aCapacity, aAlignment );
 	}
 
+	/**
+	 * @brief Completely copies the specified buffer.
+	 *
+	 * @param Source Source buffer.
+	 */
+
 	CBuffer( const CBuffer& Source )
 	{
 		allocinit( Source.Capacity, Source.Alignment );
 
 		if( Capacity > 0 )
 		{
-			memcpy( DataAligned, Source.DataAligned, Capacity * sizeof( T ));
+			memcpy( DataAligned, Source.DataAligned,
+				(size_t) Capacity * sizeof( T ));
 		}
 	}
 
@@ -498,21 +608,38 @@ public:
 		freeData();
 	}
 
+	/**
+	 * @brief Completely copies the specified buffer.
+	 *
+	 * @param Source Source buffer.
+	 * @return Reference to *this* object after the copy operation.
+	 */
+
 	CBuffer& operator = ( const CBuffer& Source )
 	{
 		alloc( Source.Capacity, Source.Alignment );
 
 		if( Capacity > 0 )
 		{
-			memcpy( DataAligned, Source.DataAligned, Capacity * sizeof( T ));
+			memcpy( DataAligned, Source.DataAligned,
+				(size_t) Capacity * sizeof( T ));
 		}
 
 		return( *this );
 	}
 
 	/**
-	 * Function allocates memory so that the specified number of elements
-	 * can be stored in *this buffer object.
+	 * @brief Returns pointer to the first buffer element.
+	 */
+
+	operator T* () const
+	{
+		return( DataAligned );
+	}
+
+	/**
+	 * @brief Allocates memory so that the specified number of elements can be
+	 * stored in *this* buffer object.
 	 *
 	 * @param aCapacity Storage for this number of elements to allocate.
 	 * @param aAlignment Buffer's required memory address alignment,
@@ -526,20 +653,19 @@ public:
 	}
 
 	/**
-	 * Function deallocates any previously allocated buffer.
+	 * @brief Deallocates any previously allocated buffer.
 	 */
 
 	void free()
 	{
 		freeData();
-		Data = NULL;
-		DataAligned = NULL;
+		DataAligned = nullptr;
 		Capacity = 0;
 		Alignment = 0;
 	}
 
 	/**
-	 * @return The capacity of the element buffer.
+	 * @brief Returns the capacity of *this* element buffer.
 	 */
 
 	capint getCapacity() const
@@ -548,11 +674,12 @@ public:
 	}
 
 	/**
-	 * Function "forces" *this buffer to have an arbitary capacity. Calling
-	 * this function invalidates all further operations except deleting *this
-	 * object. This function should not be usually used at all. Function can
-	 * be used to "model" certain buffer capacity without calling a costly
-	 * memory allocation function.
+	 * @brief "Forces" *this* buffer to have an arbitary capacity.
+	 *
+	 * Calling this function invalidates all further operations except
+	 * deleting *this* object. This function should not be usually used at
+	 * all. Function can be used to "model" certain buffer capacity without
+	 * calling a costly memory allocation function.
 	 *
 	 * @param NewCapacity A new "forced" capacity.
 	 */
@@ -563,12 +690,13 @@ public:
 	}
 
 	/**
-	 * Function reallocates *this buffer to a larger size so that it will be
-	 * able to hold the specified number of elements. Downsizing is not
-	 * performed. Alignment is not changed.
+	 * @brief Reallocates *this* buffer to a larger size.
+	 *
+	 * The buffer will be able to hold the specified number of elements.
+	 * Downsizing is not performed. Alignment is not changed.
 	 *
 	 * @param NewCapacity New (increased) capacity.
-	 * @param DoDataCopy "True" if data in the buffer should be retained.
+	 * @param DoDataCopy `true`, if data in the buffer should be retained.
 	 */
 
 	void increaseCapacity( const capint NewCapacity,
@@ -582,7 +710,7 @@ public:
 		if( DoDataCopy )
 		{
 			const capint PrevCapacity = Capacity;
-			T* const PrevData = Data;
+			char* const PrevData = Data;
 			T* const PrevDataAligned = DataAligned;
 
 			allocinit( NewCapacity, Alignment );
@@ -590,21 +718,23 @@ public:
 			if( PrevCapacity > 0 )
 			{
 				memcpy( DataAligned, PrevDataAligned,
-					PrevCapacity * sizeof( T ));
+					(size_t) PrevCapacity * sizeof( T ));
 			}
 
-			:: free( PrevData );
+			delete[] PrevData;
 		}
 		else
 		{
-			:: free( Data );
+			freeData();
 			allocinit( NewCapacity, Alignment );
 		}
 	}
 
 	/**
-	 * Function "truncates" (reduces) capacity of the buffer without
-	 * reallocating it. Alignment is not changed.
+	 * @brief "Truncates" (reduces) capacity of *this* buffer, without
+	 * reallocating it.
+	 *
+	 * Alignment is not changed.
 	 *
 	 * @param NewCapacity New required capacity.
 	 */
@@ -620,10 +750,12 @@ public:
 	}
 
 	/**
-	 * Function increases capacity so that the specified number of
-	 * elements can be stored. This function increases the previous capacity
-	 * value by third the current capacity value until space for the required
-	 * number of elements is available. Alignment is not changed.
+	 * @brief Increases capacity so that the specified number of elements can
+	 * be stored.
+	 *
+	 * This function increases the previous capacity value by third the
+	 * current capacity value until space for the required number of elements
+	 * is available. Alignment is not changed.
 	 *
 	 * @param ReqCapacity Required capacity.
 	 */
@@ -645,24 +777,15 @@ public:
 		increaseCapacity( NewCapacity );
 	}
 
-	operator T* () const
-	{
-		return( DataAligned );
-	}
-
 private:
-	T* Data; ///< Element buffer pointer.
-		///<
+	char* Data; ///< Element buffer pointer.
 	T* DataAligned; ///< Memory address-aligned element buffer pointer.
-		///<
 	capint Capacity; ///< Element buffer capacity.
-		///<
 	int Alignment; ///< Memory address alignment in use. 0 - use stdlib's
 		///< default alignment.
-		///<
 
 	/**
-	 * Internal element buffer allocation function used during object
+	 * @brief Internal element buffer allocation function used during object
 	 * construction.
 	 *
 	 * @param aCapacity Storage for this number of elements to allocate.
@@ -674,14 +797,18 @@ private:
 	{
 		if( aAlignment == 0 )
 		{
-			Data = (T*) :: malloc( aCapacity * sizeof( T ));
-			DataAligned = Data;
+			Data = new char[ (size_t) aCapacity * sizeof( T )];
+			DataAligned = (T*) Data;
 			Alignment = 0;
 		}
 		else
 		{
-			Data = (T*) :: malloc( aCapacity * sizeof( T ) + aAlignment );
-			DataAligned = alignptr( Data, aAlignment );
+			Data = new char[ (size_t) aCapacity * sizeof( T ) +
+				(size_t) aAlignment ];
+
+			DataAligned = (T*) (( (uintptr_t) Data +
+				(uintptr_t) aAlignment ) & ~(uintptr_t) ( aAlignment - 1 ));
+
 			Alignment = aAlignment;
 		}
 
@@ -689,39 +816,22 @@ private:
 	}
 
 	/**
-	 * Function frees a previously allocated Data buffer.
+	 * @brief Frees a previously allocated `Data` buffer.
 	 */
 
 	void freeData()
 	{
-		:: free( Data );
-	}
-
-	/**
-	 * Function modifies the specified pointer so that it becomes memory
-	 * address-aligned.
-	 *
-	 * @param ptr Pointer to align.
-	 * @param align Alignment in bytes to apply.
-	 * @return Pointer aligned to align bytes. Works with power-of-2
-	 * alignments only. If no alignment is necessary, "align" bytes will be
-	 * added to the pointer value.
-	 */
-
-	template< class Tp >
-	inline Tp alignptr( const Tp ptr, const uintptr_t align )
-	{
-		return( (Tp) ( (uintptr_t) ptr + align -
-			( (uintptr_t) ptr & ( align - 1 ))) );
+		delete[] Data;
+		Data = nullptr;
 	}
 };
 
 /**
  * @brief Array of structured objects.
  *
- * Implements allocation of a linear array of objects of class T (which are
- * initialized), addressable via operator[]. Each object is created via the
- * "operator new". New object insertions are quick since implementation uses
+ * Implements allocation of a linear array of objects of class `T` (which are
+ * initialized), addressable via `operator[]`. Each object is created via the
+ * `operator new`. New object insertions are quick since implementation uses
  * prior space allocation (capacity), thus not requiring frequent memory block
  * reallocations.
  *
@@ -736,6 +846,12 @@ public:
 		: ItemCount( 0 )
 	{
 	}
+
+	/**
+	 * @brief Copies the specified array element-by-element.
+	 *
+	 * @param Source Source array.
+	 */
 
 	CStructArray( const CStructArray& Source )
 		: ItemCount( 0 )
@@ -753,6 +869,13 @@ public:
 		clear();
 	}
 
+	/**
+	 * @brief Copies the specified array element-by-element.
+	 *
+	 * @param Source Source array.
+	 * @return Reference to *this* object after the copy operation.
+	 */
+
 	CStructArray& operator = ( const CStructArray& Source )
 	{
 		clear();
@@ -769,10 +892,22 @@ public:
 		return( *this );
 	}
 
+	/**
+	 * @brief Returns writable reference to the specified element.
+	 *
+	 * @param Index Element's index.
+	 */
+
 	T& operator []( const int Index )
 	{
 		return( *Items[ Index ]);
 	}
+
+	/**
+	 * @brief Returns `const` reference to the specified element.
+	 *
+	 * @param Index Element's index.
+	 */
 
 	const T& operator []( const int Index ) const
 	{
@@ -780,8 +915,8 @@ public:
 	}
 
 	/**
-	 * Function creates a new object of type T with the default constructor
-	 * and adds this object to the array.
+	 * @brief Creates a new object of type T with the default constructor, and
+	 * adds this object to the array.
 	 *
 	 * @return Reference to a newly added object.
 	 */
@@ -800,9 +935,11 @@ public:
 	}
 
 	/**
-	 * Function changes number of allocated items. New items are created with
-	 * the default constructor. If NewCount is below the current item count,
-	 * items that are above NewCount range will be destructed.
+	 * @brief Changes the number of allocated items.
+	 *
+	 * New items are created with the default constructor. If `NewCount` is
+	 * below the current item count, items that are above `NewCount` range
+	 * will be destructed.
 	 *
 	 * @param NewCount New requested item count.
 	 */
@@ -830,7 +967,7 @@ public:
 	}
 
 	/**
-	 * Function erases all items of *this array.
+	 * @brief Erases all items of *this* array.
 	 */
 
 	void clear()
@@ -843,7 +980,7 @@ public:
 	}
 
 	/**
-	 * @return The number of allocated items.
+	 * @brief Returns the number of allocated items.
 	 */
 
 	int getItemCount() const
@@ -852,28 +989,26 @@ public:
 	}
 
 private:
-	int ItemCount; ///< The number of items available in the array.
-		///<
 	CBuffer< T* > Items; ///< Element buffer.
-		///<
+	int ItemCount; ///< The number of items available in the array.
 };
 
 /**
  * @brief Sine signal generator class.
  *
  * Class implements sine signal generator without biasing, with
- * constructor-based initalization only. This generator uses oscillator
- * instead of "sin" function.
+ * constructor-based initalization only. This generator uses an efficient
+ * oscillator instead of the `sin()` function.
  */
 
 class CSineGen
 {
 public:
 	/**
-	 * Constructor initializes *this sine signal generator.
+	 * @brief Initializes *this* sine signal generator.
 	 *
 	 * @param si Sine function increment, in radians.
-	 * @param ph Starting phase, in radians. Add 0.5 * AVIR_PI for cosine
+	 * @param ph Starting phase, in radians. Add `0.5 * AVIR_PI` for cosine
 	 * function.
 	 */
 
@@ -885,7 +1020,7 @@ public:
 	}
 
 	/**
-	 * @return The next value of the sine function, without biasing.
+	 * @brief Returns the next value of the sine function, without biasing.
 	 */
 
 	double generate()
@@ -900,30 +1035,27 @@ public:
 
 private:
 	double svalue1; ///< Current sine value.
-		///<
 	double svalue2; ///< Previous sine value.
-		///<
 	double sincr; ///< Sine value increment.
-		///<
 };
 
 /**
  * @brief Peaked Cosine window function generator class.
  *
  * Class implements Peaked Cosine window function generator. Generates the
- * right-handed half of the window function. The Alpha parameter of this
+ * right-handed half of the window function. The `Alpha` parameter of this
  * window function offers the control of the balance between the early and
- * later taps of the filter. E.g. at Alpha=1 both early and later taps are
- * attenuated, but at Alpha=4 mostly later taps are attenuated. This offers a
- * great control over ringing artifacts produced by a low-pass filter in image
- * processing, without compromising achieved image sharpness.
+ * later taps of the filter. E.g. at `Alpha=1` both early and later taps are
+ * attenuated, but at `Alpha=4` mostly later taps are attenuated. This offers
+ * a great control over ringing artifacts produced by a low-pass filter in
+ * image processing, without compromising achieved image sharpness.
  */
 
 class CDSPWindowGenPeakedCosine
 {
 public:
 	/**
-	 * Constructor initializes *this window function generator.
+	 * @brief Initializes *this* window function generator.
 	 *
 	 * @param aAlpha Alpha parameter, affects the peak shape (peak
 	 * augmentation) of the window function. Any positive value can be used.
@@ -940,7 +1072,7 @@ public:
 	}
 
 	/**
-	 * @return The next Peaked Cosine window function coefficient.
+	 * @brief Returns the next Peaked Cosine window function coefficient.
 	 */
 
 	double generate()
@@ -953,16 +1085,11 @@ public:
 
 private:
 	double Alpha; ///< Alpha parameter, affects the peak shape of window.
-		///<
 	double Len2; ///< Half length of the window function.
-		///<
-	double Len2i; ///< = 1 / Len2.
-		///<
+	double Len2i; ///< Equals `1 / Len2`.
 	double wn; ///< Window function integer position. 0 - center of the
 		///< window function.
-		///<
 	CSineGen w1; ///< Sine-wave generator.
-		///<
 };
 
 /**
@@ -972,8 +1099,8 @@ private:
  * the specified frequency response (aka paragraphic equalizer). The
  * calculated filter is windowed by the Peaked Cosine window function.
  *
- * In image processing, due to short length of filters being used (6-8 taps)
- * the resulting frequency response of the filter is approximate and may be
+ * In image processing, due to short length of filters being used (6-8 taps),
+ * the resulting frequency response of the filter is approximate, and may be
  * mathematically imperfect, but still adequate to the visual requirements.
  *
  * On a side note, this equalizer generator can be successfully used for audio
@@ -990,19 +1117,21 @@ class CDSPFIREQ
 {
 public:
 	/**
-	 * Function initializes *this object with the required parameters. The
-	 * gain of frequencies beyond the MinFreq..MaxFreq range are controlled by
-	 * the first and the last band's gain.
+	 * @brief Initializes *this* object with the required parameters.
+	 *
+	 * The gain of frequencies beyond the `MinFreq..MaxFreq` range are
+	 * controlled by the first and the last band's gain.
 	 *
 	 * @param SampleRate Processing sample rate (use 2 for image processing).
 	 * @param aFilterLength Required filter length in samples (taps). The
 	 * actual filter length is truncated to an integer value.
 	 * @param aBandCount Number of band crossover points required to control,
-	 * including bands at MinFreq and MaxFreq.
+	 * including bands at `MinFreq` and `MaxFreq`.
 	 * @param MinFreq Minimal frequency that should be controlled.
 	 * @param MaxFreq Maximal frequency that should be controlled.
-	 * @param IsLogBands "True" if the bands should be spaced logarithmically.
-	 * @param WFAlpha Peaked Cosine window function's Alpha parameter.
+	 * @param IsLogBands `true`, if the bands should be spaced
+	 * logarithmically.
+	 * @param WFAlpha Peaked Cosine window function's `Alpha` parameter.
 	 */
 
 	void init( const double SampleRate, const double aFilterLength,
@@ -1088,7 +1217,7 @@ public:
 	}
 
 	/**
-	 * @return Filter's length, in samples (taps).
+	 * @brief Returns filter's length, in samples (taps).
 	 */
 
 	int getFilterLength() const
@@ -1097,7 +1226,7 @@ public:
 	}
 
 	/**
-	 * @return Filter's latency (group delay), in samples (taps).
+	 * @brief Returns filter's latency (group delay), in samples (taps).
 	 */
 
 	int getFilterLatency() const
@@ -1106,12 +1235,13 @@ public:
 	}
 
 	/**
-	 * Function creates symmetric-odd FIR filter with the specified gain
-	 * levels at band crossover points.
+	 * @brief Creates symmetric-odd FIR filter with the specified gain levels
+	 * at band crossover points.
 	 *
-	 * @param BandGains Array of linear gain levels, count=BandCount specified
-	 * in the init() function.
-	 * @param[out] Filter Output filter buffer, length = getFilterLength().
+	 * @param BandGains Array of linear gain levels, count equals `BandCount`
+	 * specified in the init() function.
+	 * @param[out] Filter Output filter buffer, length equals
+	 * getFilterLength().
 	 */
 
 	void buildFilter( const double* const BandGains, double* const Filter )
@@ -1174,13 +1304,13 @@ public:
 	}
 
 	/**
-	 * Function calculates filter's length (in samples) and latency depending
+	 * @brief Calculates filter's length (in samples) and latency, depending
 	 * on the required non-truncated filter length.
 	 *
 	 * @param aFilterLength Required filter length in samples (non-truncated).
 	 * @param[out] Latency Resulting latency (group delay) of the filter,
 	 * in samples (taps).
-	 * @return Filter length in samples (taps).
+	 * @return Filter length, in samples (taps).
 	 */
 
 	static int calcFilterLength( const double aFilterLength, int& Latency )
@@ -1193,40 +1323,30 @@ public:
 
 private:
 	double FilterLength; ///< Length of filter.
-		///<
-	int z; ///< Equals (int) ceil( FilterLength * 0.5 ).
-		///<
-	int zi; ///< Equals "z" if z is even, or z + 1 if z is odd. Used as a
-		///< Kernels1 and Kernels2 size multiplier and kernel buffer increment
-		///< to make sure each kernel buffer is 16-byte aligned.
-		///<
-	int z2; ///< Equals z * 2.
-		///<
+	int z; ///< Equals `(int) ceil( FilterLength * 0.5 )`.
+	int zi; ///< Equals `z`, if `z` is even, or `z + 1`, if `z` is odd. Used
+		///< as a `Kernels1` and `Kernels2` size multiplier, and kernel buffer
+		///< increment, to make sure each kernel buffer is 16-byte aligned.
+	int z2; ///< Equals `z * 2`.
 	int BandCount; ///< Number of controllable bands.
-		///<
 	CBuffer< double > CenterFreqs; ///< Center frequencies for all bands,
-		///< normalized to 0.0-1.0 range.
-		///<
+		///< normalized to `0..1` range.
 	CBuffer< double > Kernels1; ///< Half-length kernel buffers for each
 		///< spectral band (linear part).
-		///<
 	CBuffer< double > Kernels2; ///< Half-length kernel buffers for each
 		///< spectral band (ramp part).
-		///<
-	bool UseFirstVirtBand; ///< "True" if the first virtual band
-		///< (between 0.0 and MinFreq) should be used. The first virtual band
-		///< won't be used if MinFreq equals 0.0.
-		///<
-	bool UseLastVirtBand; ///< "True" if the last virtual band (between
-		///< MaxFreq and SampleRate * 0.5) should be used. The last virtual
-		///< band won't be used if MaxFreq * 2.0 equals SampleRate.
-		///<
+	bool UseFirstVirtBand; ///< `true`, if the first virtual band
+		///< (between 0.0 and `MinFreq`) should be used. The first virtual
+		///< band won't be used, if `MinFreq` equals 0.0.
+	bool UseLastVirtBand; ///< `true`, if the last virtual band (between
+		///< `MaxFreq` and `SampleRate * 0.5`) should be used. The last
+		///< virtual band won't be used, if `MaxFreq * 2.0` equals
+		///< `SampleRate`.
 
 	/**
-	 * Function initializes the "oscbuf" used in the fillBandKernel()
-	 * function.
+	 * @brief Initializes the `oscbuf` used in the fillBandKernel() function.
 	 *
-	 * @param oscbuf Oscillator buffer, length = z * 2.
+	 * @param oscbuf Oscillator buffer, length equals `z * 2`.
 	 */
 
 	void initOscBuf( double* oscbuf ) const
@@ -1243,11 +1363,12 @@ private:
 	}
 
 	/**
-	 * Function initializes window function buffer. This function generates
-	 * Peaked Cosine window function.
+	 * @brief Initializes the window function buffer.
+	 *
+	 * This function generates Peaked Cosine window function.
 	 *
 	 * @param winbuf Windowing buffer.
-	 * @param Alpha Peaked Cosine alpha parameter.
+	 * @param Alpha Peaked Cosine `Alpha` parameter.
 	 */
 
 	void initWinBuf( double* winbuf, const double Alpha ) const
@@ -1262,15 +1383,16 @@ private:
 	}
 
 	/**
-	 * Function fills first half of symmetric-odd FIR kernel for the band.
-	 * This function should be called successively for adjacent bands.
-	 * Previous band's x2 should be equal to current band's x1. A band kernel
-	 * consists of 2 elements: linear kernel and ramp kernel.
+	 * @brief Fills first half of symmetric-odd FIR kernel for the band.
 	 *
-	 * @param x1 Band's left corner frequency (0..1).
-	 * @param x2 Band's right corner frequency (0..1).
-	 * @param kernbuf1 Band kernel buffer 1 (linear part), length = z.
-	 * @param kernbuf2 Band kernel buffer 2 (ramp part), length = z.
+	 * This function should be called successively for adjacent bands.
+	 * Previous band's `x2` should be equal to current band's `x1`. A band
+	 * kernel consists of 2 elements: linear kernel and ramp kernel.
+	 *
+	 * @param x1 Band's left corner frequency, (0..1).
+	 * @param x2 Band's right corner frequency, (0..1).
+	 * @param kernbuf1 Band kernel buffer 1 (linear part), length equals `z`.
+	 * @param kernbuf2 Band kernel buffer 2 (ramp part), length equals `z`.
 	 * @param oscbuf Oscillation buffer. Before the first call of the
 	 * fillBandKernel() should be initialized with the call of the
 	 * initOscBuf() function.
@@ -1315,7 +1437,7 @@ private:
 	}
 
 	/**
-	 * Function copies band kernel's elements to the output buffer.
+	 * @brief Copies band kernel's elements to the output buffer.
 	 *
 	 * @param outbuf Output buffer.
 	 * @param kernbuf1 Kernel buffer 1 (linear part).
@@ -1336,7 +1458,7 @@ private:
 	}
 
 	/**
-	 * Function adds band kernel's elements to the output buffer.
+	 * @brief Adds band kernel's elements to the output buffer.
 	 *
 	 * @param outbuf Output buffer.
 	 * @param kernbuf1 Kernel buffer 1 (linear part).
@@ -1370,17 +1492,15 @@ class CDSPPeakedCosineLPF
 public:
 	int fl2; ///< Half filter's length, excluding the peak value. This value
 		///< can be also used as filter's latency in samples (taps).
-		///<
 	int FilterLen; ///< Filter's length in samples (taps).
-		///<
 
 	/**
-	 * Constructor initalizes *this object.
+	 * @brief Initalizes *this* object.
 	 *
 	 * @param aLen2 Half-length (non-truncated) of low-pass filter, in samples
 	 * (taps).
-	 * @param aFreq2 Low-pass filter's corner frequency [0; pi].
-	 * @param aAlpha Peaked Cosine window function Alpha parameter.
+	 * @param aFreq2 Low-pass filter's corner frequency, [0; pi].
+	 * @param aAlpha Peaked Cosine window function `Alpha` parameter.
 	 */
 
 	CDSPPeakedCosineLPF( const double aLen2, const double aFreq2,
@@ -1394,16 +1514,18 @@ public:
 	}
 
 	/**
-	 * Function generates a linear-phase low-pass filter windowed by Peaked
+	 * @brief Generates a linear-phase low-pass filter windowed by Peaked
 	 * Cosine window function.
 	 *
-	 * @param[out] op Output buffer, length = FilterLen (fl2 * 2 + 1).
+	 * @param[out] op Output buffer, length equals `FilterLen`
+	 * (`fl2 * 2 + 1`).
 	 * @param DCGain Required gain at DC. The resulting filter will be
 	 * normalized to achieve this DC gain. If non-positive, no automatic
 	 * normalization will be performed.
+	 * @tparam T Filter coefficients' type.
 	 */
 
-	template< class T >
+	template< typename T >
 	void generateLPF( T* op, const double DCGain )
 	{
 		CDSPWindowGenPeakedCosine wf( Alpha, Len2 );
@@ -1462,11 +1584,8 @@ public:
 private:
 	double Len2; ///< Half-length (non-truncated) of low-pass filter, in
 		///< samples (taps).
-		///<
 	double Freq2; ///< Low-pass filter's corner frequency.
-		///<
-	double Alpha; ///< Peaked Cosine window function Alpha parameter.
-		///<
+	double Alpha; ///< Peaked Cosine window function `Alpha` parameter.
 };
 
 /**
@@ -1483,13 +1602,9 @@ class CFltBuffer : public CBuffer< double >
 public:
 	double Len2; ///< Half-length (non-truncated) of low-pass filters, in
 		///< samples (taps).
-		///<
 	double Freq; ///< Low-pass filter's corner frequency.
-		///<
-	double Alpha; ///< Peaked Cosine window function Alpha parameter.
-		///<
+	double Alpha; ///< Peaked Cosine window function `Alpha` parameter.
 	double DCGain; ///< DC gain applied to the filter.
-		///<
 
 	CFltBuffer()
 		: CBuffer< double >()
@@ -1501,8 +1616,9 @@ public:
 	}
 
 	/**
-	 * @param b2 Filter buffer to compare *this object to.
-	 * @return Operator returns "true" if both filters have same parameters.
+	 * @brief Returns `true`, if both filters have same parameters.
+	 *
+	 * @param b2 Filter buffer to compare *this* object to.
 	 */
 
 	bool operator == ( const CFltBuffer& b2 ) const
@@ -1528,10 +1644,10 @@ public:
  * filters are initially calculated using the "double" precision.
  */
 
-template< class fptype >
+template< typename fptype >
 class CDSPFracFilterBankLin
 {
-	AVIR_NOCTOR( CDSPFracFilterBankLin );
+	AVIR_NOCTOR( CDSPFracFilterBankLin )
 
 public:
 	CDSPFracFilterBankLin()
@@ -1540,10 +1656,11 @@ public:
 	}
 
 	/**
-	 * Copy constructor copies a limited set of parameters of the source
-	 * filter bank. The actual filters are not copied. Such copying is used
-	 * during filtering steps "modeling" stage. A further init() function
-	 * call is required.
+	 * @brief Copies a limited set of parameters of the source filter bank.
+	 *
+	 * The actual filters are not copied. Such copying is used during
+	 * filtering steps "modeling" stage. A further init() function call is
+	 * required.
 	 *
 	 * @param s Source filter bank.
 	 */
@@ -1569,17 +1686,17 @@ public:
 
 		for( i = 0; i < TableFillFlags.getCapacity(); i++ )
 		{
-			TableFillFlags[ i ] = (uint8_t) ( s.TableFillFlags[ i ] << 2 );
+			TableFillFlags[ i ] = (char) ( s.TableFillFlags[ i ] << 2 );
 		}
 	}
 
 	/**
-	 * Operator compares *this filter bank and another filter bank and returns
-	 * "true" if their parameters are equal. Alignment is not taken into
+	 * @brief Compares *this* filter bank and another filter bank, and returns
+	 * `true`, if their parameters are equal. Alignment is not taken into
 	 * account.
 	 *
 	 * @param s Filter bank to compare to.
-	 * @return "True" if compared banks have equal parameters.
+	 * @return `true`, if compared banks have equal parameters.
 	 */
 
 	bool operator == ( const CDSPFracFilterBankLin& s ) const
@@ -1590,10 +1707,12 @@ public:
 	}
 
 	/**
-	 * Function initializes (builds) the filter bank based on the supplied
-	 * parameters. If the supplied parameters are equal to previously defined
-	 * parameters, function does nothing (alignment is assumed to be never
-	 * changing between the init() function calls).
+	 * @brief Initializes (builds) the filter bank based on the supplied
+	 * parameters.
+	 *
+	 * If the supplied parameters are equal to previously defined parameters,
+	 * function does nothing (alignment is assumed to be never changing
+	 * between the init() function calls).
 	 *
 	 * @param ReqFracCount Required number of fractional delays in the filter
 	 * bank. The minimal value is 2.
@@ -1601,7 +1720,7 @@ public:
 	 * (0 or 1).
 	 * @param BaseLen Low-pass filter's base length, in samples (taps).
 	 * Affects the actual length of the filter and its overall steepness.
-	 * @param Cutoff Low-pass filter's normalized cutoff frequency [0; 1].
+	 * @param Cutoff Low-pass filter's normalized cutoff frequency, [0; 1].
 	 * @param aWFAlpha Peaked Cosine window function's Alpha parameter.
 	 * @param aExtFilter External filter to apply to each fractional delay
 	 * filter.
@@ -1653,8 +1772,8 @@ public:
 	}
 
 	/**
-	 * @return The length of each fractional delay filter, in samples (taps).
-	 * Always an even value.
+	 * @brief Returns the length of each fractional delay filter, in samples
+	 * (taps). Always an even value.
 	 */
 
 	int getFilterLen() const
@@ -1663,7 +1782,7 @@ public:
 	}
 
 	/**
-	 * @return The number of fractional filters in use by *this bank.
+	 * @brief Returns the number of fractional filters in use by *this* bank.
 	 */
 
 	int getFracCount() const
@@ -1672,7 +1791,7 @@ public:
 	}
 
 	/**
-	 * @return The order of the interpolation polynomial.
+	 * @brief Returns the order of the interpolation polynomial.
 	 */
 
 	int getOrder() const
@@ -1681,13 +1800,14 @@ public:
 	}
 
 	/**
-	 * Function returns the pointer to the specified interpolation table
-	 * filter.
+	 * @brief Returns the pointer to the specified interpolation table filter.
 	 *
-	 * @param i Filter (fractional delay) index, in the range 0 to
-	 * ReqFracCount - 1, inclusive.
+	 * The filter will be created if it is not yet created.
+	 *
+	 * @param i Filter (fractional delay) index, in the range `0` to
+	 * `ReqFracCount - 1`, inclusive.
 	 * @return Pointer to filter. Higher order polynomial coefficients are
-	 * stored after after previous order coefficients, separated by FilterLen
+	 * stored after previous order coefficients, separated by `FilterLen`
 	 * elements.
 	 */
 
@@ -1726,7 +1846,25 @@ public:
 	}
 
 	/**
-	 * Function makes sure all fractional delay filters were created.
+	 * @brief Returns the pointer to the specified interpolation table filter.
+	 *
+	 * This function can be only used if the createAllFilters() function was
+	 * called.
+	 *
+	 * @param i Filter (fractional delay) index, in the range `0` to
+	 * `ReqFracCount - 1`, inclusive.
+	 * @return Pointer to filter. Higher order polynomial coefficients are
+	 * stored after previous order coefficients, separated by `FilterLen`
+	 * elements.
+	 */
+
+	const fptype* getFilterConst( const int i ) const
+	{
+		return( &Table[ i * FilterSize ]);
+	}
+
+	/**
+	 * @brief Makes sure all fractional delay filters were created.
 	 */
 
 	void createAllFilters()
@@ -1740,10 +1878,12 @@ public:
 	}
 
 	/**
-	 * Function returns an approximate initialization complexity, expressed in
-	 * the number of multiply-add operations. This includes fractional delay
-	 * filters calculation and multiplication by an external filter. This
-	 * function can only be called after the init() function.
+	 * @brief Returns an approximate initialization complexity, expressed in
+	 * the number of multiply-add operations.
+	 *
+	 * This includes fractional delay filters calculation and multiplication
+	 * by an external filter. This function can only be called after the
+	 * init() function.
 	 *
 	 * @param FracUseMap Fractional delays use map, each element corresponds
 	 * to a single fractional delay, will be compared to the internal table
@@ -1752,7 +1892,7 @@ public:
 	 * of multiply-add operations.
 	 */
 
-	int calcInitComplexity( const CBuffer< uint8_t >& FracUseMap ) const
+	int calcInitComplexity( const CBuffer< char >& FracUseMap ) const
 	{
 		const int FltInitCost = 65; // Cost to initialize a single sample
 			// of the fractional delay filter.
@@ -1769,7 +1909,7 @@ public:
 
 			for( i = 0; i < FracCount; i++ )
 			{
-				ic += ucb[ FracUseMap[ i ]];
+				ic += ucb[ (size_t) FracUseMap[ i ]];
 			}
 		}
 		else
@@ -1791,56 +1931,40 @@ public:
 private:
 	static const int InterpPoints = 2; ///< The maximal number of points the
 		///< interpolation is based on.
-		///<
-	double WFLen2; ///< Window function's Len2 parameter.
-		///<
-	double WFFreq; ///< Window function's Freq parameter.
-		///<
-	double WFAlpha; ///< Window function's Alpha parameter.
-		///<
+	double WFLen2; ///< Window function's `Len2` parameter.
+	double WFFreq; ///< Window function's `Freq` parameter.
+	double WFAlpha; ///< Window function's `Alpha` parameter.
 	int FracCount; ///< The required number of fractional delay filters.
-		///<
 	int Order; ///< The order of the interpolation polynomial.
-		///<
 	int Alignment; ///< The required filter table alignment.
-		///<
 	int SrcFilterLen; ///< Length of the "source" filters. This is always an
 		///< even value.
-		///<
 	int FilterLen; ///< Specifies the number of samples (taps) each fractional
 		///< delay filter has. This is always an even value, adjusted by the
-		///< FltLenAlign.
-		///<
+		///< `FltLenAlign`.
 	int FilterSize; ///< The size of a single filter element, equals
-		///< FilterLen * ElementSize.
-		///<
-	bool IsInitRequired; ///< "True" if SrcTable filter table initialization
-		///< is required. This value is available only after the call to the
-		///< init() function.
-		///<
+		///< `FilterLen * ElementSize`.
+	bool IsInitRequired; ///< `true`, if `SrcTable` filter table
+		///< initialization is required. This value is available only after
+		///< the call to the init() function.
 	CBuffer< fptype > Table; ///< Interpolation table, size equals to
-		///< ReqFracCount * FilterLen * ElementSize.
-		///<
-	CBuffer< uint8_t > TableFillFlags; ///< Contains ReqFracCount + 1
-		///< elements. Bit 0 of every element is 1 if Table already contains
-		///< the filter from SrcTable filtered by ExtFilter. Bit 1 of every
+		///< `ReqFracCount * FilterLen * ElementSize`.
+	CBuffer< char > TableFillFlags; ///< Contains `ReqFracCount + 1` elements.
+		///< Bit 0 of every element is 1, if `Table` already contains the
+		///< filter from `SrcTable` filtered by `ExtFilter`. Bit 1 of every
 		///< element means higher order coefficients were filled for the
 		///< filter.
-		///<
 	CFltBuffer ExtFilter; ///< External filter that should be applied to every
 		///< fractional delay filter. Can be empty. Half of this filter's
 		///< capacity is used as latency (group delay) value of the filter.
-		///<
 	CBuffer< double > SrcTable; ///< Source table of delay filters, contains
-		///< ReqFracCount + 1 elements. This table is used to fill the Table
-		///< with the actual filters, filtered by an external filter.
-		///<
-	bool IsSrcTableBuilt; ///< "True" if the SrcTable was built already. This
-		///< variable is set to "false" in the init() function.
-		///<
+		///< `ReqFracCount + 1` elements. This table is used to fill the
+		///< `Table` with the actual filters, filtered by an external filter.
+	bool IsSrcTableBuilt; ///< `true`, if the `SrcTable` was built already.
+		///< This variable is set to `false` in the init() function.
 
 	/**
-	 * Function builds source table used in the createFilter() function.
+	 * @brief Builds source table used in the createFilter() function.
 	 */
 
 	void buildSrcTable()
@@ -1855,9 +1979,9 @@ private:
 		const int BufCenter = SrcFilterLen * FracCount / 2 + BufOffs;
 
 		CBuffer< double > Buf( BufLen );
-		memset( Buf, 0, ( BufCenter - p.fl2 ) * sizeof( double ));
+		memset( Buf, 0, (size_t) ( BufCenter - p.fl2 ) * sizeof( double ));
 		int i = BufLen - BufCenter - p.fl2 - 1;
-		memset( &Buf[ BufLen - i ], 0, i * sizeof( double ));
+		memset( &Buf[ BufLen - i ], 0, (size_t) i * sizeof( double ));
 
 		p.generateLPF( &Buf[ BufCenter - p.fl2 ], 0.0 );
 
@@ -1869,13 +1993,13 @@ private:
 		for( i = FracCount; i >= 0; i-- )
 		{
 			TableFillFlags[ i ] = 0;
-			double* p = Buf + BufOffs + i;
+			double* ip = Buf + BufOffs + i;
 
 			for( j = 0; j < SrcFilterLen; j++ )
 			{
-				op0[ 0 ] = p[ 0 ];
+				op0[ 0 ] = ip[ 0 ];
 				op0++;
-				p += FracCount;
+				ip += FracCount;
 			}
 
 			normalizeFIRFilter( op0 - SrcFilterLen, SrcFilterLen, 1.0 );
@@ -1885,22 +2009,23 @@ private:
 	}
 
 	/**
-	 * Function creates the specified filter in the Table by copying it from
-	 * the SrcTable and filtering by ExtFilter. Function does nothing if
-	 * filter was already created.
+	 * @brief Creates the specified filter in the Table by copying it from
+	 * the `SrcTable` and filtering by `ExtFilter`.
 	 *
-	 * @param k Filter index to create, in the range 0 to FracCount,
+	 * Function does nothing if filter was already created.
+	 *
+	 * @param n Filter index to create, in the range `0` to `FracCount`,
 	 * inclusive.
 	 */
 
-	void createFilter( const int k )
+	void createFilter( const int n )
 	{
-		if( TableFillFlags[ k ] != 0 )
+		if( TableFillFlags[ n ] != 0 )
 		{
 			return;
 		}
 
-		TableFillFlags[ k ] |= 1;
+		TableFillFlags[ n ] |= 1;
 		const int ExtFilterLatency = ExtFilter.getCapacity() / 2;
 		const int ResLatency = ExtFilterLatency + SrcFilterLen / 2;
 		int ResLen = SrcFilterLen;
@@ -1911,21 +2036,21 @@ private:
 		}
 
 		const int ResOffs = FilterLen / 2 - ResLatency;
-		fptype* op = &Table[ k * FilterSize ];
+		fptype* op = &Table[ n * FilterSize ];
 		int i;
 
 		for( i = 0; i < ResOffs; i++ )
 		{
-			op[ i ] = (fptype) 0;
+			op[ i ] = 0;
 		}
 
 		for( i = ResOffs + ResLen; i < FilterLen; i++ )
 		{
-			op[ i ] = (fptype) 0;
+			op[ i ] = 0;
 		}
 
 		op += ResOffs;
-		const double* const srcflt = &SrcTable[ k * SrcFilterLen ];
+		const double* const srcflt = &SrcTable[ n * SrcFilterLen ];
 
 		if( ExtFilter.getCapacity() == 0 )
 		{
@@ -1937,7 +2062,7 @@ private:
 			return;
 		}
 
-		// Perform convolution of extflt and srcflt.
+		// Perform convolution of `extflt` and `srcflt`.
 
 		const double* const extflt = &ExtFilter[ 0 ];
 		int j;
@@ -1979,11 +2104,14 @@ private:
  *
  * This base class is used to organize a multi-threaded image resizing
  * operation. The thread pool should consist of threads that initially wait
- * for a signal. Upon receiving a signal (via the startAllWorkloads()
- * function) each previously added thread should execute its workload's
- * process() function once, and return to the wait signal state again. The
- * thread pool should be also able to efficiently wait for all workloads to
- * finish via the waitAllWorkloadsToFinish() function.
+ * for a signal.
+ *
+ * Upon receiving a signal (via the startAllWorkloads() function) each
+ * previously added thread should execute its workload's process() function
+ * once, and return to the wait signal state again.
+ *
+ * The thread pool should be also able to efficiently wait for all workloads
+ * to finish, via the waitAllWorkloadsToFinish() function.
  *
  * The image resizing algorithm makes calls to functions of this class.
  */
@@ -2014,7 +2142,7 @@ public:
 		}
 
 		/**
-		 * Function that gets called from the thread when thread pool's
+		 * @brief Function that gets called from the thread when thread pool's
 		 * startAllWorkloads() function is called.
 		 */
 
@@ -2022,10 +2150,14 @@ public:
 	};
 
 	/**
-	 * @return The suggested number of workloads (and their associated
-	 * threads) to add. The minimal value this function can return is 1. The
-	 * usual value may depend on the number of physical and virtual cores
-	 * present in the system, and on other considerations.
+	 * @brief Returns the suggested number of workloads (and their associated
+	 * threads) to add.
+	 *
+	 * The minimal value this function can return is 1. The usual value may
+	 * depend on the number of physical and virtual cores present in the
+	 * system, and on other considerations.
+	 *
+	 * @return Suggested number of workloads.
 	 */
 
 	virtual int getSuggestedWorkloadCount() const
@@ -2034,7 +2166,8 @@ public:
 	}
 
 	/**
-	 * Function adds a new workload (and possibly thread) to the thread pool.
+	 * @brief Adds a new workload (and possibly thread) to the thread pool.
+	 *
 	 * The caller decides how many parallel workloads (and threads) it
 	 * requires, but this number will not exceed the value returned by the
 	 * getSuggestedWorkloadCount() function. It is implementation-specific how
@@ -2043,12 +2176,13 @@ public:
 	 *
 	 * Note that the same set of workload objects will be processed each time
 	 * the startAllWorkloads() function is called. This means that workload
-	 * objects are added only once. The caller changes the state of the
-	 * workload objects and then calls the startAllWorkloads() function to
-	 * process them.
+	 * objects are added to the thread pool only once. The caller changes the
+	 * state of the workload objects, and then calls the startAllWorkloads()
+	 * function to process them all.
 	 *
 	 * @param Workload Workload object whose process() function will be called
-	 * from within the thread when the startAllWorkloads() function is called.
+	 * from within the thread, when the startAllWorkloads() function is
+	 * called.
 	 */
 
 	virtual void addWorkload( CWorkload* const Workload )
@@ -2056,11 +2190,13 @@ public:
 	}
 
 	/**
-	 * Function starts all workloads associated with threads previously added
-	 * via the addWorkload() function. It is assumed that this function
-	 * performs the necessary "memory barrier" (or "cache sync") kind of
-	 * operation so that all threads catch up the prior changes made to the
-	 * workload objects during their wait state.
+	 * @brief Starts all workloads associated with threads previously added
+	 * via the addWorkload() function.
+	 *
+	 * It is assumed that this function performs the necessary "memory
+	 * barrier" (or "cache sync") kind of operation so that all threads catch
+	 * up the prior changes made to the workload objects during their wait
+	 * state.
 	 */
 
 	virtual void startAllWorkloads()
@@ -2068,7 +2204,7 @@ public:
 	}
 
 	/**
-	 * Function waits for all workloads to finish.
+	 * @brief Waits for all workloads to finish.
 	 */
 
 	virtual void waitAllWorkloadsToFinish()
@@ -2076,9 +2212,11 @@ public:
 	}
 
 	/**
-	 * Function removes all workloads previously added via the addWorkload()
-	 * function. This function gets called only after the
-	 * waitAllWorkloadsToFinish() function call.
+	 * @brief Removes all workloads previously added via the addWorkload()
+	 * function.
+	 *
+	 * This function gets called only after the waitAllWorkloadsToFinish()
+	 * function call.
 	 */
 
 	virtual void removeAllWorkloads()
@@ -2094,9 +2232,9 @@ public:
  * other parameters exist that can optimize the performance of the resizing
  * algorithm. Filter length parameters can take fractional values.
  *
- * Beside quality, these parameters (except Alpha parameters) directly affect
- * the computative cost of the resizing algorithm. It is possible to trade
- * the visual quality for computative cost.
+ * Beside quality, these parameters (except `Alpha` parameters) directly
+ * affect the computative cost of the resizing algorithm. It is possible to
+ * trade the visual quality for computative cost.
  *
  * Anti-alias filtering during downsizing can be defined as a considerable
  * reduction of contrast of smallest features of an image. Unfortunately, such
@@ -2110,15 +2248,15 @@ public:
  * equating to the "perfect" linearity of frequency response.
  *
  * The pre-defined parameter sets offered by this library were auto-optimized
- * for the given LPFltBaseLen, IntFltLen and CorrFltAlpha values. The
+ * for the given `LPFltBaseLen`, `IntFltLen`, and `CorrFltAlpha` values. The
  * optimization goal was to minimize the score: the sum of squares of the
  * difference between original and processed images (which was not actually
- * resized, k=1). The original image was a 0.5 megapixel uniformly-distributed
- * white-noise image with pixel intensities in the 0-1 range. Such goal
- * converges very well and produces filtering system with the flattest
- * frequency response possible for the given constraints. With this goal,
- * increasing the LPFltBaseLen value reduces the general amount of aliasing
- * artifacts.
+ * resized, `k=1`). The original image was a 0.5 megapixel
+ * uniformly-distributed white-noise image with pixel intensities in the
+ * `0..1` range. Such goal converges very well and produces filtering system
+ * with the flattest frequency response possible, for the given constraints.
+ * With this goal, increasing the `LPFltBaseLen` value reduces the general
+ * amount of aliasing artifacts.
  */
 
 struct CImageResizerParams
@@ -2126,46 +2264,38 @@ struct CImageResizerParams
 	double CorrFltAlpha; ///< Alpha parameter of the Peaked Cosine window
 		///< function used on the correction filter. The "usable" values are
 		///< in the narrow range 1.0 to 1.5.
-		///<
 	double CorrFltLen; ///< Correction filter's length in samples (taps). The
 		///< "usable" range is narrow, 5.5 to 8, as to minimize the
 		///< "overcorrection" which is mathematically precise, but visually
 		///< unacceptable.
-		///<
 	double IntFltAlpha; ///< Alpha parameter of the Peaked Cosine window
 		///< function used on the interpolation low-pass filter. The "usable"
 		///< values are in the range 1.5 to 2.5.
-		///<
 	double IntFltCutoff; ///< Interpolation low-pass filter's cutoff frequency
 		///< (normalized, [0; 1]). The "usable" range is 0.6 to 0.8.
-		///<
 	double IntFltLen; ///< Interpolation low-pass filter's length in samples
 		///< (taps). The length value should be at least 18 or otherwise a
-		///< "dark grid" artifact will be introduced if a further sharpening
-		///< is applied. IntFltLen together with other IntFlt parameters
+		///< "dark grid" artifact will be introduced, if a further sharpening
+		///< is applied. `IntFltLen` together with other `IntFlt` parameters
 		///< should be tuned in a way that produces the flattest frequency
-		///< response in 0-0.5 normalized frequency range (this range is due
+		///< response in `0..0.5` normalized frequency range (such range due
 		///< to 2X upsampling).
-		///<
-	double LPFltAlpha; ///< Alpha parameter of the Peaked Cosine window
+	double LPFltAlpha; ///< `Alpha` parameter of the Peaked Cosine window
 		///< function used on the low-pass filter. The "usable" values are
 		///< in the range 1.5 to 6.5.
-		///<
 	double LPFltBaseLen; ///< Base length of the low-pass (aka anti-aliasing
 		///< or reconstruction) filter, in samples (taps), further adjusted by
 		///< the actual cutoff frequency, upsampling and downsampling factors.
 		///< The "usable" range is between 6 and 9.
-		///<
 	double LPFltCutoffMult; ///< Low-pass filter's cutoff frequency
 		///< multiplier. This value can be both below and above 1.0 as
 		///< low-pass filters are inserted on downsampling and upsampling
-		///< steps and always have corner frequency equal to or below 0.5pi.
-		///< This multiplier shifts low-pass filter's corner frequency towards
-		///< lower (if below 1.0) or higher (if above 1.0) frequencies. This
-		///< multiplier can be way below 1.0 since any additional
-		///< high-frequency damping will be partially corrected by the
-		///< correction filter. The "usable" range is 0.3 to 1.0.
-		///<
+		///< steps and always have corner frequency equal to or below
+		///< `0.5 * pi`. This multiplier shifts low-pass filter's corner
+		///< frequency towards lower (if below 1.0) or higher (if above 1.0)
+		///< frequencies. This multiplier can be way below 1.0 since any
+		///< additional high-frequency damping will be partially corrected by
+		///< the correction filter. The "usable" range is 0.3 to 1.0.
 
 	CImageResizerParams()
 		: HBFltAlpha( 1.94609 )
@@ -2175,10 +2305,8 @@ struct CImageResizerParams
 	}
 
 	double HBFltAlpha; ///< Half-band filter's Alpha. Assigned internally.
-		///<
-	double HBFltCutoff; ///< Half-band filter's cutoff point [0; 1]. Assigned
+	double HBFltCutoff; ///< Half-band filter's cutoff point, [0; 1]. Assigned
 		///< internally.
-		///<
 	double HBFltLen; ///< Length of the half-band low-pass filter. Assigned
 		///< internally. Internally used to perform 2X or higher downsampling.
 		///< These filter parameters should be treated as "technical" and do
@@ -2186,7 +2314,6 @@ struct CImageResizerParams
 		///< combinations of other parameters. This half-band filter provides
 		///< a wide transition band (for minimal ringing artifacts) and a high
 		///< stop-band attenuation (for minimal aliasing).
-		///<
 };
 
 /**
@@ -2337,88 +2464,82 @@ struct CImageResizerParamsUltra : public CImageResizerParams
 };
 
 /**
- * @brief Image resizing variables class.
+ * @brief Image resizing variables (base class).
  * 
- * This is an utility "catch all" class that defines various variables used
- * during image resizing. Several variables that are explicitly initialized in
- * this class' constructor are also used as additional "input" variables to
- * the image resizing function. These variables will not be changed by the
- * avir::CImageResizer<>::resizeImage() function.
+ * This is an utility "catch all" base class, which defines various variables
+ * used during image resizing.
  */
 
-class CImageResizerVars
+class CImageResizerVarsBase
 {
 public:
-	int ElCount; ///< The number of "fptype" elements used to store 1 pixel.
-		///<
+	int ElCount; ///< The number of `fptype` elements used to store 1 pixel.
 	int ElCountIO; ///< The number of source and destination image's elements
 		///< used to store 1 pixel.
-		///<
-	int fppack; ///< The number of atomic types stored in a single "fptype"
+	int fppack; ///< The number of atomic types stored in a single `fptype`
 		///< element.
-		///<
 	int fpalign; ///< Suggested alignment size in bytes. This is not a
 		///< required alignment, because image resizing algorithm cannot be
 		///< made to have a strictly aligned data access in all cases (e.g.
 		///< de-interleaved interpolation cannot perform aligned accesses).
-		///<
 	int elalign; ///< Length alignment of arrays of elements. This applies to
 		///< filters and intermediate buffers: this constant forces filters
 		///< and scanlines to have a length which is a multiple of this value,
 		///< for more efficient SIMD implementation.
-		///<
-	int packmode; ///< 0 if interleaved packing, 1 if de-interleaved.
-		///<
-	int BufLen[ 2 ]; ///< Intermediate buffers' lengths in "fptype" elements.
+	int packmode; ///< 0, if interleaved packing; 1, if de-interleaved.
+	int BufLen[ 2 ]; ///< Intermediate buffers' lengths in `fptype` elements.
 	int BufOffs[ 2 ]; ///< Offsets into the intermediate buffers, used to
 		///< provide prefix elements required during processing so that no
 		///< "out of range" access happens. This offset is a multiple of
 		///< ElCount if pixels are stored in interleaved form.
-		///<
 	double k; ///< Resizing step coefficient, updated to reflect the actually
 		///< used coefficient during resizing.
-		///<
 	double o; ///< Starting pixel offset inside the source image, updated to
 		///< reflect the actually used offset during resizing.
-		///<
 	int ResizeStep; ///< Index of the resizing step in the latest filtering
 		///< steps array.
-		///<
-	bool IsResize2; ///< Use optimized "doResize2" function.
-		///<
+	bool IsResize2; ///< Use optimized doResize2() function.
 	double InGammaMult; ///< Input gamma multiplier, used to convert input
-		///< data to 0 to 1 range. 0.0 if no gamma is in use.
-		///<
+		///< data to [0; 1] range. 0.0, if no gamma is in use.
 	double OutGammaMult; ///< Output gamma multiplier, used to convert data to
-		///< 0 to 255/65535 range. 0.0 if no gamma is in use.
-		///<
+		///< [0; 255/65535] range. 0.0, if no gamma is in use.
+};
 
+/**
+ * @brief Image resizing variables.
+ * 
+ * Variables defined in this class are used as additional "input" variables to
+ * the image resizing function. These variables will not be changed by the
+ * avir::CImageResizer<>::resizeImage() function.
+ */
+
+class CImageResizerVars : public CImageResizerVarsBase
+{
+public:
 	double ox; ///< Start X pixel offset within source image (can be
 		///< negative). Positive offset moves image to the left.
-		///<
 	double oy; ///< Start Y pixel offset within source image (can be
 		///< negative). Positive offset moves image to the top.
-		///<
 	CImageResizerThreadPool* ThreadPool; ///< Thread pool to be used by the
-		///< image resizing function. Set to NULL to use single-threaded
+		///< image resizing function. Set to `nullptr` to use single-threaded
 		///< processing.
-		///<
 	bool UseSRGBGamma; ///< Perform sRGB gamma linearization (correction).
-		///<
+	int AlphaIndex; ///< Alpha-channel index, for 4-channel input. Default -1
+		///< applies gamma correction to all channels. Value of 0 or 3
+		///< bypasses gamma correction for alpha-channel at this index.
 	int BuildMode; ///< The build mode to use, for debugging purposes. Set to
-		///< -1 to select a minimal-complexity mode automatically. All build
-		///< modes deliver similar results with minor deviations.
-		///<
+		///< -1, to select a minimal-complexity mode automatically. All
+		///< build modes deliver similar results with minor deviations.
 	int RndSeed; ///< Random seed parameter. This parameter may be incremented
 		///< after each random generator initialization. The use of this
 		///< variable depends on the ditherer implementation.
-		///<
 
 	CImageResizerVars()
 		: ox( 0.0 )
 		, oy( 0.0 )
-		, ThreadPool( NULL )
+		, ThreadPool( nullptr )
 		, UseSRGBGamma( false )
+		, AlphaIndex( -1 )
 		, BuildMode( -1 )
 		, RndSeed( 0 )
 	{
@@ -2441,93 +2562,73 @@ public:
  *
  * @tparam fptype Floating point type to use for storing pixel elements. SIMD
  * types can be used: in this case each element may hold a whole pixel.
- * @tparam fptypeatom The atomic type the "fptype" consists of.
+ * @tparam fptypeatom The atomic type the `fptype` consists of.
  */
 
-template< class fptype, class fptypeatom >
+template< typename fptype, typename fptypeatom >
 class CImageResizerFilterStep
 {
-	AVIR_NOCTOR( CImageResizerFilterStep );
+	AVIR_NOCTOR( CImageResizerFilterStep )
 
 public:
-	bool IsUpsample; ///< "True" if this step is an upsampling step, "false"
-		///< if downsampling step. Should be set to "false" if ResampleFactor
-		///< equals 0.
-		///<
-	int ResampleFactor; ///< Resample factor (>=1). If 0, this is a resizing
-		///< step. This value should be >1 if IsUpsample equals "true".
-		///<
+	bool IsUpsample; ///< `true`, if this step is an upsampling step; `false`,
+		///< if downsampling step. Should be set to `false`, if
+		///< `ResampleFactor` equals 0.
+	int ResampleFactor; ///< Resample factor (greater or equal to 1). If 0,
+		///< this is a resizing step. This value should be greater than 1, if
+		///< `IsUpsample` equals `true`.
 	CBuffer< fptype > Flt; ///< Filter to use at this step.
-		///<
 	CFltBuffer FltOrig; ///< Originally-designed filter. This buffer may not
 		///< be assigned. Assigned by filters that precede the resizing step
 		///< if such filter is planned to be embedded into the interpolation
-		///< filter as "external" filter. If IsUpsample=true and this filter
-		///< buffer is not empty, the upsampling step will not itself apply
-		///< any filtering over upsampled input scanline.
-		///<
-	double DCGain; ///< DC gain which was applied to the filter. Not defined
-		///< if ResampleFactor = 0.
-		///<
+		///< filter as "external" filter. If `IsUpsample` equals `true`, and
+		///< this filter buffer is not empty, the upsampling step will not
+		///< itself apply any filtering over upsampled input scanline.
+	double DCGain; ///< DC gain which was applied to the filter. Not defined,
+		///< if `ResampleFactor` equals 0.
 	int FltLatency; ///< Filter's latency (group delay, shift) in pixels.
-		///<
 	const CImageResizerVars* Vars; ///< Image resizing-related variables.
-		///<
 	int InLen; ///< Input scanline's length in pixels.
-		///<
 	int InBuf; ///< Input buffer index, 0 or 1.
-		///<
 	int InPrefix; ///< Required input prefix pixels. These prefix pixels will
-		///< be filled with source scanline's first pixel value. If IsUpsample
-		///< is "true", this is the additional number of times the first pixel
-		///< will be filtered before processing scanline, this number is also
-		///< reflected in the OutPrefix.
-		///<
+		///< be filled with source scanline's first pixel value. If
+		///< `IsUpsample` is `true`, this is the additional number of times
+		///< the first pixel will be filtered before processing scanline, this
+		///< number is also reflected in the `OutPrefix`.
 	int InSuffix; ///< Required input suffix pixels. These suffix pixels will
-		///< be filled with source scanline's last pixel value. If IsUpsample
-		///< is "true", this is the additional number of times the last pixel
-		///< will be filtered before processing scanline, this number is also
-		///< reflected in the OutSuffix.
-		///<
+		///< be filled with source scanline's last pixel value. If
+		///< `IsUpsample` is `true`, this is the additional number of times
+		///< the last pixel will be filtered before processing scanline, this
+		///< number is also reflected in the `OutSuffix`.
 	int InElIncr; ///< Pixel element increment within the input buffer, used
 		///< during de-interleaved processing: in this case each image's
-		///< channel is stored independently, InElIncr elements apart.
-		///<
+		///< channel is stored independently, `InElIncr` elements apart.
 	int OutLen; ///< Length of the resulting scanline.
-		///<
 	int OutBuf; ///< Output buffer index. 0 or 1; 2 for the last step.
-		///<
 	int OutPrefix; ///< Required output prefix pixels. These prefix pixels
 		///< will not be pre-filled with any values. Value is valid only if
-		///< IsUpsample equals "true".
-		///<
+		///< `IsUpsample` equals `true`.
 	int OutSuffix; ///< Required input suffix pixels. These suffix pixels will
 		///< not be pre-filled with any values. Value is valid only if
-		///< IsUpsample equals "true".
-		///<
+		///< `IsUpsample` equals `true`.
 	int OutElIncr; ///< Pixel element increment within the output buffer, used
-		///< during de-interleaved processing. Equals to the InBufElIncr of
-		///< the next step.
-		///<
+		///< during de-interleaved processing. Equals to `InBufElIncr` of the
+		///< next step.
 	CBuffer< fptype > PrefixDC; ///< DC component fluctuations added at the
-		///< start of the resulting scanline, used when IsUpsample equals
-		///< "true".
-		///<
+		///< start of the resulting scanline, used when `IsUpsample` equals
+		///< `true`.
 	CBuffer< fptype > SuffixDC; ///< DC component fluctuations added at the
-		///< end of the resulting scanline, used when IsUpsample equals
-		///< "true".
-		///<
+		///< end of the resulting scanline, used when `IsUpsample` equals
+		///< `true`.
 	int EdgePixelCount; ///< The number of edge pixels added. Affects the
 		///< initial position within the input scanline, used to produce edge
 		///< pixels. This variable is used and should be defined when
-		///< IsUpsample=false and ResampleFactor>0. When assigning this
-		///< variable it is also necessary to update InPrefix, OutLen and
-		///< Vars.o variables.
-		///<
+		///< `IsUpsample` equals `false` and ResampleFactor is greater than 0.
+		///< When assigning this variable, it is also necessary to update
+		///< `InPrefix`, `OutLen`, and `Vars.o` variables.
 	static const int EdgePixelCountDef = 3; ///< The default number of pixels
 		///< additionally produced at scanline edges during filtering. This is
 		///< required to reduce edge artifacts.
-		///<
 
 	/**
 	 * @brief Resizing position structure.
@@ -2539,17 +2640,11 @@ public:
 	struct CResizePos
 	{
 		int SrcPosInt; ///< Source scanline position.
-			///<
 		int fti; ///< Fractional delay filter index.
-			///<
 		const fptype* ftp; ///< Fractional delay filter pointer.
-			///<
 		fptypeatom x; ///< Interpolation coefficient between delay filters.
-			///<
 		int SrcOffs; ///< Source scanline offset.
-			///<
 		int fl; ///< Filter length to use, applies to doResize2() only.
-			///<
 	};
 
 	/**
@@ -2563,12 +2658,9 @@ public:
 	{
 	public:
 		double k; ///< Resizing step.
-			///<
 		double o; ///< Resizing offset.
-			///<
 		int FracCount; ///< The number of fractional delay filters in a filter
 			///< bank used together with this buffer.
-			///<
 	};
 
 	/**
@@ -2586,8 +2678,10 @@ public:
 		using CStructArray< CRPosBuf > :: getItemCount;
 
 		/**
-		 * Function returns the resizing positions buffer with the required
-		 * stepping. If no such buffer exists, it is created.
+		 * @brief Returns the resizing positions buffer with the required
+		 * stepping.
+		 *
+		 * If no such buffer exists, it is created.
 		 *
 		 * @param k Resizing step.
 		 * @param o Resizing offset.
@@ -2621,11 +2715,12 @@ public:
 	};
 
 	CRPosBuf* RPosBuf; ///< Resizing positions buffer. Used when
-		///< ResampleFactor equals 0 (resizing step).
-		///<
-	CDSPFracFilterBankLin< fptype >* FltBank; ///< Filter bank in use by *this
-		///< resizing step.
-		///<
+		///< `ResampleFactor` equals 0 (resizing step).
+	const CDSPFracFilterBankLin< fptype >* FltBank; ///< Filter bank in use by
+		///< *this* resizing step, may be equal to `FltBankDyn`.
+	CDSPFracFilterBankLin< fptype >* FltBankDyn; ///< Dynamically-allocated
+		///< filter bank in use by *this* resizing step. Equals `nullptr`, if
+		///< a static `FltBank` filter bank is in use.
 
 	CImageResizerFilterStep()
 	{
@@ -2640,10 +2735,10 @@ public:
  *
  * @tparam fptype Floating point type to use for storing pixel elements. SIMD
  * types can be used: in this case each element may hold a whole pixel.
- * @tparam fptypeatom The atomic type the "fptype" consists of.
+ * @tparam fptypeatom The atomic type the `fptype` consists of.
  */
 
-template< class fptype, class fptypeatom >
+template< typename fptype, typename fptypeatom >
 class CImageResizerFilterStepINL :
 	public CImageResizerFilterStep< fptype, fptypeatom >
 {
@@ -2667,17 +2762,19 @@ public:
 	using CImageResizerFilterStep< fptype, fptypeatom > :: EdgePixelCount;
 
 	/**
-	 * Function performs "packing" of a scanline, and type conversion.
-	 * Scanline, depending on the "fptype" can be potentially stored as a
+	 * @brief Performs "packing" of a scanline, and type conversion.
+	 *
+	 * Scanline, depending on the `fptype` can be potentially stored as a
 	 * packed SIMD values having a certain atomic type. If required, the sRGB
 	 * gamma correction is applied.
 	 *
 	 * @param ip Input scanline.
 	 * @param op0 Output scanline.
 	 * @param l0 The number of pixels to "pack".
+	 * @tparam Tin Input values' type.
 	 */
 
-	template< class Tin >
+	template< typename Tin >
 	void packScanline( const Tin* ip, fptype* const op0, const int l0 ) const
 	{
 		const int ElCount = Vars -> ElCount;
@@ -2750,7 +2847,7 @@ public:
 				while( l > 0 )
 				{
 					fptypeatom* v = (fptypeatom*) op;
-					v[ 0 ] = convertSRGB2Lin( (fptypeatom) ip[ 0 ] * gm );
+					v[ 0 ] = convertSRGB2Lin( ip[ 0 ], gm );
 					op += ElCount;
 					ip++;
 					l--;
@@ -2759,16 +2856,48 @@ public:
 			else
 			if( ElCountIO == 4 )
 			{
-				while( l > 0 )
+				if( Vars -> AlphaIndex == 0 )
 				{
-					fptypeatom* v = (fptypeatom*) op;
-					v[ 0 ] = convertSRGB2Lin( (fptypeatom) ip[ 0 ] * gm );
-					v[ 1 ] = convertSRGB2Lin( (fptypeatom) ip[ 1 ] * gm );
-					v[ 2 ] = convertSRGB2Lin( (fptypeatom) ip[ 2 ] * gm );
-					v[ 3 ] = convertSRGB2Lin( (fptypeatom) ip[ 3 ] * gm );
-					op += ElCount;
-					ip += 4;
-					l--;
+					while( l > 0 )
+					{
+						fptypeatom* v = (fptypeatom*) op;
+						v[ 0 ] = (fptypeatom) ip[ 0 ] * gm;
+						v[ 1 ] = convertSRGB2Lin( ip[ 1 ], gm );
+						v[ 2 ] = convertSRGB2Lin( ip[ 2 ], gm );
+						v[ 3 ] = convertSRGB2Lin( ip[ 3 ], gm );
+						op += ElCount;
+						ip += 4;
+						l--;
+					}
+				}
+				else
+				if( Vars -> AlphaIndex == 3 )
+				{
+					while( l > 0 )
+					{
+						fptypeatom* v = (fptypeatom*) op;
+						v[ 0 ] = convertSRGB2Lin( ip[ 0 ], gm );
+						v[ 1 ] = convertSRGB2Lin( ip[ 1 ], gm );
+						v[ 2 ] = convertSRGB2Lin( ip[ 2 ], gm );
+						v[ 3 ] = (fptypeatom) ip[ 3 ] * gm;
+						op += ElCount;
+						ip += 4;
+						l--;
+					}
+				}
+				else
+				{
+					while( l > 0 )
+					{
+						fptypeatom* v = (fptypeatom*) op;
+						v[ 0 ] = convertSRGB2Lin( ip[ 0 ], gm );
+						v[ 1 ] = convertSRGB2Lin( ip[ 1 ], gm );
+						v[ 2 ] = convertSRGB2Lin( ip[ 2 ], gm );
+						v[ 3 ] = convertSRGB2Lin( ip[ 3 ], gm );
+						op += ElCount;
+						ip += 4;
+						l--;
+					}
 				}
 			}
 			else
@@ -2777,9 +2906,9 @@ public:
 				while( l > 0 )
 				{
 					fptypeatom* v = (fptypeatom*) op;
-					v[ 0 ] = convertSRGB2Lin( (fptypeatom) ip[ 0 ] * gm );
-					v[ 1 ] = convertSRGB2Lin( (fptypeatom) ip[ 1 ] * gm );
-					v[ 2 ] = convertSRGB2Lin( (fptypeatom) ip[ 2 ] * gm );
+					v[ 0 ] = convertSRGB2Lin( ip[ 0 ], gm );
+					v[ 1 ] = convertSRGB2Lin( ip[ 1 ], gm );
+					v[ 2 ] = convertSRGB2Lin( ip[ 2 ], gm );
 					op += ElCount;
 					ip += 3;
 					l--;
@@ -2791,8 +2920,8 @@ public:
 				while( l > 0 )
 				{
 					fptypeatom* v = (fptypeatom*) op;
-					v[ 0 ] = convertSRGB2Lin( (fptypeatom) ip[ 0 ] * gm );
-					v[ 1 ] = convertSRGB2Lin( (fptypeatom) ip[ 1 ] * gm );
+					v[ 0 ] = convertSRGB2Lin( ip[ 0 ], gm );
+					v[ 1 ] = convertSRGB2Lin( ip[ 1 ], gm );
 					op += ElCount;
 					ip += 2;
 					l--;
@@ -2842,7 +2971,7 @@ public:
 	}
 
 	/**
-	 * Function applies Linear to sRGB gamma correction to the specified
+	 * @brief Applies Linear to sRGB gamma correction to the specified
 	 * scanline.
 	 *
 	 * @param p Scanline.
@@ -2870,15 +2999,45 @@ public:
 		else
 		if( ElCountIO == 4 )
 		{
-			while( l > 0 )
+			if( Vars0.AlphaIndex == 0 )
 			{
-				fptypeatom* v = (fptypeatom*) p;
-				v[ 0 ] = convertLin2SRGB( v[ 0 ]) * gm;
-				v[ 1 ] = convertLin2SRGB( v[ 1 ]) * gm;
-				v[ 2 ] = convertLin2SRGB( v[ 2 ]) * gm;
-				v[ 3 ] = convertLin2SRGB( v[ 3 ]) * gm;
-				p += ElCount;
-				l--;
+				while( l > 0 )
+				{
+					fptypeatom* v = (fptypeatom*) p;
+					v[ 0 ] *= gm;
+					v[ 1 ] = convertLin2SRGB( v[ 1 ]) * gm;
+					v[ 2 ] = convertLin2SRGB( v[ 2 ]) * gm;
+					v[ 3 ] = convertLin2SRGB( v[ 3 ]) * gm;
+					p += ElCount;
+					l--;
+				}
+			}
+			else
+			if( Vars0.AlphaIndex == 3 )
+			{
+				while( l > 0 )
+				{
+					fptypeatom* v = (fptypeatom*) p;
+					v[ 0 ] = convertLin2SRGB( v[ 0 ]) * gm;
+					v[ 1 ] = convertLin2SRGB( v[ 1 ]) * gm;
+					v[ 2 ] = convertLin2SRGB( v[ 2 ]) * gm;
+					v[ 3 ] *= gm;
+					p += ElCount;
+					l--;
+				}
+			}
+			else
+			{
+				while( l > 0 )
+				{
+					fptypeatom* v = (fptypeatom*) p;
+					v[ 0 ] = convertLin2SRGB( v[ 0 ]) * gm;
+					v[ 1 ] = convertLin2SRGB( v[ 1 ]) * gm;
+					v[ 2 ] = convertLin2SRGB( v[ 2 ]) * gm;
+					v[ 3 ] = convertLin2SRGB( v[ 3 ]) * gm;
+					p += ElCount;
+					l--;
+				}
 			}
 		}
 		else
@@ -2909,8 +3068,9 @@ public:
 	}
 
 	/**
-	 * Function converts vertical scanline to horizontal scanline. This
-	 * function is called by the image resizer when image is resized
+	 * @brief Converts vertical scanline to horizontal scanline.
+	 *
+	 * This function is called by the image resizer when image is resized
 	 * vertically. This means that the vertical scanline is stored in the
 	 * same format produced by the packScanline() and maintained by other
 	 * filtering functions.
@@ -2976,9 +3136,11 @@ public:
 	}
 
 	/**
-	 * Function performs "unpacking" of a scanline and type conversion
-	 * (truncation is used when floating point is converted to integer).
-	 * Scanline, depending on the "fptype" can be potentially stored as a
+	 * @brief Performs "unpacking" of a scanline, and type conversion.
+	 *
+	 * Truncation is used when floating point is converted to integer.
+	 *
+	 * Scanline, depending on the `fptype` can be potentially stored as a
 	 * packed SIMD values having a certain atomic type. The unpacking function
 	 * assumes that scanline is stored in the style produced by the
 	 * packScanline() function.
@@ -2987,9 +3149,10 @@ public:
 	 * @param op Output scanline.
 	 * @param l The number of pixels to "unpack".
 	 * @param Vars0 Image resizing-related variables.
+	 * @tparam Tout Output value's type.
 	 */
 
-	template< class Tout >
+	template< typename Tout >
 	static void unpackScanline( const fptype* ip, Tout* op, int l,
 		const CImageResizerVars& Vars0 )
 	{
@@ -3052,172 +3215,8 @@ public:
 	}
 
 	/**
-	 * Function calculates scanline's DC gain for each channel, further used
-	 * to "unbias" the scanline.
+	 * @brief Prepares input scanline buffer for *this* filtering step.
 	 *
-	 * @param p Source scanline.
-	 * @param SrcLen Source scanline's length.
-	 * @param[out] ElBiases Resuling biases.
-	 */
-
-	void calcScanlineBias( const fptype* p, const int SrcLen,
-		fptype* const ElBiases ) const
-	{
-		const int ElCount = Vars -> ElCount;
-		int l = SrcLen;
-
-		if( ElCount == 1 )
-		{
-			fptype b0 = (fptype) 0;
-
-			while( l > 0 )
-			{
-				b0 += p[ 0 ];
-				p++;
-				l--;
-			}
-
-			ElBiases[ 0 ] = b0 / (fptype) SrcLen;
-		}
-		else
-		if( ElCount == 4 )
-		{
-			fptype b0 = (fptype) 0;
-			fptype b1 = (fptype) 0;
-			fptype b2 = (fptype) 0;
-			fptype b3 = (fptype) 0;
-
-			while( l > 0 )
-			{
-				b0 += p[ 0 ];
-				b1 += p[ 1 ];
-				b2 += p[ 2 ];
-				b3 += p[ 3 ];
-				p += 4;
-				l--;
-			}
-
-			ElBiases[ 0 ] = b0 / (fptype) SrcLen;
-			ElBiases[ 1 ] = b1 / (fptype) SrcLen;
-			ElBiases[ 2 ] = b2 / (fptype) SrcLen;
-			ElBiases[ 3 ] = b3 / (fptype) SrcLen;
-		}
-		else
-		if( ElCount == 3 )
-		{
-			fptype b0 = (fptype) 0;
-			fptype b1 = (fptype) 0;
-			fptype b2 = (fptype) 0;
-
-			while( l > 0 )
-			{
-				b0 += p[ 0 ];
-				b1 += p[ 1 ];
-				b2 += p[ 2 ];
-				p += 3;
-				l--;
-			}
-
-			ElBiases[ 0 ] = b0 / (fptype) SrcLen;
-			ElBiases[ 1 ] = b1 / (fptype) SrcLen;
-			ElBiases[ 2 ] = b2 / (fptype) SrcLen;
-		}
-		else
-		if( ElCount == 2 )
-		{
-			fptype b0 = (fptype) 0;
-			fptype b1 = (fptype) 0;
-
-			while( l > 0 )
-			{
-				b0 += p[ 0 ];
-				b1 += p[ 1 ];
-				p += 2;
-				l--;
-			}
-
-			ElBiases[ 0 ] = b0 / (fptype) SrcLen;
-			ElBiases[ 1 ] = b1 / (fptype) SrcLen;
-		}
-	}
-
-	/**
-	 * Function applies "unbiasing" to the scanline, by subtracting the
-	 * previously calculated bias (DC gain) values.
-	 *
-	 * @param p Scanline.
-	 * @param l Scanline's length.
-	 * @param ElBiases Biases to subtract, for each channel.
-	 */
-
-	void unbiasScanline( fptype* p, int l,
-		const fptype* const ElBiases ) const
-	{
-		const int ElCount = Vars -> ElCount;
-
-		if( ElCount == 1 )
-		{
-			const fptype b0 = ElBiases[ 0 ];
-
-			while( l > 0 )
-			{
-				p[ 0 ] -= b0;
-				p++;
-				l--;
-			}
-		}
-		else
-		if( ElCount == 4 )
-		{
-			const fptype b0 = ElBiases[ 0 ];
-			const fptype b1 = ElBiases[ 1 ];
-			const fptype b2 = ElBiases[ 2 ];
-			const fptype b3 = ElBiases[ 3 ];
-
-			while( l > 0 )
-			{
-				p[ 0 ] -= b0;
-				p[ 1 ] -= b1;
-				p[ 2 ] -= b2;
-				p[ 3 ] -= b3;
-				p += 4;
-				l--;
-			}
-		}
-		else
-		if( ElCount == 3 )
-		{
-			const fptype b0 = ElBiases[ 0 ];
-			const fptype b1 = ElBiases[ 1 ];
-			const fptype b2 = ElBiases[ 2 ];
-
-			while( l > 0 )
-			{
-				p[ 0 ] -= b0;
-				p[ 1 ] -= b1;
-				p[ 2 ] -= b2;
-				p += 3;
-				l--;
-			}
-		}
-		else
-		if( ElCount == 2 )
-		{
-			const fptype b0 = ElBiases[ 0 ];
-			const fptype b1 = ElBiases[ 1 ];
-
-			while( l > 0 )
-			{
-				p[ 0 ] -= b0;
-				p[ 1 ] -= b1;
-				p += 2;
-				l--;
-			}
-		}
-	}
-
-	/**
-	 * Function prepares input scanline buffer for *this filtering step.
 	 * Left- and right-most pixels are replicated to make sure no buffer
 	 * overrun happens. Such approach also allows to bypass any pointer
 	 * range checks.
@@ -3240,10 +3239,10 @@ public:
 	}
 
 	/**
-	 * Function peforms scanline upsampling with filtering.
+	 * @brief Performs scanline upsampling with filtering.
 	 *
-	 * @param Src Source scanline buffer (length = this -> InLen). Source
-	 * scanline increment will be equal to ElCount.
+	 * @param Src Source scanline buffer (length = `InLen`). Source scanline
+	 * increment will be equal to `ElCount`.
 	 * @param Dst Destination scanline buffer.
 	 */
 
@@ -3251,8 +3250,8 @@ public:
 	{
 		const int ElCount = Vars -> ElCount;
 		fptype* op0 = &Dst[ -OutPrefix * ElCount ];
-		memset( op0, 0, ( OutPrefix + OutLen + OutSuffix ) * ElCount *
-			sizeof( fptype ));
+		memset( op0, 0, (size_t) ( OutPrefix + OutLen + OutSuffix ) *
+			(size_t) ElCount * sizeof( fptype ));
 
 		const fptype* ip = Src;
 		const int opstep = ElCount * ResampleFactor;
@@ -3735,11 +3734,12 @@ public:
 	}
 
 	/**
-	 * Function peforms scanline filtering with optional downsampling.
+	 * @brief Performs scanline filtering with optional downsampling.
+	 *
 	 * Function makes use of the symmetry of the filter.
 	 *
-	 * @param Src Source scanline buffer (length = this -> InLen). Source
-	 * scanline increment will be equal to ElCount.
+	 * @param Src Source scanline buffer (length = `InLen`). Source scanline
+	 * increment will be equal to ElCount.
 	 * @param Dst Destination scanline buffer.
 	 * @param DstIncr Destination scanline buffer increment, used for
 	 * horizontal or vertical scanline stepping.
@@ -3866,25 +3866,23 @@ public:
 	}
 
 	/**
-	 * Function performs resizing of a single scanline. This function does
-	 * not "know" about the length of the source scanline buffer. This buffer
-	 * should be padded with enough pixels so that ( SrcPos - FilterLenD2 ) is
-	 * always >= 0 and ( SrcPos + ( DstLineLen - 1 ) * k + FilterLenD2 + 1 )
-	 * does not exceed source scanline's buffer length. SrcLine's increment is
-	 * assumed to be equal to ElCount.
+	 * @brief Performs resizing of a single scanline.
+	 *
+	 * This function does not "know" about the length of the source scanline
+	 * buffer. This buffer should be padded with enough pixels so that
+	 * `SrcPos - FilterLenD2` is always greater or equal to 0, and
+	 * `SrcPos + ( DstLineLen - 1 ) * k + FilterLenD2 + 1` does not exceed
+	 * source scanline's buffer length. `SrcLine` increment is assumed to be
+	 * equal to `ElCount`.
 	 *
 	 * @param SrcLine Source scanline buffer.
 	 * @param DstLine Destination (resized) scanline buffer.
 	 * @param DstLineIncr Destination scanline position increment, used for
 	 * horizontal or vertical scanline stepping.
-	 * @param ElBiases Bias values to add to the resulting scanline.
-	 * @param xx Temporary buffer, of size FltBank -> getFilterLen(), must be
-	 * aligned by fpclass :: fpalign.
 	 */
 
 	void doResize( const fptype* SrcLine, fptype* DstLine,
-		const int DstLineIncr, const fptype* const ElBiases,
-		fptype* const ) const
+		const int DstLineIncr, fptype* const ) const
 	{
 		const int IntFltLen = FltBank -> getFilterLen();
 		const int ElCount = Vars -> ElCount;
@@ -3921,7 +3919,7 @@ public:
 			{
 				AVIR_RESIZE_PART1
 
-				fptype sum0 = ElBiases[ 0 ];
+				fptype sum0 = 0;
 
 				for( i = 0; i < IntFltLen; i++ )
 				{
@@ -3937,10 +3935,10 @@ public:
 			{
 				AVIR_RESIZE_PART1
 
-				fptype sum0 = ElBiases[ 0 ];
-				fptype sum1 = ElBiases[ 1 ];
-				fptype sum2 = ElBiases[ 2 ];
-				fptype sum3 = ElBiases[ 3 ];
+				fptype sum0 = 0;
+				fptype sum1 = 0;
+				fptype sum2 = 0;
+				fptype sum3 = 0;
 
 				for( i = 0; i < IntFltLen; i++ )
 				{
@@ -3964,9 +3962,9 @@ public:
 			{
 				AVIR_RESIZE_PART1
 
-				fptype sum0 = ElBiases[ 0 ];
-				fptype sum1 = ElBiases[ 1 ];
-				fptype sum2 = ElBiases[ 2 ];
+				fptype sum0 = 0;
+				fptype sum1 = 0;
+				fptype sum2 = 0;
 
 				for( i = 0; i < IntFltLen; i++ )
 				{
@@ -3988,8 +3986,8 @@ public:
 			{
 				AVIR_RESIZE_PART1
 
-				fptype sum0 = ElBiases[ 0 ];
-				fptype sum1 = ElBiases[ 1 ];
+				fptype sum0 = 0;
+				fptype sum1 = 0;
 
 				for( i = 0; i < IntFltLen; i++ )
 				{
@@ -4011,7 +4009,7 @@ public:
 			{
 				AVIR_RESIZE_PART1nx
 
-				fptype sum0 = ElBiases[ 0 ];
+				fptype sum0 = 0;
 
 				for( i = 0; i < IntFltLen; i++ )
 				{
@@ -4027,10 +4025,10 @@ public:
 			{
 				AVIR_RESIZE_PART1nx
 
-				fptype sum0 = ElBiases[ 0 ];
-				fptype sum1 = ElBiases[ 1 ];
-				fptype sum2 = ElBiases[ 2 ];
-				fptype sum3 = ElBiases[ 3 ];
+				fptype sum0 = 0;
+				fptype sum1 = 0;
+				fptype sum2 = 0;
+				fptype sum3 = 0;
 
 				for( i = 0; i < IntFltLen; i++ )
 				{
@@ -4054,9 +4052,9 @@ public:
 			{
 				AVIR_RESIZE_PART1nx
 
-				fptype sum0 = ElBiases[ 0 ];
-				fptype sum1 = ElBiases[ 1 ];
-				fptype sum2 = ElBiases[ 2 ];
+				fptype sum0 = 0;
+				fptype sum1 = 0;
+				fptype sum2 = 0;
 
 				for( i = 0; i < IntFltLen; i++ )
 				{
@@ -4078,8 +4076,8 @@ public:
 			{
 				AVIR_RESIZE_PART1nx
 
-				fptype sum0 = ElBiases[ 0 ];
-				fptype sum1 = ElBiases[ 1 ];
+				fptype sum0 = 0;
+				fptype sum1 = 0;
 
 				for( i = 0; i < IntFltLen; i++ )
 				{
@@ -4101,22 +4099,20 @@ public:
 #undef AVIR_RESIZE_PART1
 
 	/**
-	 * Function performs resizing of a single scanline assuming that the input
+	 * @brief Performs resizing of a single scanline assuming that the input
 	 * buffer consists of zero-padded elements (2X upsampling without
-	 * filtering). Similar to the doResize() function otherwise.
+	 * filtering).
+	 *
+	 * Similar to the doResize() function otherwise.
 	 *
 	 * @param SrcLine Source scanline buffer.
 	 * @param DstLine Destination (resized) scanline buffer.
 	 * @param DstLineIncr Destination scanline position increment, used for
 	 * horizontal or vertical scanline stepping.
-	 * @param ElBiases Bias values to add to the resulting scanline.
-	 * @param xx Temporary buffer, of size FltBank -> getFilterLen(), must be
-	 * aligned by fpclass :: fpalign.
 	 */
 
 	void doResize2( const fptype* SrcLine, fptype* DstLine,
-		const int DstLineIncr, const fptype* const ElBiases,
-		fptype* const ) const
+		const int DstLineIncr, fptype* const ) const
 	{
 		const int IntFltLen0 = FltBank -> getFilterLen();
 		const int ElCount = Vars -> ElCount;
@@ -4155,7 +4151,7 @@ public:
 			{
 				AVIR_RESIZE_PART1
 
-				fptype sum0 = ElBiases[ 0 ];
+				fptype sum0 = 0;
 
 				for( i = 0; i < IntFltLen; i += 2 )
 				{
@@ -4171,10 +4167,10 @@ public:
 			{
 				AVIR_RESIZE_PART1
 
-				fptype sum0 = ElBiases[ 0 ];
-				fptype sum1 = ElBiases[ 1 ];
-				fptype sum2 = ElBiases[ 2 ];
-				fptype sum3 = ElBiases[ 3 ];
+				fptype sum0 = 0;
+				fptype sum1 = 0;
+				fptype sum2 = 0;
+				fptype sum3 = 0;
 
 				for( i = 0; i < IntFltLen; i += 2 )
 				{
@@ -4198,9 +4194,9 @@ public:
 			{
 				AVIR_RESIZE_PART1
 
-				fptype sum0 = ElBiases[ 0 ];
-				fptype sum1 = ElBiases[ 1 ];
-				fptype sum2 = ElBiases[ 2 ];
+				fptype sum0 = 0;
+				fptype sum1 = 0;
+				fptype sum2 = 0;
 
 				for( i = 0; i < IntFltLen; i += 2 )
 				{
@@ -4222,8 +4218,8 @@ public:
 			{
 				AVIR_RESIZE_PART1
 
-				fptype sum0 = ElBiases[ 0 ];
-				fptype sum1 = ElBiases[ 1 ];
+				fptype sum0 = 0;
+				fptype sum1 = 0;
 
 				for( i = 0; i < IntFltLen; i += 2 )
 				{
@@ -4245,7 +4241,7 @@ public:
 			{
 				AVIR_RESIZE_PART1nx
 
-				fptype sum0 = ElBiases[ 0 ];
+				fptype sum0 = 0;
 
 				for( i = 0; i < IntFltLen; i += 2 )
 				{
@@ -4261,10 +4257,10 @@ public:
 			{
 				AVIR_RESIZE_PART1nx
 
-				fptype sum0 = ElBiases[ 0 ];
-				fptype sum1 = ElBiases[ 1 ];
-				fptype sum2 = ElBiases[ 2 ];
-				fptype sum3 = ElBiases[ 3 ];
+				fptype sum0 = 0;
+				fptype sum1 = 0;
+				fptype sum2 = 0;
+				fptype sum3 = 0;
 
 				for( i = 0; i < IntFltLen; i += 2 )
 				{
@@ -4288,9 +4284,9 @@ public:
 			{
 				AVIR_RESIZE_PART1nx
 
-				fptype sum0 = ElBiases[ 0 ];
-				fptype sum1 = ElBiases[ 1 ];
-				fptype sum2 = ElBiases[ 2 ];
+				fptype sum0 = 0;
+				fptype sum1 = 0;
+				fptype sum2 = 0;
 
 				for( i = 0; i < IntFltLen; i += 2 )
 				{
@@ -4312,8 +4308,8 @@ public:
 			{
 				AVIR_RESIZE_PART1nx
 
-				fptype sum0 = ElBiases[ 0 ];
-				fptype sum1 = ElBiases[ 1 ];
+				fptype sum0 = 0;
+				fptype sum1 = 0;
 
 				for( i = 0; i < IntFltLen; i += 2 )
 				{
@@ -4352,12 +4348,12 @@ public:
  * types can be used.
  */
 
-template< class fptype >
+template< typename fptype >
 class CImageResizerDithererDefINL
 {
 public:
 	/**
-	 * Function initializes the ditherer object.
+	 * @brief Initializes the ditherer object.
 	 *
 	 * @param aLen Scanline length in pixels to process.
 	 * @param aVars Image resizing-related variables.
@@ -4377,8 +4373,9 @@ public:
 	}
 
 	/**
-	 * @return "True" if dithering is recursive relative to scanlines meaning
-	 * multi-threaded execution is not supported by this dithering method.
+	 * @brief Returns `true`, if dithering is recursive relative to scanlines,
+	 * meaning multi-threaded execution is not supported by this dithering
+	 * method.
 	 */
 
 	static bool isRecursive()
@@ -4387,14 +4384,14 @@ public:
 	}
 
 	/**
-	 * Function performs rounding and clipping operations.
+	 * @brief Performs rounding and clipping operations, in-place.
 	 *
-	 * @param ResScanline The buffer containing the final scanline.
+	 * @param[in,out] ResScanline The buffer containing the final scanline.
 	 */
 
 	void dither( fptype* const ResScanline ) const
 	{
-		const fptype c0 = (fptype) 0;
+		const fptype c0 = 0;
 		const fptype PkOut = (fptype) PkOut0;
 		int j;
 
@@ -4411,10 +4408,11 @@ public:
 		else
 		{
 			const fptype TrMul = (fptype) TrMul0;
+			const fptype TrMulI = (fptype) ( 1.0 / TrMul0 );
 
 			for( j = 0; j < LenE; j++ )
 			{
-				const fptype z0 = round( ResScanline[ j ] / TrMul ) * TrMul;
+				const fptype z0 = round( ResScanline[ j ] * TrMulI ) * TrMul;
 				ResScanline[ j ] = clamp( z0, c0, PkOut );
 			}
 		}
@@ -4422,15 +4420,10 @@ public:
 
 protected:
 	int Len; ///< Scanline's length in pixels.
-		///<
 	const CImageResizerVars* Vars; ///< Image resizing-related variables.
-		///<
 	int LenE; ///< = LenE * ElCount.
-		///<
 	double TrMul0; ///< Bit-depth truncation multiplier.
-		///<
 	double PkOut0; ///< Peak output value allowed.
-		///<
 };
 
 /**
@@ -4445,13 +4438,13 @@ protected:
  * types can be used.
  */
 
-template< class fptype >
+template< typename fptype >
 class CImageResizerDithererErrdINL :
 	public CImageResizerDithererDefINL< fptype >
 {
 public:
 	/**
-	 * Function initializes the ditherer object.
+	 * @brief Initializes the ditherer object.
 	 *
 	 * @param aLen Scanline length in pixels to process.
 	 * @param aVars Image resizing-related variables.
@@ -4472,46 +4465,56 @@ public:
 
 		for( i = 0; i < LenE + Vars -> ElCount; i++ )
 		{
-			ResScanlineDith0[ i ] = (fptype) 0;
+			ResScanlineDith0[ i ] = 0;
 		}
 	}
+
+	/**
+	 * @copydoc CImageResizerDithererDefINL::isRecursive()
+	 */
 
 	static bool isRecursive()
 	{
 		return( true );
 	}
 
+	/**
+	 * @copydoc CImageResizerDithererDefINL::dither()
+	 */
+
 	void dither( fptype* const ResScanline )
 	{
 		const int ElCount = Vars -> ElCount;
-		const fptype c0 = (fptype) 0;
+		const fptype c0 = 0;
 		const fptype TrMul = (fptype) TrMul0;
+		const fptype TrMulI = (fptype) ( 1.0 / TrMul0 );
 		const fptype PkOut = (fptype) PkOut0;
 		int j;
 
 		for( j = 0; j < LenE; j++ )
 		{
 			ResScanline[ j ] += ResScanlineDith[ j ];
-			ResScanlineDith[ j ] = (fptype) 0;
+			ResScanlineDith[ j ] = 0;
 		}
 
 		for( j = 0; j < LenE - ElCount; j++ )
 		{
 			// Perform rounding, noise estimation and saturation.
 
-			const fptype z0 = round( ResScanline[ j ] / TrMul ) * TrMul;
+			const fptype z0 = round( ResScanline[ j ] * TrMulI ) * TrMul;
 			const fptype Noise = ResScanline[ j ] - z0;
 			ResScanline[ j ] = clamp( z0, c0, PkOut );
 
-			ResScanline[ j + ElCount ] += Noise * (fptype) 0.364842;
+			const fptype NoiseM1 = Noise * (fptype) 0.364842;
+			ResScanline[ j + ElCount ] += NoiseM1;
 			ResScanlineDith[ j - ElCount ] += Noise * (fptype) 0.207305;
-			ResScanlineDith[ j ] += Noise * (fptype) 0.364842;
+			ResScanlineDith[ j ] += NoiseM1;
 			ResScanlineDith[ j + ElCount ] += Noise * (fptype) 0.063011;
 		}
 
 		while( j < LenE )
 		{
-			const fptype z0 = round( ResScanline[ j ] / TrMul ) * TrMul;
+			const fptype z0 = round( ResScanline[ j ] * TrMulI ) * TrMul;
 			const fptype Noise = ResScanline[ j ] - z0;
 			ResScanline[ j ] = clamp( z0, c0, PkOut );
 
@@ -4529,10 +4532,8 @@ protected:
 	using CImageResizerDithererDefINL< fptype > :: PkOut0;
 
 	CBuffer< fptype > ResScanlineDith0; ///< Error diffusion buffer.
-		///<
 	fptype* ResScanlineDith; ///< Error diffusion buffer pointer which skips
 		///< the first ElCount elements.
-		///<
 };
 
 /**
@@ -4551,51 +4552,43 @@ protected:
  *
  * @tparam afptype Floating point type to use for storing intermediate data
  * and variables. For variables that are not used in intensive calculations
- * the "double" type is always used. On the latest Intel processors (like
- * i7-4770K) there is almost no performance difference between "double" and
- * "float". Image quality differences between "double" and "float" are not
- * apparent on 8-bit images. At the same time the "float" uses half amount of
- * working memory the "double" type uses. SIMD types can be used. The
- * functions round() and clamp() in the "avir" or other visible namespace
+ * the `double` type is always used. On the latest Intel processors (like
+ * i7-4770K) there is almost no performance difference between `double` and
+ * `float`. Image quality differences between `double` and `float` are not
+ * apparent on 8-bit images. At the same time, the `float` uses half amount of
+ * working memory the `double` type uses. SIMD types can be used. The
+ * functions `round()` and `clamp()` in the "avir" or other visible namespace
  * should be available for the specified type. SIMD types allow to perform
- * resizing of images with more than 4 channels, to be exact 4 * SIMD element
- * number (e.g. 16 for float4), without modification of the image resizing
- * algorithm required.
- * @tparam afptypeatom The atomic type the "afptype" consists of.
+ * resizing of images with more than 4 channels, to be exact `4 * SIMD
+ * elements` (e.g. 16 for `float4`), without modification of the image
+ * resizing algorithm required.
+ * @tparam afptypeatom The atomic type the `afptype` consists of.
  * @tparam adith Ditherer class to use during processing.
  */
 
-template< class afptype, class afptypeatom = afptype,
+template< typename afptype, typename afptypeatom = afptype,
 	class adith = CImageResizerDithererDefINL< afptype > >
 class fpclass_def
 {
 public:
 	typedef afptype fptype; ///< Floating-point type to use during processing.
-		///<
-	typedef afptypeatom fptypeatom; ///< Atomic type "fptype" consists of.
-		///<
+	typedef afptypeatom fptypeatom; ///< Atomic type `fptype` consists of.
 	static const int fppack = sizeof( fptype ) / sizeof( fptypeatom ); ///<
-		///< The number of atomic types stored in a single "fptype" element.
-		///<
+		///< The number of atomic types stored in a single `fptype` element.
 	static const int fpalign = sizeof( fptype ); ///< Suggested alignment size
 		///< in bytes. This is not a required alignment, because image
 		///< resizing algorithm cannot be made to have a strictly aligned data
 		///< access at all steps (e.g. interpolation cannot perform aligned
 		///< accesses).
-		///<
 	static const int elalign = 1; ///< Length alignment of arrays of elements.
 		///< This applies to filters and intermediate buffers: this constant
 		///< forces filters and scanlines to have a length which is a multiple
 		///< of this value, for more efficient SIMD implementation.
-		///<
 	static const int packmode = 0; ///< 0 if interleaved packing, 1 if
 		///< de-interleaved.
-		///<
 	typedef CImageResizerFilterStepINL< fptype, fptypeatom > CFilterStep; ///<
 		///< Filtering step class to use during processing.
-		///<
 	typedef adith CDitherer; ///< Ditherer class to use during processing.
-		///<
 };
 
 /**
@@ -4616,17 +4609,17 @@ public:
 template< class fpclass = fpclass_def< float > >
 class CImageResizer
 {
-	AVIR_NOCTOR( CImageResizer );
+	AVIR_NOCTOR( CImageResizer )
 
 public:
 	/**
-	 * Constructor initializes the resizer.
+	 * @brief Initializes the resizer.
 	 *
 	 * @param aResBitDepth Required bit depth of resulting image (1-16). If
-	 * integer value output is used (e.g. uint8_t), the bit depth also affects
-	 * rounding: for example, if aResBitDepth=6 and "Tout" is uint8_t, the
-	 * result will be rounded to 6 most significant bits (2 least significant
-	 * bits truncated, with dithering applied).
+	 * integer value output is used (e.g., `uint8_t`), the bit depth also
+	 * affects rounding: for example, if `aResBitDepth` equals 6, and `Tout`
+	 * is `uint8_t`, the result will be rounded to 6 most significant bits
+	 * (2 least significant bits truncated, with dithering applied).
 	 * @param aSrcBitDepth Source image's real bit-depth. Set to 0 to use
 	 * aResBitDepth.
 	 * @param aParams Resizing algorithm's parameters to use. Leave out for
@@ -4646,53 +4639,53 @@ public:
 	}
 
 	/**
-	 * Function resizes image.
+	 * @brief Resizes the image.
 	 *
 	 * @param SrcBuf Source image buffer.
 	 * @param SrcWidth Source image width.
 	 * @param SrcHeight Source image height.
 	 * @param SrcScanlineSize Physical size of source scanline in elements
-	 * (not bytes). If this value is below 1, SrcWidth * ElCountIO will be
+	 * (not bytes). If this value is below 1, `SrcWidth * ElCountIO` will be
 	 * used as the physical source scanline size.
 	 * @param[out] NewBuf Buffer to accept the resized image. Can be equal to
-	 * SrcBuf if the size of the resized image is smaller or equal to source
-	 * image in size.
+	 * `SrcBuf`, if the size of the resized image is smaller or equal to
+	 * source image in size.
 	 * @param NewWidth New image width.
 	 * @param NewHeight New image height.
 	 * @param ElCountIO The number of elements (channels) used to store each
 	 * source and destination pixel (1-4).
-	 * @param k Resizing step (one output pixel corresponds to "k" input
-	 * pixels). A downsizing factor if > 1.0; upsizing factor if <= 1.0.
-	 * Multiply by -1 if you would like to bypass "ox" and "oy" adjustment
-	 * which is done by default to produce a centered image. If step value
-	 * equals 0, the step value will be chosen automatically and independently
-	 * for horizontal and vertical resizing.
+	 * @param k Resizing step (one output pixel corresponds to `k` input
+	 * pixels). A downsizing factor if greater than 1.0; upsizing factor if
+	 * lesser than 1.0. Multiply by -1 if you would like to bypass `ox` and
+	 * `oy` adjustment which is done by default, to produce a centered image.
+	 * If step value equals 0, the step value will be chosen automatically and
+	 * independently for horizontal and vertical resizing.
 	 * @param[in,out] aVars Pointer to variables structure to be passed to the
-	 * image resizing function. Can be NULL. Only variables that are
+	 * image resizing function. Can be `nullptr`. Only variables that are
 	 * initialized in default constructor of this structure are accepted by
 	 * this function. These variables will not be changed by this function.
 	 * All other variables can be modified by this function. The access to
 	 * this object is not thread-safe, each concurrent instance of this
 	 * function should use a separate aVars object.
-	 * @tparam Tin Input buffer element's type. Can be uint8_t (0-255 value
-	 * range), uint16_t (0-65535 value range), float (0.0-1.0 value range),
-	 * double (0.0-1.0 value range). Larger integer types are treated as
-	 * uint16_t. Signed integer types are unsupported.
-	 * @tparam Tout Output buffer element's type. Can be uint8_t (0-255 value
-	 * range), uint16_t (0-65535 value range), float (0.0-1.0 value range),
-	 * double (0.0-1.0 value range). Larger integer types are treated as
-	 * uint16_t. Signed integer types are unsupported.
+	 * @tparam Tin Input buffer element's type. Can be `uint8_t` (`0..255`
+	 * value range), `uint16_t` (`0..65535` value range), float (`0..1` value
+	 * range), `double` (`0..1` value range). Larger integer types are treated
+	 * as `uint16_t`. Signed integer types are unsupported.
+	 * @tparam Tout Output buffer element's type. Can be `uint8_t` (`0..255`
+	 * value range), `uint16_t` (`0..65535` value range), `float` (`0..1`
+	 * value range), `double` (`0..1` value range). Larger integer types are
+	 * treated as `uint16_t`. Signed integer types are unsupported.
 	 */
 
-	template< class Tin, class Tout >
+	template< typename Tin, typename Tout >
 	void resizeImage( const Tin* const SrcBuf, const int SrcWidth,
 		const int SrcHeight, int SrcScanlineSize, Tout* const NewBuf,
 		const int NewWidth, const int NewHeight, const int ElCountIO,
-		const double k, CImageResizerVars* const aVars = NULL ) const
+		const double k, CImageResizerVars* const aVars = nullptr ) const
 	{
 		if( SrcWidth == 0 || SrcHeight == 0 )
 		{
-			memset( NewBuf, 0, (size_t) NewWidth * NewHeight *
+			memset( NewBuf, 0, (size_t) NewWidth * (size_t) NewHeight *
 				sizeof( Tout ));
 
 			return;
@@ -4704,10 +4697,10 @@ public:
 		}
 
 		CImageResizerVars DefVars;
-		CImageResizerVars& Vars = ( aVars == NULL ? DefVars : *aVars );
+		CImageResizerVars& Vars = ( aVars == nullptr ? DefVars : *aVars );
 
 		CImageResizerThreadPool DefThreadPool;
-		CImageResizerThreadPool& ThreadPool = ( Vars.ThreadPool == NULL ?
+		CImageResizerThreadPool& ThreadPool = ( Vars.ThreadPool == nullptr ?
 			DefThreadPool : *Vars.ThreadPool );
 
 		// Define resizing steps, also optionally modify offsets so that
@@ -4812,7 +4805,7 @@ public:
 		CDSPFracFilterBankLin< fptype > FltBank;
 		CFilterSteps FltSteps;
 		typename CFilterStep :: CRPosBufArray RPosBufArray;
-		CBuffer< uint8_t > UsedFracMap;
+		CBuffer< char > UsedFracMap;
 
 		// Perform the filtering steps modeling at various modes, find the
 		// most efficient mode for both horizontal and vertical resizing.
@@ -4885,15 +4878,15 @@ public:
 				SrcWidth );
 		}
 
-		CBuffer< fptype, size_t > FltBuf( (size_t) NewWidthE * SrcHeight,
-			fpclass :: fpalign ); // Temporary buffer that receives
-			// horizontally-filtered and resized image.
+		CBuffer< fptype, size_t > FltBuf( (size_t) NewWidthE *
+			(size_t) SrcHeight, fpclass :: fpalign ); // Temporary buffer that
+			// receives horizontally-filtered and resized image.
 
 		for( i = 0; i < SrcHeight; i++ )
 		{
 			td[ i % ThreadCount ].addScanlineToQueue(
-				(void*) &SrcBuf[ (size_t) i * SrcScanlineSize ],
-				&FltBuf[ (size_t) i * NewWidthE ]);
+				(void*) &SrcBuf[ (size_t) i * (size_t) SrcScanlineSize ],
+				&FltBuf[ (size_t) i * (size_t) NewWidthE ]);
 		}
 
 		ThreadPool.startAllWorkloads();
@@ -4974,8 +4967,7 @@ public:
 			for( i = 0; i < NewWidth; i++ )
 			{
 				td[ i % ThreadCount ].addScanlineToQueue(
-					&FltBuf[ (size_t) i * ElCount ],
-					(fptype*) &NewBuf[ (size_t) i * ElCount ]);
+					&FltBuf[ i * ElCount ], (fptype*) &NewBuf[ i * ElCount ]);
 			}
 
 			ThreadPool.startAllWorkloads();
@@ -4986,8 +4978,8 @@ public:
 			return;
 		}
 
-		CBuffer< fptype, size_t > ResBuf( (size_t) NewWidthE * NewHeight,
-			fpclass :: fpalign );
+		CBuffer< fptype, size_t > ResBuf( (size_t) NewWidthE *
+			(size_t) NewHeight, fpclass :: fpalign );
 
 		for( i = 0; i < ThreadCount; i++ )
 		{
@@ -5000,7 +4992,7 @@ public:
 		for( i = 0; i < NewWidth; i++ )
 		{
 			td[ i % ThreadCount ].addScanlineToQueue(
-				&FltBuf[ (size_t) i * im ], &ResBuf[ (size_t) i * im ]);
+				&FltBuf[ i * im ], &ResBuf[ i * im ]);
 		}
 
 		ThreadPool.startAllWorkloads();
@@ -5020,8 +5012,8 @@ public:
 			for( i = 0; i < NewHeight; i++ )
 			{
 				td[ i % ThreadCount ].addScanlineToQueue(
-					&ResBuf[ (size_t) i * NewWidthE ],
-					&NewBuf[ (size_t) i * NewWidth * ElCountIO ]);
+					&ResBuf[ (size_t) i * (size_t) NewWidthE ],
+					&NewBuf[ (size_t) i * (size_t) ( NewWidth * ElCountIO )]);
 			}
 
 			ThreadPool.startAllWorkloads();
@@ -5056,36 +5048,22 @@ public:
 		{
 			td[ 0 ].getDitherer().init( NewWidth, Vars, TrMul, PkOut );
 
-			if( Vars.UseSRGBGamma )
+			for( i = 0; i < NewHeight; i++ )
 			{
-				for( i = 0; i < NewHeight; i++ )
-				{
-					fptype* const ResScanline =
-						&ResBuf[ (size_t) i * NewWidthE ];
+				fptype* const ResScanline =
+					&ResBuf[ (size_t) i * (size_t) NewWidthE ];
 
+				if( Vars.UseSRGBGamma )
+				{
 					CFilterStep :: applySRGBGamma( ResScanline, NewWidth,
 						Vars );
-
-					td[ 0 ].getDitherer().dither( ResScanline );
-
-					CFilterStep :: unpackScanline( ResScanline,
-						&NewBuf[ (size_t) i * NewWidth * ElCountIO ],
-						NewWidth, Vars );
 				}
-			}
-			else
-			{
-				for( i = 0; i < NewHeight; i++ )
-				{
-					fptype* const ResScanline =
-						&ResBuf[ (size_t) i * NewWidthE ];
 
-					td[ 0 ].getDitherer().dither( ResScanline );
+				td[ 0 ].getDitherer().dither( ResScanline );
 
-					CFilterStep :: unpackScanline( ResScanline,
-						&NewBuf[ (size_t) i * NewWidth * ElCountIO ],
-						NewWidth, Vars );
-				}
+				CFilterStep :: unpackScanline( ResScanline,
+					&NewBuf[ (size_t) i * (size_t) ( NewWidth * ElCountIO )],
+					NewWidth, Vars );
 			}
 		}
 		else
@@ -5101,8 +5079,8 @@ public:
 			for( i = 0; i < NewHeight; i++ )
 			{
 				td[ i % ThreadCount ].addScanlineToQueue(
-					&ResBuf[ (size_t) i * NewWidthE ],
-					&NewBuf[ (size_t) i * NewWidth * ElCountIO ]);
+					&ResBuf[ (size_t) i * (size_t) NewWidthE ],
+					&NewBuf[ (size_t) i * (size_t) ( NewWidth * ElCountIO )]);
 			}
 
 			ThreadPool.startAllWorkloads();
@@ -5116,23 +5094,16 @@ public:
 private:
 	typedef typename fpclass :: fptype fptype; ///< Floating-point type to use
 		///< during processing.
-		///<
 	typedef typename fpclass :: CFilterStep CFilterStep; ///< Filtering step
 		///< class to use during processing.
-		///<
 	typedef typename fpclass :: CDitherer CDitherer; ///< Ditherer class to
 		///< use during processing.
-		///<
 	CImageResizerParams Params; ///< Algorithm's parameters currently in use.
-		///<
 	int SrcBitDepth; ///< Bit resolution of the source image.
-		///<
 	int ResBitDepth; ///< Bit resolution of the resulting image.
-		///<
 	CDSPFracFilterBankLin< fptype > FixedFilterBank; ///< Fractional delay
 		///< filter bank with fixed characteristics, mainly for upsizing
 		///< cases.
-		///<
 
 	/**
 	 * @brief Filtering steps array.
@@ -5143,13 +5114,13 @@ private:
 	typedef CStructArray< CFilterStep > CFilterSteps;
 
 	/**
-	 * Function initializes the filter bank in the specified resizing step
+	 * @brief Initializes the filter bank in the specified resizing step
 	 * according to the source and resulting image bit depths.
 	 *
 	 * @param FltBank Filter bank to initialize.
-	 * @param CutoffMult Cutoff multiplier, 0 to 1. 1 corresponds to 0.5pi
-	 * cutoff point.
-	 * @param ForceHiOrder "True" if a high-order interpolation should be
+	 * @param CutoffMult Cutoff multiplier, 0 to 1. 1 corresponds to
+	 * `0.5 * pi` cutoff point.
+	 * @param ForceHiOrder `true`, if a high-order interpolation should be
 	 * forced which requires considerably less resources for initialization.
 	 * @param ExtFilter External filter to apply to interpolation filter.
 	 */
@@ -5165,10 +5136,11 @@ private:
 		int UseOrder;
 		int FracCount; // The number of fractional delay filters sampled by
 			// the filter bank. This variable affects the signal-to-noise
-			// ratio at interpolation stage. Theoretically, at UseOrder==1,
-			// 8-bit image resizing requires 66.2 dB SNR or 11. 16-bit
-			// resizing requires 114.4 dB SNR or 150. At UseOrder=0 the
-			// required number of filters is exponentially higher.
+			// ratio at interpolation stage. Theoretically, at `UseOrder`
+			// equal to 1, 8-bit image resizing requires 66.2 dB SNR, or 11.
+			// 16-bit resizing requires 114.4 dB SNR, or 150. At `UseOrder`
+			// equal to 0, the required number of filters is exponentially
+			// higher.
 
 		if( ForceHiOrder || IntBitDepth > 8 )
 		{
@@ -5192,27 +5164,29 @@ private:
 	}
 
 	/**
-	 * Function allocates filter buffer taking "fpclass" alignments into
-	 * account. The allocated buffer may be larger than the requested size: in
-	 * this case the additional elements will be zeroed by this function.
+	 * @brief Allocates filter buffer taking `fpclass` alignments into
+	 * account.
+	 *
+	 * The allocated buffer may be larger than the requested size: in this
+	 * case the additional elements will be zeroed by this function.
 	 *
 	 * @param Flt Filter buffer.
 	 * @param ReqCapacity The required filter buffer's capacity.
-	 * @param IsModel "True" if filtering steps modeling is performed without
+	 * @param IsModel `true`, if filtering steps modeling is performed without
 	 * actual filter allocation.
-	 * @param FltExt If non-NULL this variable will receive the number of
-	 * elements the filter was extended by.
+	 * @param FltExt If not `nullptr`, this variable will receive the number
+	 * of elements the filter was extended by.
 	 */
 
 	static void allocFilter( CBuffer< fptype >& Flt, const int ReqCapacity,
-		const bool IsModel = false, int* const FltExt = NULL )
+		const bool IsModel = false, int* const FltExt = nullptr )
 	{
 		int UseCapacity = ( ReqCapacity + fpclass :: elalign - 1 ) &
 			~( fpclass :: elalign - 1 );
 
 		int Ext = UseCapacity - ReqCapacity;
 
-		if( FltExt != NULL )
+		if( FltExt != nullptr )
 		{
 			*FltExt = Ext;
 		}
@@ -5228,29 +5202,30 @@ private:
 		while( Ext > 0 )
 		{
 			Ext--;
-			Flt[ ReqCapacity + Ext ] = (fptype) 0;
+			Flt[ ReqCapacity + Ext ] = 0;
 		}
 	}
 
 	/**
-	 * Function assigns filter parameters to the specified filtering step
+	 * @brief Assigns filter parameters to the specified filtering step
 	 * object.
 	 *
 	 * @param fs Filtering step to assign parameter to. This step cannot be
-	 * the last step if ResampleFactor greater than 1 was specified.
-	 * @param IsUpsample "True" if upsampling step. Should be set to "false"
-	 * if FltCutoff is negative.
-	 * @param ResampleFactor Resampling factor of this filter (>=1).
+	 * the last step, if `ResampleFactor` greater than 1 was specified.
+	 * @param IsUpsample `true`, if upsampling step. Should be set to `false`,
+	 * if `FltCutoff` is negative.
+	 * @param ResampleFactor Resampling factor of this filter (greater or
+	 * equal to 1).
 	 * @param FltCutoff Filter cutoff point. This value will be divided by the
-	 * ResampleFactor if IsUpsample equals "true". If zero value was
+	 * `ResampleFactor`, if `IsUpsample` equals `true`. If zero value was
 	 * specified, the "half-band" predefined filter will be created. In this
-	 * case the ResampleFactor will modify the filter cutoff point.
+	 * case, the `ResampleFactor` will modify the filter cutoff point.
 	 * @param DCGain DC gain to apply to the filter. Assigned to filtering
-	 * step's DCGain variable.
-	 * @param UseFltOrig "True" if the originally-designed filter should be
-	 * left in filtering step's FltOrig buffer. Otherwise it will be freed.
-	 * @param IsModel "True" if filtering steps modeling is performed without
-	 * actual filter building.
+	 * step's `DCGain` variable.
+	 * @param UseFltOrig `true`, if the originally-designed filter should be
+	 * left in filtering step's `FltOrig` buffer. Otherwise it will be freed.
+	 * @param IsModel `true`, if filtering steps modeling is performed,
+	 * without actual filter building.
 	 */
 
 	void assignFilterParams( CFilterStep& fs, const bool IsUpsample,
@@ -5310,7 +5285,7 @@ private:
 
 				fs.FltOrig.alloc( w.FilterLen );
 				memset( &fs.FltOrig[ 0 ], 0,
-					w.FilterLen * sizeof( fs.FltOrig[ 0 ]));
+					(size_t) w.FilterLen * sizeof( fs.FltOrig[ 0 ]));
 			}
 		}
 		else
@@ -5385,11 +5360,12 @@ private:
 	}
 
 	/**
-	 * Function adds a correction filter that tries to achieve a linear
-	 * frequency response at all frequencies. The actual resulting response
-	 * may feature a slight damping of the highest frequencies since a
-	 * suitably short correction filter cannot fix steep high-frequency
-	 * damping.
+	 * @brief Adds a correction filter that tries to achieve a linear
+	 * frequency response at all frequencies.
+	 *
+	 * The actual resulting response may feature a slight damping of the
+	 * highest frequencies since a suitably short correction filter cannot fix
+	 * steep high-frequency damping.
 	 *
 	 * This function assumes that the resizing step is currently the last
 	 * step, even if it was not inserted yet: this allows placement of the
@@ -5397,27 +5373,27 @@ private:
 	 *
 	 * @param Steps Filtering steps.
 	 * @param bw Resulting bandwidth relative to the original bandwidth (which
-	 * is 1.0), usually 1/k. Should be <= 1.0.
-	 * @param IsPreCorrection "True" if the filtering step was already created
-	 * and it is first in the Steps array. "True" also adds edge pixels to
-	 * reduce edge artifacts.
-	 * @param IsModel "True" if filtering steps modeling is performed without
-	 * actual filter building.
+	 * is 1.0), usually `1/k`. Should be lesser than or equal to 1.0.
+	 * @param IsPreCorrection `true`, if the filtering step was already
+	 * created, and it is first in the `Steps` array. `true` also adds edge
+	 * pixels, to reduce edge artifacts.
+	 * @param IsModel `true`, if filtering steps modeling is performed,
+	 * without actual filter building.
 	 */
 
 	void addCorrectionFilter( CFilterSteps& Steps, const double bw,
 		const bool IsPreCorrection, const bool IsModel ) const
 	{
-		CFilterStep& fs = ( IsPreCorrection ? Steps[ 0 ] : Steps.add() );
-		fs.IsUpsample = false;
-		fs.ResampleFactor = 1;
-		fs.DCGain = 1.0;
-		fs.EdgePixelCount = ( IsPreCorrection ? fs.EdgePixelCountDef : 0 );
+		CFilterStep& nfs = ( IsPreCorrection ? Steps[ 0 ] : Steps.add() );
+		nfs.IsUpsample = false;
+		nfs.ResampleFactor = 1;
+		nfs.DCGain = 1.0;
+		nfs.EdgePixelCount = ( IsPreCorrection ? nfs.EdgePixelCountDef : 0 );
 
 		if( IsModel )
 		{
-			allocFilter( fs.Flt, CDSPFIREQ :: calcFilterLength(
-				Params.CorrFltLen, fs.FltLatency ), true );
+			allocFilter( nfs.Flt, CDSPFIREQ :: calcFilterLength(
+				Params.CorrFltLen, nfs.FltLatency ), true );
 
 			return;
 		}
@@ -5459,8 +5435,16 @@ private:
 
 			if( fs.ResampleFactor == 0 )
 			{
-				Flt = fs.FltBank -> getFilter( 0 );
-				FltLen = fs.FltBank -> getFilterLen();
+				if( fs.FltBankDyn == nullptr )
+				{
+					Flt = fs.FltBank -> getFilterConst( 0 );
+					FltLen = fs.FltBank -> getFilterLen();
+				}
+				else
+				{
+					Flt = fs.FltBankDyn -> getFilter( 0 );
+					FltLen = fs.FltBankDyn -> getFilterLen();
+				}
 			}
 			else
 			{
@@ -5493,14 +5477,14 @@ private:
 		EQ.init( bw * 2.0, Params.CorrFltLen, BinCount, 0.0, bw, false,
 			Params.CorrFltAlpha );
 
-		fs.FltLatency = EQ.getFilterLatency();
+		nfs.FltLatency = EQ.getFilterLatency();
 
 		CBuffer< double > Filter( EQ.getFilterLength() );
 		EQ.buildFilter( Bins, &Filter[ 0 ]);
 		normalizeFIRFilter( &Filter[ 0 ], Filter.getCapacity(), 1.0 );
 
-		allocFilter( fs.Flt, Filter.getCapacity() );
-		copyArray( &Filter[ 0 ], &fs.Flt[ 0 ], Filter.getCapacity() );
+		allocFilter( nfs.Flt, Filter.getCapacity() );
+		copyArray( &Filter[ 0 ], &nfs.Flt[ 0 ], Filter.getCapacity() );
 
 		// Print a theoretically achieved final frequency response at various
 		// feature sizes (from DC to 1 pixel). Values above 255 means features
@@ -5512,7 +5496,7 @@ private:
 		{
 			const double th = AVIR_PI * sbw * j / BinCount1;
 
-			calcFIRFilterResponse( &fs.Flt[ 0 ], fs.Flt.getCapacity(),
+			calcFIRFilterResponse( &nfs.Flt[ 0 ], nfs.Flt.getCapacity(),
 				th, re, im );
 
 			printf( "%f\n", sqrt( re * re + im * im ) / Bins[ j ] * 255 );
@@ -5522,10 +5506,11 @@ private:
 	}
 
 	/**
-	 * Function adds a sharpening filter if image is being upsized. Such
-	 * sharpening allows to spot interpolation filter's stop-band attenuation:
-	 * if attenuation is too weak, a "dark grid" and other artifacts may
-	 * become visible.
+	 * @brief Adds a sharpening filter test, if image is being upsized.
+	 *
+	 * Such sharpening allows to spot interpolation filter's stop-band
+	 * attenuation: if attenuation is too weak, a "dark grid" and other
+	 * artifacts may become visible.
 	 *
 	 * It is assumed that 40 decibel stop-band attenuation should be
 	 * considered a required minimum: this allows application of (deliberately
@@ -5533,9 +5518,9 @@ private:
 	 *
 	 * @param Steps Filtering steps.
 	 * @param bw Resulting bandwidth relative to the original bandwidth (which
-	 * is 1.0), usually 1/k.
-	 * @param IsModel "True" if filtering steps modeling is performed without
-	 * actual filter building.
+	 * is 1.0), usually `1/k`.
+	 * @param IsModel `true`, if filtering steps modeling is performed,
+	 * without actual filter building.
 	 */
 
 	static void addSharpenTest( CFilterSteps& Steps, const double bw,
@@ -5611,9 +5596,11 @@ private:
 	}
 
 	/**
-	 * Function builds sequence of filtering steps depending on the specified
-	 * resizing coefficient. The last steps included are always the resizing
-	 * step then (possibly) the correction step.
+	 * @brief Builds sequence of filtering steps, depending on the specified
+	 * resizing coefficient.
+	 *
+	 * The last steps included are always the resizing step then (possibly)
+	 * the correction step.
 	 *
 	 * @param Steps Array that receives filtering steps.
 	 * @param[out] Vars Variables object.
@@ -5622,8 +5609,8 @@ private:
 	 * the first filtering step only (upsampling or filtering step).
 	 * @param ModeFlags Build mode flags to use. This is a bitmap of switches
 	 * that enable or disable certain algorithm features.
-	 * @param IsModel "True" if filtering steps modeling is performed without
-	 * the actual filter allocation and building.
+	 * @param IsModel `true`, if filtering steps modeling is performed,
+	 * without the actual filter allocation and building.
 	 */
 
 	void buildFilterSteps( CFilterSteps& Steps, CImageResizerVars& Vars,
@@ -5642,14 +5629,14 @@ private:
 		const double bw = 1.0 / Vars.k; // Resulting bandwidth.
 		const int UpsampleFactor = ( (int) floor( Vars.k ) < 2 ? 2 : 1 );
 		double IntCutoffMult; // Interpolation filter cutoff multiplier.
-		CFilterStep* ReuseStep; // If not NULL, resizing step should use
+		CFilterStep* ReuseStep; // If not `nullptr`, resizing step should use
 			// this step object instead of creating a new one.
-		CFilterStep* ExtFltStep; // Use FltOrig of this step as the external
+		CFilterStep* ExtFltStep; // Use `FltOrig` of this step as the external
 			// filter to applied to the interpolator.
-		bool IsPreCorrection; // "True" if the correction filter is applied
+		bool IsPreCorrection; // `true`, if the correction filter is applied
 			// first.
 		double FltCutoff; // Cutoff frequency of the first filtering step.
-		double corrbw; ///< Bandwidth at the correction step.
+		double corrbw; // Bandwidth at the correction step.
 
 		if( Vars.k <= 1.0 )
 		{
@@ -5674,8 +5661,8 @@ private:
 				DoFltAndIntCombo, IsModel );
 
 			IntCutoffMult = FltCutoff * 2.0 / UpsampleFactor;
-			ReuseStep = NULL;
-			ExtFltStep = ( DoFltAndIntCombo ? &fs : NULL );
+			ReuseStep = nullptr;
+			ExtFltStep = ( DoFltAndIntCombo ? &fs : nullptr );
 		}
 		else
 		{
@@ -5718,30 +5705,32 @@ private:
 			else
 			{
 				IntCutoffMult *= DownsampleFactor;
-				ReuseStep = NULL;
-				ExtFltStep = NULL;
+				ReuseStep = nullptr;
+				ExtFltStep = nullptr;
 			}
 		}
 
 		// Insert resizing and correction steps.
 
-		CFilterStep& fs = ( ReuseStep == NULL ? Steps.add() : *ReuseStep );
+		CFilterStep& fs = ( ReuseStep == nullptr ? Steps.add() : *ReuseStep );
 
 		Vars.ResizeStep = Steps.getItemCount() - 1;
 		fs.IsUpsample = false;
 		fs.ResampleFactor = 0;
-		fs.DCGain = ( ExtFltStep == NULL ? 1.0 : ExtFltStep -> DCGain );
+		fs.DCGain = ( ExtFltStep == nullptr ? 1.0 : ExtFltStep -> DCGain );
 
 		initFilterBank( FltBank, IntCutoffMult, ForceHiOrderInt,
-			( ExtFltStep == NULL ? fs.FltOrig : ExtFltStep -> FltOrig ));
+			( ExtFltStep == nullptr ? fs.FltOrig : ExtFltStep -> FltOrig ));
 
 		if( FltBank == FixedFilterBank )
 		{
-			fs.FltBank = (CDSPFracFilterBankLin< fptype >*) &FixedFilterBank;
+			fs.FltBank = &FixedFilterBank;
+			fs.FltBankDyn = nullptr;
 		}
 		else
 		{
 			fs.FltBank = &FltBank;
+			fs.FltBankDyn = &FltBank;
 		}
 
 		addCorrectionFilter( Steps, corrbw, IsPreCorrection, IsModel );
@@ -5750,9 +5739,11 @@ private:
 	}
 
 	/**
-	 * Function extends *this upsampling step so that it produces more
+	 * @brief Extends *this* upsampling step so that it produces more
 	 * upsampled pixels that cover the prefix and suffix needs of the next
-	 * step. After the call to this function the InPrefix and InSuffix
+	 * step.
+	 *
+	 * After the call to this function, the `InPrefix` and `InSuffix`
 	 * variables of the next step will be set to zero.
 	 *
 	 * @param fs Upsampling filtering step.
@@ -5775,8 +5766,8 @@ private:
 	}
 
 	/**
-	 * Function fills resizing step's RPosBuf array, excluding the actual
-	 * "ftp" pointers and "SrcOffs" offsets.
+	 * @brief Fills resizing step's `RPosBuf` array, excluding the actual
+	 * `ftp` pointers and `SrcOffs` offsets.
 	 *
 	 * This array should be cleared if the resizing step or offset were
 	 * changed. Otherwise this function only fills the elements required to
@@ -5817,13 +5808,14 @@ private:
 	}
 
 	/**
-	 * Function updates filtering step buffer lengths depending on the
-	 * specified source and new scanline lengths. This function should be
-	 * called after the buildFilterSteps() function.
+	 * @brief Updates filtering step buffer lengths, depending on the
+	 * specified source and new scanline lengths.
+	 *
+	 * This function should be called after the buildFilterSteps() function.
 	 *
 	 * @param Steps Array that receives filtering steps.
 	 * @param[out] Vars Variables object, will receive buffer size and length.
-	 * This function expects "k" and "o" variable values that will be
+	 * This function expects the `k` and `o` variable values that will be
 	 * adjusted by this function.
 	 * @param RPosBufArray Resizing position buffers array, used to obtain
 	 * buffer to initialize and use (will be reused if it is already fully or
@@ -5907,7 +5899,7 @@ private:
 				fs.InPrefix = fs.FltLatency;
 				fs.InSuffix = fs.Flt.getCapacity() - fs.FltLatency - 1;
 
-				// Additionally extend OutLen to produce more precise edge
+				// Additionally extend `OutLen`, to produce more precise edge
 				// pixels.
 
 				fs.OutLen = ( fs.InLen + fs.ResampleFactor - 1 ) /
@@ -5945,18 +5937,20 @@ private:
 	}
 
 	/**
-	 * Function calculates an optimal intermediate buffer length that will
-	 * cover all needs of the specified filtering steps. This function should
-	 * be called after the updateFilterStepBuffers() function.
+	 * @brief Calculates an optimal intermediate buffer length that will
+	 * cover all needs of the specified filtering steps.
 	 *
-	 * Function also updates resizing step's RPosBuf pointers to the filter
-	 * bank and SrcOffs values.
+	 * This function should be called after the updateFilterStepBuffers()
+	 * function.
+	 *
+	 * Function also updates resizing step's `RPosBuf` pointers to the filter
+	 * bank, and `SrcOffs` values.
 	 *
 	 * @param Steps Filtering steps.
 	 * @param[out] Vars Variables object, will receive buffer size and length.
 	 * @param ResElIncr Resulting (final) element increment, used to produce
 	 * de-interleaved result. For horizontal processing this value is equal
-	 * to last step's OutLen, for vertical processing this value is equal to
+	 * to last step's `OutLen`, for vertical processing this value is equal to
 	 * resulting image's width.
 	 */
 
@@ -6064,39 +6058,76 @@ private:
 			Vars.BufLen[ i ] *= Vars.ElCount;
 		}
 
-		// Update RPosBuf pointers and SrcOffs.
+		// Update `RPosBuf` pointers, and `SrcOffs`.
 
 		CFilterStep& fs = Steps[ Vars.ResizeStep ];
 		typename CFilterStep :: CResizePos* rpos = &(*fs.RPosBuf)[ 0 ];
 		const int em = ( fpclass :: packmode == 0 ? Vars.ElCount : 1 );
-		const int fl = fs.FltBank -> getFilterLen();
+		const int fl = ( fs.FltBankDyn == nullptr ?
+			fs.FltBank -> getFilterLen() : fs.FltBankDyn -> getFilterLen() );
+
 		const int FilterLenD21 = fl / 2 - 1;
 
 		if( Vars.IsResize2 )
 		{
-			for( i = 0; i < fs.OutLen; i++ )
+			if( fs.FltBankDyn == nullptr )
 			{
-				const int p = rpos -> SrcPosInt - FilterLenD21;
-				const int fo = p & 1;
-				rpos -> SrcOffs = ( p + fo ) * em;
-				rpos -> ftp = fs.FltBank -> getFilter( rpos -> fti ) + fo;
-				rpos -> fl = fl - fo;
-				rpos++;
+				for( i = 0; i < fs.OutLen; i++ )
+				{
+					const int p = rpos -> SrcPosInt - FilterLenD21;
+					const int fo = p & 1;
+					rpos -> SrcOffs = ( p + fo ) * em;
+					rpos -> ftp = fs.FltBank -> getFilterConst(
+						rpos -> fti ) + fo;
+
+					rpos -> fl = fl - fo;
+					rpos++;
+				}
+			}
+			else
+			{
+				for( i = 0; i < fs.OutLen; i++ )
+				{
+					const int p = rpos -> SrcPosInt - FilterLenD21;
+					const int fo = p & 1;
+					rpos -> SrcOffs = ( p + fo ) * em;
+					rpos -> ftp = fs.FltBankDyn -> getFilter(
+						rpos -> fti ) + fo;
+
+					rpos -> fl = fl - fo;
+					rpos++;
+				}
 			}
 		}
 		else
 		{
-			for( i = 0; i < fs.OutLen; i++ )
+			if( fs.FltBankDyn == nullptr )
 			{
-				rpos -> SrcOffs = ( rpos -> SrcPosInt - FilterLenD21 ) * em;
-				rpos -> ftp = fs.FltBank -> getFilter( rpos -> fti );
-				rpos++;
+				for( i = 0; i < fs.OutLen; i++ )
+				{
+					rpos -> SrcOffs = ( rpos -> SrcPosInt -
+						FilterLenD21 ) * em;
+
+					rpos -> ftp = fs.FltBank -> getFilterConst( rpos -> fti );
+					rpos++;
+				}
+			}
+			else
+			{
+				for( i = 0; i < fs.OutLen; i++ )
+				{
+					rpos -> SrcOffs = ( rpos -> SrcPosInt -
+						FilterLenD21 ) * em;
+
+					rpos -> ftp = fs.FltBankDyn -> getFilter( rpos -> fti );
+					rpos++;
+				}
 			}
 		}
 	}
 
 	/**
-	 * Function modifies the overall (DC) gain of the correction filter in the
+	 * @brief Modifies the overall (DC) gain of the correction filter in the
 	 * pre-built filtering steps array.
 	 *
 	 * @param Steps Filtering steps.
@@ -6126,7 +6157,7 @@ private:
 	}
 
 	/**
-	 * Function builds a map of used fractional delay filters based on the
+	 * @brief Builds a map of used fractional delay filters based on the
 	 * resizing positions buffer.
 	 *
 	 * @param fs Resizing step.
@@ -6134,11 +6165,12 @@ private:
 	 */
 
 	static void fillUsedFracMap( const CFilterStep& fs,
-		CBuffer< uint8_t >& UsedFracMap )
+		CBuffer< char >& UsedFracMap )
 	{
 		const int FracCount = fs.FltBank -> getFracCount();
 		UsedFracMap.increaseCapacity( FracCount, false );
-		memset( &UsedFracMap[ 0 ], 0, FracCount * sizeof( UsedFracMap[ 0 ]));
+		memset( &UsedFracMap[ 0 ], 0,
+			(size_t) FracCount * sizeof( UsedFracMap[ 0 ]));
 
 		typename CFilterStep :: CResizePos* rpos = &(*fs.RPosBuf)[ 0 ];
 		int i;
@@ -6151,14 +6183,15 @@ private:
 	}
 
 	/**
-	 * Function calculates the overall filtering steps complexity per
-	 * scanline. Each complexity unit corresponds to a single multiply-add
-	 * operation. Data copy and pointer math operations are not included in
-	 * this calculation, it is assumed that they correlate to the multiply-add
+	 * @brief Calculates the overall filtering steps complexity per scanline.
+	 *
+	 * Each complexity unit corresponds to a single multiply-add operation.
+	 * Data copy and pointer math operations are not included in this
+	 * calculation: it is assumed that they correlate to the multiply-add
 	 * operations. Calculation also does not include final rounding, dithering
 	 * and clamping operations since they cannot be optimized out anyway.
 	 *
-	 * Calculation of the CRPosBuf buffer is not included since it cannot be
+	 * Calculation of the `CRPosBuf` buffer is not included since it cannot be
 	 * avoided.
 	 *
  	 * This function should be called after the updateFilterStepBuffers()
@@ -6171,7 +6204,7 @@ private:
 	 */
 
 	static int calcComplexity( const CFilterSteps& Steps,
-		const CImageResizerVars& Vars, const CBuffer< uint8_t >& UsedFracMap,
+		const CImageResizerVars& Vars, const CBuffer< char >& UsedFracMap,
 		const int ScanlineCount )
 	{
 		int fcnum; // Filter complexity multiplier numerator.
@@ -6248,33 +6281,32 @@ private:
 	 * data in floating point format.
 	 */
 
-	template< class Tin, class Tout >
+	template< typename Tin, typename Tout >
 	class CThreadData : public CImageResizerThreadPool :: CWorkload
 	{
 	public:
 		virtual void process()
+	#if __cplusplus >= 201103L
+		override
+	#endif // __cplusplus >= 201103L
 		{
 			processScanlineQueue();
 		}
 
 		/**
-		 * This enumeration lists possible scanline operations.
+		 * @brief Lists possible scanline operations.
 		 */
 
 		enum EScanlineOperation
 		{
 			sopResizeH, ///< Resize horizontal scanline.
-				///<
 			sopResizeV, ///< Resize vertical scanline.
-				///<
 			sopDitherAndUnpackH, ///< Dither and unpack horizontal scanline.
-				///<
 			sopUnpackH ///< Unpack horizontal scanline.
-				///<
 		};
 
 		/**
-		 * Function initializes *this thread data object and assigns certain
+		 * @brief Initializes *this* thread data object, and assigns certain
 		 * variables provided by the higher level code.
 		 *
 		 * @param aThreadIndex Index of this thread data (0-based).
@@ -6293,7 +6325,7 @@ private:
 		}
 
 		/**
-		 * Function initializes scanline processing queue, and updates
+		 * @brief Initializes scanline processing queue, and updates
 		 * capacities of intermediate buffers.
 		 *
 		 * @param aOp Operation to perform over scanline.
@@ -6345,10 +6377,11 @@ private:
 		}
 
 		/**
-		 * Function adds a scanline to the queue buffer. The
-		 * initScanlineQueue() function should be called before calling this
-		 * function. The number of calls to this add function should not
-		 * exceed the TotalLines spread over all threads.
+		 * @brief Adds a scanline to the queue buffer.
+		 *
+		 * The initScanlineQueue() function should be called before calling
+		 * this function. The number of calls to this add function should not
+		 * exceed the `TotalLines` spread over all threads.
 		 *
 		 * @param SrcBuf Source scanline buffer.
 		 * @param ResBuf Resulting scanline buffer.
@@ -6362,7 +6395,7 @@ private:
 		}
 
 		/**
-		 * Function processes all queued scanlines.
+		 * @brief Processes all queued scanlines.
 		 */
 
 		void processScanlineQueue()
@@ -6395,30 +6428,19 @@ private:
 
 				case sopDitherAndUnpackH:
 				{
-					if( Vars -> UseSRGBGamma )
+					for( i = 0; i < QueueLen; i++ )
 					{
-						for( i = 0; i < QueueLen; i++ )
+						if( Vars -> UseSRGBGamma )
 						{
 							CFilterStep :: applySRGBGamma(
 								(fptype*) Queue[ i ].SrcBuf, SrcLen, *Vars );
-
-							Ditherer.dither( (fptype*) Queue[ i ].SrcBuf );
-
-							CFilterStep :: unpackScanline(
-								(fptype*) Queue[ i ].SrcBuf,
-								(Tout*) Queue[ i ].ResBuf, SrcLen, *Vars );
 						}
-					}
-					else
-					{
-						for( i = 0; i < QueueLen; i++ )
-						{
-							Ditherer.dither( (fptype*) Queue[ i ].SrcBuf );
 
-							CFilterStep :: unpackScanline(
-								(fptype*) Queue[ i ].SrcBuf,
-								(Tout*) Queue[ i ].ResBuf, SrcLen, *Vars );
-						}
+						Ditherer.dither( (fptype*) Queue[ i ].SrcBuf );
+
+						CFilterStep :: unpackScanline(
+							(fptype*) Queue[ i ].SrcBuf,
+							(Tout*) Queue[ i ].ResBuf, SrcLen, *Vars );
 					}
 
 					break;
@@ -6426,26 +6448,17 @@ private:
 
 				case sopUnpackH:
 				{
-					if( Vars -> UseSRGBGamma )
+					for( i = 0; i < QueueLen; i++ )
 					{
-						for( i = 0; i < QueueLen; i++ )
+						if( Vars -> UseSRGBGamma )
 						{
 							CFilterStep :: applySRGBGamma(
 								(fptype*) Queue[ i ].SrcBuf, SrcLen, *Vars );
+						}
 
-							CFilterStep :: unpackScanline(
-								(fptype*) Queue[ i ].SrcBuf,
-								(Tout*) Queue[ i ].ResBuf, SrcLen, *Vars );
-						}
-					}
-					else
-					{
-						for( i = 0; i < QueueLen; i++ )
-						{
-							CFilterStep :: unpackScanline(
-								(fptype*) Queue[ i ].SrcBuf,
-								(Tout*) Queue[ i ].ResBuf, SrcLen, *Vars );
-						}
+						CFilterStep :: unpackScanline(
+							(fptype*) Queue[ i ].SrcBuf,
+							(Tout*) Queue[ i ].ResBuf, SrcLen, *Vars );
 					}
 
 					break;
@@ -6454,7 +6467,7 @@ private:
 		}
 
 		/**
-		 * Function returns ditherer object associated with *this thread data
+		 * @brief Returns ditherer object associated with *this* thread data
 		 * object.
 		 */
 
@@ -6465,33 +6478,21 @@ private:
 
 	private:
 		int ThreadIndex; ///< Thread index.
-			///<
 		int ThreadCount; ///< Thread count.
-			///<
 		const CFilterSteps* Steps; ///< Filtering steps.
-			///<
 		const CImageResizerVars* Vars; ///< Image resizer variables.
-			///<
 		CBuffer< fptype > Bufs; ///< Flip-flop intermediate buffers.
-			///<
 		fptype* BufPtrs[ 3 ]; ///< Flip-flop buffer pointers (referenced by
 			///< filtering step's InBuf and OutBuf indices).
-			///<
 		CBuffer< fptype > TmpFltBuf; ///< Temporary buffer used in the
 			///< doResize() function, aligned by fpclass :: fpalign.
-			///<
 		EScanlineOperation ScanlineOp; ///< Operation to perform over
 			///< scanline.
-			///<
 		int SrcLen; ///< Source scanline length in the last queue.
-			///<
 		int SrcIncr; ///< Source scanline buffer increment in the last queue.
-			///<
 		int ResIncr; ///< Resulting scanline buffer increment in the last
 			///< queue.
-			///<
 		CDitherer Ditherer; ///< Ditherer object to use.
-			///<
 
 		/**
 		 * @brief Scanline processing queue item.
@@ -6502,20 +6503,16 @@ private:
 		struct CQueueItem
 		{
 			void* SrcBuf; ///< Source scanline buffer, will by typecasted to
-				///< Tin or fptype*.
-				///<
+				///< `Tin` or `fptype*`.
 			void* ResBuf; ///< Resulting scanline buffer, will by typecasted
-				///< to Tout or fptype*.
-				///<
+				///< to `Tout` or `fptype*`.
 		};
 
 		CBuffer< CQueueItem > Queue; ///< Scanline processing queue.
-			///<
 		int QueueLen; ///< Queue length.
-			///<
 
 		/**
-		 * Function resizes a single horizontal scanline.
+		 * @brief Resizes a single horizontal scanline.
 		 *
 		 * @param SrcBuf Source scanline buffer. Can be either horizontal or
 		 * vertical.
@@ -6528,10 +6525,6 @@ private:
 
 			fs0.packScanline( SrcBuf, BufPtrs[ 0 ], SrcLen );
 			BufPtrs[ 2 ] = ResBuf;
-
-			fptype ElBiases[ 4 ];
-			fs0.calcScanlineBias( BufPtrs[ 0 ], SrcLen, ElBiases );
-			fs0.unbiasScanline( BufPtrs[ 0 ], SrcLen, ElBiases );
 
 			int j;
 
@@ -6560,21 +6553,19 @@ private:
 					if( Vars -> IsResize2 )
 					{
 						fs.doResize2( BufPtrs[ fs.InBuf ],
-							BufPtrs[ fs.OutBuf ], DstIncr, ElBiases,
-							TmpFltBuf );
+							BufPtrs[ fs.OutBuf ], DstIncr, TmpFltBuf );
 					}
 					else
 					{
 						fs.doResize( BufPtrs[ fs.InBuf ],
-							BufPtrs[ fs.OutBuf ], DstIncr, ElBiases,
-							TmpFltBuf );
+							BufPtrs[ fs.OutBuf ], DstIncr, TmpFltBuf );
 					}
 				}
 			}
 		}
 
 		/**
-		 * Function resizes a single vertical scanline.
+		 * @brief Resizes a single vertical scanline.
 		 *
 		 * @param SrcBuf Source scanline buffer. Can be either horizontal or
 		 * vertical.
@@ -6588,10 +6579,6 @@ private:
 
 			fs0.convertVtoH( SrcBuf, BufPtrs[ 0 ], SrcLen, SrcIncr );
 			BufPtrs[ 2 ] = ResBuf;
-
-			fptype ElBiases[ 4 ];
-			fs0.calcScanlineBias( BufPtrs[ 0 ], SrcLen, ElBiases );
-			fs0.unbiasScanline( BufPtrs[ 0 ], SrcLen, ElBiases );
 
 			int j;
 
@@ -6620,14 +6607,12 @@ private:
 					if( Vars -> IsResize2 )
 					{
 						fs.doResize2( BufPtrs[ fs.InBuf ],
-							BufPtrs[ fs.OutBuf ], DstIncr, ElBiases,
-							TmpFltBuf );
+							BufPtrs[ fs.OutBuf ], DstIncr, TmpFltBuf );
 					}
 					else
 					{
 						fs.doResize( BufPtrs[ fs.InBuf ],
-							BufPtrs[ fs.OutBuf ], DstIncr, ElBiases,
-							TmpFltBuf );
+							BufPtrs[ fs.OutBuf ], DstIncr, TmpFltBuf );
 					}
 				}
 			}
@@ -6638,6 +6623,11 @@ private:
 #undef AVIR_PI
 #undef AVIR_PId2
 #undef AVIR_NOCTOR
+
+#if defined( AVIR_NULLPTR )
+	#undef nullptr
+	#undef AVIR_NULLPTR
+#endif // defined( AVIR_NULLPTR )
 
 } // namespace avir
 

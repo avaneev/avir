@@ -1,15 +1,16 @@
-//$ nobt
-//$ nocpp
-
 /**
  * @file avir_dil.h
  *
+ * @version 3.1
+ *
  * @brief Inclusion file for de-interleaved image resizing functions.
  *
- * This file includes the "CImageResizerFilterStepDIL" class which implements
+ * This file includes the CImageResizerFilterStepDIL class which implements
  * image resizing functions in de-interleaved mode.
  *
- * AVIR Copyright (c) 2015-2021 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2025 Aleksey Vaneev
+ *
+ * See the "LICENSE" file for license.
  */
 
 namespace avir {
@@ -22,7 +23,7 @@ namespace avir {
  *
  * @tparam fptype Floating point type to use for storing pixel elements.
  * SIMD types cannot be used.
- * @tparam fptypesimd The SIMD type used to store a pack of "fptype" values.
+ * @tparam fptypesimd The SIMD type used to store a pack of `fptype` values.
  */
 
 template< class fptype, class fptypesimd >
@@ -51,11 +52,11 @@ public:
 	using CImageResizerFilterStep< fptype, fptype > :: EdgePixelCount;
 
 	/**
-	 * Function performs "packing" (de-interleaving) of a scanline and type
+	 * @brief Performs "packing" (de-interleaving) of a scanline, and type
 	 * conversion. If required, the sRGB gamma correction is applied.
 	 *
 	 * @param ip0 Input scanline, pixel elements interleaved.
-	 * @param op0 Output scanline, pixel elements are grouped, "l" elements
+	 * @param op0 Output scanline, pixel elements are grouped, `l` elements
 	 * apart.
 	 * @param l The number of pixels to "pack".
 	 */
@@ -84,6 +85,7 @@ public:
 		}
 		else
 		{
+			const int AlphaIndex = Vars -> AlphaIndex;
 			const fptype gm = (fptype) Vars -> InGammaMult;
 
 			for( j = 0; j < ElCount; j++ )
@@ -92,20 +94,31 @@ public:
 				fptype* const op = op0 + j * InElIncr;
 				int i;
 
-				for( i = 0; i < l; i++ )
+				if( ElCount == 4 && j == AlphaIndex )
 				{
-					op[ i ] = convertSRGB2Lin( (fptype) *ip * gm );
-					ip += ElCount;
+					for( i = 0; i < l; i++ )
+					{
+						op[ i ] = (fptype) *ip * gm;
+						ip += ElCount;
+					}
+				}
+				else
+				{
+					for( i = 0; i < l; i++ )
+					{
+						op[ i ] = convertSRGB2Lin( *ip, gm );
+						ip += ElCount;
+					}
 				}
 			}
 		}
 	}
 
 	/**
-	 * Function applies Linear to sRGB gamma correction to the specified
-	 * scanline.
+	 * @brief Applies Linear to sRGB gamma correction to the specified
+	 * scanline, in-place.
 	 *
-	 * @param p Scanline.
+	 * @param[in,out] p0 Scanline.
 	 * @param l The number of pixels to de-linearize.
 	 * @param Vars0 Image resizing-related variables.
 	 */
@@ -114,6 +127,7 @@ public:
 		const CImageResizerVars& Vars0 )
 	{
 		const int ElCount = Vars0.ElCount;
+		const int AlphaIndex = Vars0.AlphaIndex;
 		const fptype gm = (fptype) Vars0.OutGammaMult;
 		int j;
 
@@ -122,16 +136,27 @@ public:
 			fptype* const p = p0 + j * l;
 			int i;
 
-			for( i = 0; i < l; i++ )
+			if( ElCount == 4 && j == AlphaIndex )
 			{
-				p[ i ] = convertLin2SRGB( p[ i ]) * gm;
+				for( i = 0; i < l; i++ )
+				{
+					p[ i ] *= gm;
+				}
+			}
+			else
+			{
+				for( i = 0; i < l; i++ )
+				{
+					p[ i ] = convertLin2SRGB( p[ i ]) * gm;
+				}
 			}
 		}
 	}
 
 	/**
-	 * Function converts vertical scanline to horizontal scanline. This
-	 * function is called by the image resizer when image is resized
+	 * @brief Converts vertical scanline to horizontal scanline.
+	 *
+	 * This function is called by the image resizer when image is resized
 	 * vertically. This means that the vertical scanline is stored in the
 	 * same format produced by the packScanline() and maintained by other
 	 * filtering functions.
@@ -139,7 +164,7 @@ public:
 	 * @param ip Input vertical scanline, pixel elements are grouped, SrcLen
 	 * elements apart.
 	 * @param op Output buffer (temporary buffer used during resizing), pixel
-	 * elements are grouped, "l" elements apart.
+	 * elements are grouped, `l` elements apart.
 	 * @param SrcLen The number of pixels in the input scanline, also used to
 	 * calculate input buffer increment.
 	 * @param SrcIncr Input buffer increment to the next vertical pixel.
@@ -206,17 +231,18 @@ public:
 	}
 
 	/**
-	 * Function performs "unpacking" of a scanline and type conversion
-	 * (truncation is used when floating point is converted to integer).
+	 * @brief Performs "unpacking" of a scanline, and type conversion.
+	 *
+	 * Truncation is used when floating point is converted to integer.
 	 * The unpacking function assumes that scanline is stored in the style
 	 * produced by the packScanline() function.
 	 *
-	 * @param ip0 Input scanline, pixel elements are grouped, "l" elements
+	 * @param ip0 Input scanline, pixel elements are grouped, `l` elements
 	 * apart.
 	 * @param op0 Output scanline, pixel elements are interleaved.
 	 * @param l The number of pixels to "unpack".
-	 * @param Vars0 Image resizing-related variables. ElCount is assumed to be
-	 * equal to ElCountIO.
+	 * @param Vars0 Image resizing-related variables. `ElCount` is assumed to
+	 * be equal to `ElCountIO`.
 	 */
 
 	template< class Tout >
@@ -241,65 +267,8 @@ public:
 	}
 
 	/**
-	 * Function calculates scanline's DC gain for each channel, further used
-	 * to "unbias" the scanline.
+	 * @brief Prepares input scanline buffer for *this* filtering step.
 	 *
-	 * @param p0 Source scanline.
-	 * @param SrcLen Source scanline's length.
-	 * @param[out] ElBiases Resuling biases.
-	 */
-
-	void calcScanlineBias( const fptype* const p0, const int SrcLen,
-		fptype* const ElBiases ) const
-	{
-		const int ElCount = Vars -> ElCount;
-		int j;
-
-		for( j = 0; j < ElCount; j++ )
-		{
-			const fptype* const p = p0 + j * InElIncr;
-			fptype b = (fptype) 0;
-			int i;
-
-			for( i = 0; i < SrcLen; i++ )
-			{
-				b += p[ i ];
-			}
-
-			ElBiases[ j ] = b / (fptype) SrcLen;
-		}
-	}
-
-	/**
-	 * Function applies "unbiasing" to the scanline, by subtracting the
-	 * previously calculated bias (DC gain) values.
-	 *
-	 * @param p0 Scanline.
-	 * @param l Scanline's length.
-	 * @param ElBiases Biases to subtract, for each channel.
-	 */
-
-	void unbiasScanline( fptype* const p0, const int l,
-		const fptype* const ElBiases ) const
-	{
-		const int ElCount = Vars -> ElCount;
-		int j;
-
-		for( j = 0; j < ElCount; j++ )
-		{
-			fptype* const p = p0 + j * InElIncr;
-			const fptype b = ElBiases[ j ];
-			int i;
-
-			for( i = 0; i < l; i++ )
-			{
-				p[ i ] -= b;
-			}
-		}
-	}
-
-	/**
-	 * Function prepares input scanline buffer for *this filtering step.
 	 * Left- and right-most pixels are replicated to make sure no buffer
 	 * overrun happens. Such approach also allows to bypass any pointer
 	 * range checks.
@@ -326,7 +295,7 @@ public:
 	}
 
 	/**
-	 * Function peforms scanline upsampling with filtering.
+	 * @brief Peforms scanline upsampling with filtering.
 	 *
 	 * @param Src Source scanline buffer (length = this -> InLen). Source
 	 * scanline increment will be equal to ElCount.
@@ -347,7 +316,7 @@ public:
 		{
 			const fptype* ip = Src;
 			fptype* op0 = &Dst[ -OutPrefix ];
-			memset( op0, 0, ( OutPrefix + OutLen + OutSuffix ) *
+			memset( op0, 0, (size_t) ( OutPrefix + OutLen + OutSuffix ) *
 				sizeof( fptype ));
 
 			if( FltOrig.getCapacity() > 0 )
@@ -461,7 +430,8 @@ public:
 	}
 
 	/**
-	 * Function peforms scanline filtering with optional downsampling.
+	 * @brief Performs scanline filtering with optional downsampling.
+	 *
 	 * Function makes use of the symmetry of the filter.
 	 *
 	 * @param Src Source scanline buffer (length = this -> InLen). Source
@@ -569,25 +539,25 @@ public:
 	}
 
 	/**
-	 * Function performs resizing of a single scanline. This function does
-	 * not "know" about the length of the source scanline buffer. This buffer
-	 * should be padded with enough pixels so that ( SrcPos - FilterLenD2 ) is
-	 * always >= 0 and ( SrcPos + ( DstLineLen - 1 ) * k + FilterLenD2 + 1 )
-	 * does not exceed source scanline's buffer length. SrcLine's increment is
-	 * assumed to be equal to 1.
+	 * @brief Performs resizing of a single scanline.
+	 *
+	 * This function does not "know" about the length of the source scanline
+	 * buffer. This buffer should be padded with enough pixels so that
+	 * `SrcPos - FilterLenD2` is always positive, and
+	 * `SrcPos + ( DstLineLen - 1 ) * k + FilterLenD2 + 1` does not exceed
+	 * source scanline's buffer length. SrcLine's increment is assumed to be
+	 * equal to 1.
 	 *
 	 * @param SrcLine Source scanline buffer.
 	 * @param DstLine Destination (resized) scanline buffer.
 	 * @param DstLineIncr Destination scanline position increment, used for
 	 * horizontal or vertical scanline stepping.
-	 * @param ElBiases Bias values to add to the resulting scanline.
-	 * @param xx Temporary buffer, of size FltBank -> getFilterLen(), must be
+	 * @param xx Temporary buffer, of size FltBank.getFilterLen(), must be
 	 * aligned by fpclass :: fpalign.
 	 */
 
 	void doResize( const fptype* SrcLine, fptype* DstLine,
-		int DstLineIncr, const fptype* const ElBiases,
-		fptype* const xx ) const
+		int DstLineIncr, fptype* const xx ) const
 	{
 		const int IntFltLen = FltBank -> getFilterLen();
 		const int ElCount = Vars -> ElCount;
@@ -621,8 +591,6 @@ public:
 
 		if( ElCount == 1 )
 		{
-			const fptype b = ElBiases[ 0 ];
-
 			if( FltBank -> getOrder() == 1 )
 			{
 				AVIR_RESIZE_PART1
@@ -638,7 +606,7 @@ public:
 						fptypesimd :: loadu( Src + i );
 				}
 
-				DstLine[ 0 ] = sum.hadd() + b;
+				DstLine[ 0 ] = sum.hadd();
 
 				AVIR_RESIZE_PART2
 			}
@@ -655,7 +623,7 @@ public:
 						fptypesimd :: loadu( Src + i );
 				}
 
-				DstLine[ 0 ] = sum.hadd() + b;
+				DstLine[ 0 ] = sum.hadd();
 
 				AVIR_RESIZE_PART2
 			}
@@ -672,8 +640,6 @@ public:
 			{
 				for( j = 0; j < ElCount; j++ )
 				{
-					const fptype b = ElBiases[ j ];
-
 					AVIR_RESIZE_PART1
 
 					fptypesimd sum = 0.0;
@@ -685,7 +651,7 @@ public:
 							fptypesimd :: loadu( Src + i );
 					}
 
-					DstLine[ 0 ] = sum.hadd() + b;
+					DstLine[ 0 ] = sum.hadd();
 
 					AVIR_RESIZE_PART2
 
@@ -699,8 +665,6 @@ public:
 			{
 				for( j = 0; j < ElCount; j++ )
 				{
-					const fptype b = ElBiases[ j ];
-
 					AVIR_RESIZE_PART1nx
 
 					fptypesimd sum = fptypesimd :: load( ftp ) *
@@ -712,7 +676,7 @@ public:
 							fptypesimd :: loadu( Src + i );
 					}
 
-					DstLine[ 0 ] = sum.hadd() + b;
+					DstLine[ 0 ] = sum.hadd();
 
 					AVIR_RESIZE_PART2
 
@@ -750,7 +714,7 @@ public:
 							fptypesimd :: loadu( Src + i );
 					}
 
-					DstLine[ 0 ] = sum.hadd() + ElBiases[ j ];
+					DstLine[ 0 ] = sum.hadd();
 					DstLine += DstLineElIncr;
 					Src += SrcIncr;
 				}
@@ -772,7 +736,7 @@ public:
 							fptypesimd :: loadu( Src + i );
 					}
 
-					DstLine[ 0 ] = sum.hadd() + ElBiases[ j ];
+					DstLine[ 0 ] = sum.hadd();
 					DstLine += DstLineElIncr;
 					Src += SrcIncr;
 				}
@@ -787,15 +751,13 @@ public:
 	}
 
 	/**
-	 * Same as doResize(). No specific 2x filter-less upsampling
-	 * optimization.
+	 * @copydoc doResize()
 	 */
 
 	void doResize2( const fptype* SrcLine, fptype* DstLine,
-		int DstLineIncr, const fptype* const ElBiases,
-		fptype* const xx ) const
+		int DstLineIncr, fptype* const xx ) const
 	{
-		doResize( SrcLine, DstLine, DstLineIncr, ElBiases, xx );
+		doResize( SrcLine, DstLine, DstLineIncr, xx );
 	}
 };
 
@@ -810,7 +772,7 @@ public:
  *
  * @tparam fptype Floating point type to use for storing pixel data. SIMD
  * types cannot be used.
- * @tparam fptypesimd The SIMD type used to store a pack of "fptype" values.
+ * @tparam fptypesimd The SIMD type used to store a pack of `fptype` values.
  */
 
 template< class fptype, class fptypesimd >
@@ -818,7 +780,7 @@ class CImageResizerDithererDefDIL
 {
 public:
 	/**
-	 * Function initializes the ditherer object.
+	 * @brief Initializes the ditherer object.
 	 *
 	 * @param aLen Scanline length in pixels to process.
 	 * @param aVars Image resizing-related variables.
@@ -838,8 +800,7 @@ public:
 	}
 
 	/**
-	 * @return "True" if dithering is recursive relative to scanlines meaning
-	 * multi-threaded execution is not supported by this dithering method.
+	 * @copydoc CImageResizerDithererDefINL::isRecursive()
 	 */
 
 	static bool isRecursive()
@@ -848,9 +809,7 @@ public:
 	}
 
 	/**
-	 * Function performs rounding and clipping operations.
-	 *
-	 * @param ResScanline The buffer containing the final scanline.
+	 * @copydoc CImageResizerDithererDefINL::dither()
 	 */
 
 	void dither( fptype* const ResScanline ) const
@@ -881,18 +840,19 @@ public:
 		else
 		{
 			const fptypesimd TrMul = (fptypesimd) TrMul0;
+			const fptypesimd TrMulI = (fptypesimd) ( 1.0 / TrMul0 );
 
 			for( j = 0; j < LenE - elalign; j += elalign )
 			{
 				const fptypesimd z0 = round(
-					fptypesimd :: loadu( ResScanline + j ) / TrMul ) * TrMul;
+					fptypesimd :: loadu( ResScanline + j ) * TrMulI ) * TrMul;
 
 				clamp( z0, c0, PkOut ).storeu( ResScanline + j );
 			}
 
 			const int lim = LenE - j;
-			const fptypesimd z0 = round(
-				fptypesimd :: loadu( ResScanline + j, lim ) / TrMul ) * TrMul;
+			const fptypesimd z0 = round( fptypesimd :: loadu(
+				ResScanline + j, lim ) * TrMulI ) * TrMul;
 
 			clamp( z0, c0, PkOut ).storeu( ResScanline + j, lim );
 		}
@@ -900,15 +860,10 @@ public:
 
 protected:
 	int Len; ///< Scanline's length in pixels.
-		///<
 	const CImageResizerVars* Vars; ///< Image resizing-related variables.
-		///<
 	int LenE; ///< = LenE * ElCount.
-		///<
 	double TrMul0; ///< Bit-depth truncation multiplier.
-		///<
 	double PkOut0; ///< Peak output value allowed.
-		///<
 };
 
 /**
@@ -956,16 +911,25 @@ public:
 		}
 	}
 
+	/**
+	 * @copydoc CImageResizerDithererDefINL::isRecursive()
+	 */
+
 	static bool isRecursive()
 	{
 		return( true );
 	}
 
+	/**
+	 * @copydoc CImageResizerDithererDefINL::dither()
+	 */
+
 	void dither( fptype* const ResScanline )
 	{
 		const int ea = Vars -> elalign;
-		const fptypesimd c0 = 0.0;
+		const fptypesimd c0 = 0;
 		const fptypesimd TrMul = (fptypesimd) TrMul0;
+		const fptypesimd TrMulI = (fptypesimd) ( 1.0 / TrMul0 );
 		const fptypesimd PkOut = (fptypesimd) PkOut0;
 		int j;
 
@@ -995,20 +959,21 @@ public:
 				// Perform rounding, noise estimation and saturation.
 
 				fptype* const rsj = rs + j;
-				const fptype z0 = round( rsj[ 0 ] / TrMul ) * TrMul;
+				const fptype z0 = round( rsj[ 0 ] * TrMulI ) * TrMul;
 				const fptype Noise = rsj[ 0 ] - z0;
-				rsj[ 0 ] = clamp( z0, (fptype) 0.0, PkOut );
+				rsj[ 0 ] = clamp( z0, (fptype) 0, PkOut );
 
 				fptype* const rsdj = rsd + j;
-				rsj[ 1 ] += Noise * (fptype) 0.364842;
+				const fptype NoiseM1 = Noise * (fptype) 0.364842;
+				rsj[ 1 ] += NoiseM1;
 				rsdj[ -1 ] += Noise * (fptype) 0.207305;
-				rsdj[ 0 ] += Noise * (fptype) 0.364842;
+				rsdj[ 0 ] += NoiseM1;
 				rsdj[ 1 ] += Noise * (fptype) 0.063011;
 			}
 
 			// Process the last pixel element in scanline.
 
-			const fptype z1 = round( rs[ Len1 ] / TrMul ) * TrMul;
+			const fptype z1 = round( rs[ Len1 ] * TrMulI ) * TrMul;
 			const fptype Noise2 = rs[ Len1 ] - z1;
 			rs[ Len1 ] = clamp( z1, c0, PkOut );
 
@@ -1022,21 +987,14 @@ public:
 
 protected:
 	int Len; ///< Scanline's length in pixels.
-		///<
 	const CImageResizerVars* Vars; ///< Image resizing-related variables.
-		///<
 	int LenE; ///< = LenE * ElCount.
-		///<
 	double TrMul0; ///< Bit-depth truncation multiplier.
-		///<
 	double PkOut0; ///< Peak output value allowed.
-		///<
 	CBuffer< fptype > ResScanlineDith0; ///< Error propagation buffer for
 		///< dithering, first pixel unused.
-		///<
 	fptype* ResScanlineDith; ///< Error propagation buffer pointer which skips
 		///< the first ElCount elements.
-		///<
 };
 
 /**
@@ -1059,32 +1017,24 @@ class fpclass_def_dil
 {
 public:
 	typedef afptype fptype; ///< Floating-point type to use during processing.
-		///<
-	typedef afptype fptypeatom; ///< Atomic type "fptype" consists of.
-		///<
+	typedef afptype fptypeatom; ///< Atomic type `fptype` consists of.
 	static const int fppack = 1; ///< The number of atomic types stored in a
-		///< single "fptype" element.
-		///<
+		///< single `fptype` element.
 	static const int fpalign = sizeof( afptypesimd ); ///< Suggested alignment
 		///< size in bytes. This is not a required alignment, because image
 		///< resizing algorithm cannot be made to have a strictly aligned data
 		///< access in all cases (e.g. de-interleaved interpolation cannot
 		///< perform aligned accesses).
-		///<
 	static const int elalign = sizeof( afptypesimd ) / sizeof( afptype ); ///<
 		///< Length alignment of arrays of elements. This applies to filters
 		///< and intermediate buffers: this constant forces filters and
 		///< scanlines to have a length which is a multiple of this value, for
 		///< more efficient SIMD implementation.
-		///<
 	static const int packmode = 1; ///< 0 if interleaved packing, 1 if
 		///< de-interleaved.
-		///<
 	typedef CImageResizerFilterStepDIL< fptype, afptypesimd > CFilterStep; ///<
 		///< Filtering step class to use during processing.
-		///<
 	typedef adith CDitherer; ///< Ditherer class to use during processing.
-		///<
 };
 
 } // namespace avir

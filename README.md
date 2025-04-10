@@ -92,7 +92,7 @@ bit resolution, which may be 10 or even 16):
 #include "avir.h"
 avir :: CImageResizer<> ImageResizer( 8 );
 ImageResizer.resizeImage( InBuf, 640, 480, 0, OutBuf, 1024, 768, 3, 0 );
-(multi-threaded operation requires additional coding, see the documentation)
+// multi-threaded operation requires additional coding, see the documentation
 ```
 
 AVIR works with header-less "raw" image buffers. If you are not too familiar
@@ -108,10 +108,10 @@ constructor. AVIR's algorithm does not discern between channel packing order
 (`RGBA`, `ARGB`, `BGRA`, etc.), so if the `BGRA` ordered elements were passed
 to it, the result will be also `BGRA`.
 
-If the graphics library you are using returns a `uint32_t*` pointer to a raw
-4-channel packed pixel data, you will need to cast both the input and output
-pointers to the `uint8_t*` type when supplying them to the resizing function,
-and set the ElCount to 4.
+If the graphics library you are using returns a `uint32_t*` or `unsigned int*`
+pointer to a raw 4-channel packed pixel data, you will need to cast both the
+input and output pointers to the `uint8_t*` (or `unsigned char*`) type, when
+supplying them to the resizing function, and set the `ElCountIO` to 4.
 
 For low-ringing performance:
 
@@ -120,10 +120,12 @@ avir :: CImageResizer<> ImageResizer( 8, 0, avir :: CImageResizerParamsLR() );
 ```
 
 To use the built-in gamma correction, which is disabled by default, an object
-of the `avir::CImageResizerVars` class with its variable `UseSRGBGamma` set to
-`true` should be supplied to the `resizeImage()` function. Note that, when
-enabled, the gamma correction is applied to all channels (e.g. alpha-channel)
-in the current implementation.
+of the `avir::CImageResizerVars` class, with its variable `UseSRGBGamma` set
+to `true`, should be supplied to the `resizeImage()` function. Note that, when
+enabled, the gamma correction is applied to all channels (including
+alpha-channel), by default. To bypass adjustment of alpha-channel,
+additionally set the `Vars.AlphaIndex` to 3 or 0, depending on pixel packing
+order.
 
 ```c++
 avir :: CImageResizerVars Vars;
@@ -176,10 +178,10 @@ image resizing (due to overhead). SIMD internal type can be used this way:
 avir :: CImageResizer< avir :: fpclass_float4 > ImageResizer( 8 );
 ```
 
-For 1-channel and 2-channel image resizing when AVX instructions are allowed
+For 1-channel and 2-channel image resizing when AVX instructions are allowed,
 it may be reasonable to utilize de-interleaved SIMD processing algorithm.
-While it gives no performance benefit if the "float4" SSE processing type is
-used, it offers some performance boost if the "float8" AVX processing type is
+While it gives no performance benefit, if the "float4" SSE processing type is
+used, it offers some performance boost, if the "float8" AVX processing type is
 used (given dithering is not performed, or otherwise performance is reduced at
 the dithering stage since recursive dithering cannot be parallelized). The
 internal type remains non-SIMD "float". De-interleaved algorithm can be used
@@ -190,24 +192,25 @@ this way:
 avir :: CImageResizer< avir :: fpclass_float8_dil > ImageResizer( 8 );
 ```
 
-It's important to note that on the latest Intel processors (i7-7700K and
-probably later) the use of the aforementioned SIMD-specific resizing code may
-not be justifiable, or may be even counter-productive due to many factors:
-memory bandwidth bottleneck, increased efficiency of processor's circuitry
-utilization and out-of-order execution, automatic SIMD optimizations performed
-by the compiler. This is at least true when compiling 64-bit code with Intel
+It's important to note that on the latest processors (i7-7700K and later) the
+use of the aforementioned SIMD-specific resizing code may not be justifiable,
+or may be even counter-productive due to many factors: memory bandwidth
+bottleneck, increased efficiency of processor's circuitry utilization and
+out-of-order execution, automatic SIMD optimizations performed by the
+compiler. This is at least true when compiling 64-bit code with Intel
 C++ Compiler 18.2 with /QxSSE4.2, or especially with the /QxCORE-AVX2 option.
 SSE-specific resizing code may still be a little bit more efficient for
-4-channel image resizing.
+4-channel image resizing. De-interleaved AVX SIMD processing may provide up to
+50% performance improvement over non-SIMD compiler-optimized code.
 
 ## Notes
 
-This library was tested for compatibility with [GNU C++](http://gcc.gnu.org/),
-[Microsoft Visual C++](http://www.microsoft.com/visualstudio/eng/products/visual-studio-express-products),
-[LLVM](https://llvm.org/), and [Intel C++](http://software.intel.com/en-us/c-compilers)
-compilers, on 32- and 64-bit Windows, macOS, and CentOS Linux. The code was
-also tested with Dr.Memory/Win32 for the absence of uninitialized or
-unaddressable memory accesses.
+This library was tested for compatibility with [GNU C++](https://gcc.gnu.org/),
+[Microsoft Visual C++](https://visualstudio.microsoft.com/),
+[Clang LLVM](https://llvm.org/), and [Intel C++](https://software.intel.com/en-us/c-compilers)
+compilers, on 32- and 64-bit Windows, macOS, and AlmaLinux. The code was also
+tested with Dr.Memory/Win32 for the absence of uninitialized or unaddressable
+memory accesses.
 
 All code is fully "inline", without the need to compile any source files. The
 memory footprint of the library itself is very modest, except that the size of
@@ -239,8 +242,8 @@ optimizations. This tool uses the following libraries:
 * libpng Copyright (c) 1998-2013 Glenn Randers-Pehrson
 * zlib Copyright (c) 1995-2013 Jean-loup Gailly and Mark Adler
 
-Note that you can enable gamma-correction with the `-g` switch. However,
-sometimes gamma-correction produces "greenish/reddish/bluish haze" since
+Note that you can enable the gamma correction with the `-g` switch. However,
+sometimes gamma correction produces "greenish/reddish/bluish haze" since
 low-amplitude oscillations produced by resizing at object boundaries are
 amplified by gamma correction. This can also have an effect of reduced
 contrast.
@@ -359,9 +362,9 @@ image resizing filter. This class has a similar programmatic interface to
 AVIR, but it is not thread-safe: each executing thread should have its own
 `CLancIR` object. This class was designed for cases of batch processing of
 same-sized frames like in video encoding, or for just-in-time resizing of
-an application's assets. This Lanczos implementation is likely one of the
-fastest available for CPUs; it features radical AVX, SSE2, and NEON
-optimizations.
+an application's assets. This Lanczos implementation, at its quality level, is
+likely one of the fastest available for CPUs; it features radical AVX, SSE2,
+NEON, and WASM SIMD128 optimizations.
 
 LANCIR offers up to three times faster image resizing in comparison to AVIR.
 The quality difference is, however, debatable. Note that while LANCIR can
@@ -370,7 +373,7 @@ take 8- and 16-bit and float image buffers, its precision is limited to
 
 LANCIR should be seen as a bonus and as an "industrial standard" reference
 for comparison. By default, LANCIR uses Lanczos filter's `a` parameter equal
-to 3 which is similar to AVIR's default setting.
+to 3, which is similar to AVIR's default setting.
 
 ## Comparison
 
@@ -419,6 +422,19 @@ your software product to the list of users. This list is important at
 maintaining confidence in this library among the interested parties.
 
 ## Change Log
+
+Version 3.1:
+
+* Implemented full C++ compliance, eliminated `stdlib.h` dependency.
+* Removed a previously added scanline "unbiasing" since its positive effect
+was a compiler-dependent statistical error.
+* Fixed a bug with bit-depth conversions (e.g., 16-bit to 8-bit).
+* Fixed `sign conversion`, `nullptr`, and other compiler warnings.
+* Optimized dithering function.
+* Added 8-bit input gamma correction optimization.
+* Added optional gamma correction bypass for alpha-channel (`AlphaIndex`).
+* LANCIR: implemented WebAssembly SIMD128 support.
+* Improved documentation.
 
 Version 3.0:
 

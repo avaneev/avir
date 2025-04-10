@@ -1,17 +1,14 @@
-//$ nobt
-//$ nocpp
-
 /**
  * @file lancir.h
  *
- * @version 3.0.18
+ * @version 3.1
  *
  * @brief Self-contained header-only "LANCIR" image resizing algorithm.
  *
  * This is a self-contained inclusion file for the "LANCIR" image resizer,
- * a part of the AVIR library. Features scalar, AVX, SSE2, and NEON
- * optimizations as well as batched resizing technique which provides a better
- * CPU cache performance.
+ * a part of the AVIR library. Features scalar, AVX, SSE2, NEON, and WASM
+ * SIMD128 optimizations as well as batched resizing technique which provides
+ * a better CPU cache performance.
  *
  * AVIR Copyright (c) 2015-2025 Aleksey Vaneev
  *
@@ -118,11 +115,111 @@
 	#define LANCIR_SSE2
 	#define LANCIR_ALIGN 16
 
-#else // SSE2
+#elif defined( __wasm_simd128__ )
+
+	#include <wasm_simd128.h>
+
+	#define LANCIR_WASM
+	#define LANCIR_ALIGN 16
+
+#else // WASM
 
 	#define LANCIR_ALIGN 4
 
-#endif // SSE2
+#endif // WASM
+
+#if defined( LANCIR_SSE2 )
+
+	#define lancvec_t __m128
+	#define lancvec_const_splat( v ) _mm_set1_ps( v )
+	#define lancvec_load( m ) _mm_load_ps( m )
+	#define lancvec_loadu( m ) _mm_loadu_ps( m )
+	#define lancvec_store( m, v ) _mm_store_ps( m, v )
+	#define lancvec_storeu( m, v ) _mm_storeu_ps( m, v )
+	#define lancvec_add( v1, v2 ) _mm_add_ps( v1, v2 )
+	#define lancvec_mul( v1, v2 ) _mm_mul_ps( v1, v2 )
+	#define lancvec_min( v1, v2 ) _mm_min_ps( v1, v2 )
+	#define lancvec_max( v1, v2 ) _mm_max_ps( v1, v2 )
+	#define lancvec_madd( va, v1, v2 ) _mm_add_ps( va, _mm_mul_ps( v1, v2 ))
+	#define lancvec_addhl( vl, vh ) _mm_add_ps( vl, _mm_movehl_ps( vh, vh ))
+	#define lancvec_store32_addhl( m, v ) \
+		_mm_store_ss( m, _mm_add_ss( v, _mm_shuffle_ps( v, v, 1 )))
+
+	#define lancvec_store64_addhl( m, v ) \
+		_mm_storel_pi( (__m64*) ( m ), lancvec_addhl( v, v ))
+
+#elif defined( LANCIR_NEON )
+
+	#define lancvec_t float32x4_t
+	#define lancvec_const_splat( v ) vdupq_n_f32( v )
+	#define lancvec_load( m ) vld1q_f32( m )
+	#define lancvec_store( m, v ) vst1q_f32( m, v )
+	#define lancvec_add( v1, v2 ) vaddq_f32( v1, v2 )
+	#define lancvec_mul( v1, v2 ) vmulq_f32( v1, v2 )
+	#define lancvec_min( v1, v2 ) vminq_f32( v1, v2 )
+	#define lancvec_max( v1, v2 ) vmaxq_f32( v1, v2 )
+	#define lancvec_madd( va, v1, v2 ) vmlaq_f32( va, v1, v2 )
+
+	#if defined( LANCIR_ARM32 )
+		#define lancvec_store32_hadd( m, v ) { \
+			const float32x2_t v2 = vadd_f32( vget_high_f32( v ), \
+				vget_low_f32( v )); \
+			*( m ) = vget_lane_f32( v2, 0 ) + \
+				vget_lane_f32( v2, 1 ); } (void) 0
+	#else // defined( LANCIR_ARM32 )
+		#define lancvec_store32_hadd( m, v ) *( m ) = vaddvq_f32( v )
+	#endif // defined( LANCIR_ARM32 )
+
+	#define lancvec_store64_addhl( m, v ) \
+		vst1_f32( m, vadd_f32( vget_high_f32( v ), vget_low_f32( v )));
+
+#elif defined( LANCIR_WASM )
+
+	#define lancvec_t v128_t
+	#define lancvec_const_splat( v ) wasm_f32x4_const_splat( v )
+	#define lancvec_load32_splat( m ) wasm_v128_load32_splat( m )
+	#define lancvec_load( m ) wasm_v128_load( m )
+	#define lancvec_store( m, v ) wasm_v128_store( m, v )
+	#define lancvec_add( v1, v2 ) wasm_f32x4_add( v1, v2 )
+	#define lancvec_mul( v1, v2 ) wasm_f32x4_mul( v1, v2 )
+	#define lancvec_min( v1, v2 ) wasm_f32x4_min( v1, v2 )
+	#define lancvec_max( v1, v2 ) wasm_f32x4_max( v1, v2 )
+	#define lancvec_madd( va, v1, v2 ) wasm_f32x4_add( va, \
+		wasm_f32x4_mul( v1, v2 ))
+
+	#define lancvec_addhl( vl, vh ) wasm_f32x4_add( vl, \
+		wasm_i32x4_shuffle( vh, vh, 6, 7, 2, 3 ))
+
+	#define lancvec_store32_addhl( m, v ) \
+		*( m ) = ( wasm_f32x4_extract_lane( v, 0 ) + \
+			wasm_f32x4_extract_lane( v, 1 ))
+
+	#define lancvec_store64_addhl( m, v ) \
+		wasm_v128_store64_lane( m, lancvec_addhl( v, v ), 0 )
+
+#endif // defined( LANCIR_WASM )
+
+#if LANCIR_ALIGN > 4
+
+	#if !defined( lancvec_load32_splat )
+		#define lancvec_load32_splat( m ) lancvec_const_splat( *( m ))
+	#endif // !defined( lancvec_load32_splat )
+
+	#if !defined( lancvec_loadu )
+		#define lancvec_loadu( m ) lancvec_load( m )
+	#endif // !defined( lancvec_loadu )
+
+	#if !defined( lancvec_storeu )
+		#define lancvec_storeu( m, v ) lancvec_store( m, v )
+	#endif // !defined( lancvec_storeu )
+
+	#if !defined( lancvec_store32_hadd )
+		#define lancvec_store32_hadd( m, v ) { \
+			const lancvec_t v2 = lancvec_addhl( v, v ); \
+			lancvec_store32_addhl( m, v2 ); } (void) 0
+	#endif // !defined( lancvec_store32_hadd )
+
+#endif // LANCIR_ALIGN > 4
 
 namespace avir {
 
@@ -164,11 +261,11 @@ class CLancIRParams
 {
 public:
 	int SrcSSize; ///< Physical size of the source scanline, in elements (not
-		///< bytes). If this value is below 1, `SrcWidth*ElCount` will be
+		///< bytes). If this value is below 1, `SrcWidth * ElCount` will be
 		///< used.
 	int NewSSize; ///< Physical size of the destination scanline, in elements
-		///< (not bytes). If this value is below 1, `NewWidth*ElCount` will be
-		///< used.
+		///< (not bytes). If this value is below 1, `NewWidth * ElCount` will
+		///< be used.
 	double kx; ///< Resizing step - horizontal (one output pixel corresponds
 		///< to `k` input pixels). A downsizing factor if greater than 1.0;
 		///< upsizing factor if below or equal to 1.0. Multiply by -1 if you
@@ -266,21 +363,24 @@ public:
 	 * @param SrcWidth Source image width, in pixels.
 	 * @param SrcHeight Source image height, in pixels.
 	 * @param[out] NewBuf Buffer to accept the resized image. Cannot be equal
-	 * to SrcBuf.
+	 * to `SrcBuf`.
 	 * @param NewWidth New image width, in pixels.
 	 * @param NewHeight New image height, in pixels.
 	 * @param ElCount The number of elements (channels) used to store each
 	 * source and destination pixel (1-4).
-	 * @tparam Tin Input buffer's element type. Can be uint8_t (0-255 value
-	 * range), uint16_t (0-65535 value range), float (0-1 value range), double
-	 * (0-1 value range). uint32_t type is treated as uint16_t. Signed integer
-	 * types and larger integer types are unsupported.
+	 * @param aParams Custom resizing parameters. Can be `nullptr`, for
+	 * default values.
+	 * @tparam Tin Input buffer's element type. Can be `uint8_t` (`0..255`
+	 * value range), `uint16_t` (`0..65535` value range), `float` (`0..1`
+	 * value range), `double` (`0..1` value range). `uint32_t` type is treated
+	 * as `uint16_t`. Signed integer types and larger integer types are not
+	 * supported.
 	 * @tparam Tout Output buffer's element type, treated like `Tin`. If `Tin`
 	 * and `Tout` types do not match, an output value scaling will be applied.
-	 * Floating-point output will not be clamped/clipped/saturated, integer
+	 * Floating-point output will not be clamped/clipped/saturated; integer
 	 * output is always rounded and clamped.
-	 * @return The number of available output scanlines. Equals to NewHeight,
-	 * or 0 on function parameters error.
+	 * @return The number of available output scanlines. Equals to
+	 * `NewHeight`, or 0 on function parameters error.
 	 */
 
 	template< typename Tin, typename Tout >
@@ -428,9 +528,9 @@ public:
 		static const bool IsUnityMul = ( IsInFloat && IsOutFloat ) ||
 			( IsInFloat == IsOutFloat && sizeof( Tin ) == sizeof( Tout ));
 
-		const int Clamp = ( sizeof( Tout ) == 1 ? 255 : 65535 );
-		const float OutMul = ( IsOutFloat ? 1.0f : (float) Clamp ) /
-			( IsInFloat ? 1 : ( sizeof( Tin ) == 1 ? 255 : 65535 ));
+		const float Clamp = ( sizeof( Tout ) == 1 ? 255.0f : 65535.0f );
+		const float OutMul = ( IsOutFloat ? 1.0f : Clamp ) /
+			( IsInFloat ? 1.0f : ( sizeof( Tin ) == 1 ? 255.0f : 65535.0f ));
 
 		// Perform batched resizing.
 
@@ -637,8 +737,8 @@ public:
 	 * @param oy Start Y pixel offset within the source image.
 	 * @tparam Tin Input buffer's element type.
 	 * @tparam Tout Output buffer's element type.
-	 * @return The number of available output scanlines. Equals to NewHeight,
-	 * or 0 on function parameters error.
+	 * @return The number of available output scanlines. Equals to
+	 * `NewHeight`, or 0 on function parameters error.
 	 */
 
 	template< typename Tin, typename Tout >
@@ -775,8 +875,8 @@ protected:
 		 * @param k0 Resizing step.
 		 * @param ElCount0 Image's element count, may be used for SIMD filter
 		 * tap replication.
-		 * @return `true` if an update occured and scanline resizing positions
-		 * should be updated unconditionally.
+		 * @return `true`, if an update occured and scanline resizing
+		 * positions should be updated unconditionally.
 		 */
 
 		bool update( const double la0, const double k0, const int ElCount0 )
@@ -920,7 +1020,7 @@ protected:
 		 *
 		 * Class implements sine-wave signal generator without biasing, with
 		 * constructor-based initialization only. This generator uses an
-		 * oscillator instead of the `sin` function.
+		 * oscillator instead of the `sin()` function.
 		 */
 
 		class CSineGen
@@ -931,7 +1031,7 @@ protected:
 			 * generator.
 			 *
 			 * @param si Sine function increment, in radians.
-			 * @param ph Starting phase, in radians. Add `0.5*PI` for a
+			 * @param ph Starting phase, in radians. Add `0.5*pi` for a
 			 * cosine function.
 			 */
 
@@ -943,8 +1043,7 @@ protected:
 			}
 
 			/**
-			 * @brief Generate the next sample.
-			 * @return The next value of the sine-wave, without biasing.
+			 * @brief Generates the next sine-wave sample, without biasing.
 			 */
 
 			double generate()
@@ -989,7 +1088,7 @@ protected:
 			{
 				f.generate();
 				fw.generate();
-				*op = (float) 0;
+				*op = 0;
 				op++;
 				t++;
 			}
@@ -1037,7 +1136,7 @@ protected:
 
 			if( ut > Len2 )
 			{
-				*op = (float) 0;
+				*op = 0;
 			}
 			else
 			{
@@ -1637,23 +1736,17 @@ protected:
 	/** @} */
 
 	/**
-	 * @brief Function rounds a value and applies clamping.
+	 * @brief Rounds a value, and applies clamping.
 	 *
 	 * @param v Value to round and clamp.
 	 * @param Clamp High clamp level; low level is 0.
 	 * @return Rounded and clamped value.
 	 */
 
-	static inline int roundclamp( const float v, const int Clamp )
+	static inline int roundclamp( const float v, const float Clamp )
 	{
-		if( v < 0.5f )
-		{
-			return( 0 );
-		}
-
-		const int vr = (int) ( v + 0.5f );
-
-		return( vr > Clamp ? Clamp : vr );
+		return( (int) (( v > Clamp ? Clamp : ( v < 0.0f ? 0.0f : v )) +
+			0.5f ));
 	}
 
 	/**
@@ -1669,16 +1762,16 @@ protected:
 	 * @param Clamp Clamp high level, used if `IsOutFloat` is `false`.
 	 * @param OutMul Output multiplier, for value range conversion, applied
 	 * before clamping.
-	 * @tparam IsOutFloat `true` if floating-point output, and no clamping is
+	 * @tparam IsOutFloat `true`, if floating-point output, and no clamping is
 	 * necessary.
-	 * @tparam IsUnityMul `true` if multiplication is optional. However, even
+	 * @tparam IsUnityMul `true`, if multiplication is optional. However, even
 	 * if this parameter was specified as `true`, `OutMul` must be 1.
 	 * @tparam T Output buffer's element type. Acquired implicitly.
 	 */
 
 	template< bool IsOutFloat, bool IsUnityMul, typename T >
 	static void outputScanline( const float* ip, T* op, int l,
-		const int Clamp, const float OutMul )
+		const float Clamp, const float OutMul )
 	{
 		if( IsOutFloat )
 		{
@@ -1721,37 +1814,22 @@ protected:
 
 				if( sizeof( op[ 0 ]) == sizeof( ip[ 0 ]))
 				{
-				#if defined( LANCIR_SSE2 )
+				#if LANCIR_ALIGN > 4
 
 					DoScalar = false;
-					const __m128 om = _mm_set1_ps( OutMul );
+					const lancvec_t om = lancvec_load32_splat( &OutMul );
 
 					while( l4 != 0 )
 					{
-						_mm_storeu_ps( (float*) op,
-							_mm_mul_ps( _mm_load_ps( ip ), om ));
+						lancvec_storeu( (float*) op,
+							lancvec_mul( lancvec_load( ip ), om ));
 
 						ip += 4;
 						op += 4;
 						l4--;
 					}
 
-				#elif defined( LANCIR_NEON )
-
-					DoScalar = false;
-					const float32x4_t om = vdupq_n_f32( OutMul );
-
-					while( l4 != 0 )
-					{
-						vst1q_f32( (float*) op,
-							vmulq_f32( vld1q_f32( ip ), om ));
-
-						ip += 4;
-						op += 4;
-						l4--;
-					}
-
-				#endif // defined( LANCIR_NEON )
+				#endif // LANCIR_ALIGN > 4
 				}
 
 				if( DoScalar )
@@ -1782,25 +1860,43 @@ protected:
 			int l4 = l >> 2;
 			l &= 3;
 
-		#if defined( LANCIR_SSE2 )
+		#if LANCIR_ALIGN > 4
 
-			const __m128 minv = _mm_setzero_ps();
-			const __m128 maxv = _mm_set1_ps( (float) Clamp );
-			const __m128 om = _mm_set1_ps( OutMul );
+			const lancvec_t minv = lancvec_const_splat( 0.0f );
+			const lancvec_t maxv = lancvec_load32_splat( &Clamp );
+			const lancvec_t om = lancvec_load32_splat( &OutMul );
 
-			unsigned int prevrm = _MM_GET_ROUNDING_MODE();
-			_MM_SET_ROUNDING_MODE( _MM_ROUND_NEAREST );
+			#if defined( LANCIR_SSE2 )
+				unsigned int prevrm = _MM_GET_ROUNDING_MODE();
+				_MM_SET_ROUNDING_MODE( _MM_ROUND_NEAREST );
+			#else // defined( LANCIR_SSE2 )
+				const lancvec_t v05 = lancvec_const_splat( 0.5f );
+			#endif // defined( LANCIR_SSE2 )
 
 			if( sizeof( op[ 0 ]) == 4 )
 			{
 				while( l4 != 0 )
 				{
-					const __m128 v = _mm_load_ps( ip );
-					const __m128 cv = _mm_max_ps( _mm_min_ps(
-						( IsUnityMul ? v : _mm_mul_ps( v, om )),
+					const lancvec_t v = lancvec_load( ip );
+					const lancvec_t cv = lancvec_max( lancvec_min(
+						( IsUnityMul ? v : lancvec_mul( v, om )),
 						maxv ), minv );
 
+				#if defined( LANCIR_SSE2 )
+
 					_mm_storeu_si128( (__m128i*) op, _mm_cvtps_epi32( cv ));
+
+				#elif defined( LANCIR_NEON )
+
+					vst1q_u32( (unsigned int*) op, vcvtq_u32_f32( vaddq_f32(
+						cv, v05 )));
+
+				#elif defined( LANCIR_WASM )
+
+					wasm_v128_store( op, wasm_i32x4_trunc_sat_f32x4(
+						wasm_f32x4_add( cv, v05 )));
+
+				#endif // defined( LANCIR_WASM )
 
 					ip += 4;
 					op += 4;
@@ -1812,10 +1908,12 @@ protected:
 			{
 				while( l4 != 0 )
 				{
-					const __m128 v = _mm_load_ps( ip );
-					const __m128 cv = _mm_max_ps( _mm_min_ps(
-						( IsUnityMul ? v : _mm_mul_ps( v, om )),
+					const lancvec_t v = lancvec_load( ip );
+					const lancvec_t cv = lancvec_max( lancvec_min(
+						( IsUnityMul ? v : lancvec_mul( v, om )),
 						maxv ), minv );
+
+				#if defined( LANCIR_SSE2 )
 
 					const __m128i v32 = _mm_cvtps_epi32( cv );
 					const __m128i v16s = _mm_shufflehi_epi16(
@@ -1827,6 +1925,25 @@ protected:
 					_mm_store_si128( &tmp, v16 );
 					memcpy( op, &tmp, 8 );
 
+				#elif defined( LANCIR_NEON )
+
+					const uint32x4_t v32 = vcvtq_u32_f32(
+						vaddq_f32( cv, v05 ));
+
+					const uint16x4_t v16 = vmovn_u32( v32 );
+
+					vst1_u16( (unsigned short*) op, v16 );
+
+				#elif defined( LANCIR_WASM )
+
+					const v128_t v32 = wasm_i32x4_trunc_sat_f32x4(
+						wasm_f32x4_add( cv, v05 ));
+
+					wasm_v128_store64_lane( op,
+						wasm_u16x8_narrow_i32x4( v32, v32 ), 0 );
+
+				#endif // defined( LANCIR_WASM )
+
 					ip += 4;
 					op += 4;
 					l4--;
@@ -1836,10 +1953,12 @@ protected:
 			{
 				while( l4 != 0 )
 				{
-					const __m128 v = _mm_load_ps( ip );
-					const __m128 cv = _mm_max_ps( _mm_min_ps(
-						( IsUnityMul ? v : _mm_mul_ps( v, om )),
+					const lancvec_t v = lancvec_load( ip );
+					const lancvec_t cv = lancvec_max( lancvec_min(
+						( IsUnityMul ? v : lancvec_mul( v, om )),
 						maxv ), minv );
+
+				#if defined( LANCIR_SSE2 )
 
 					const __m128i v32 = _mm_cvtps_epi32( cv );
 					const __m128i v16s = _mm_shufflehi_epi16(
@@ -1850,68 +1969,7 @@ protected:
 
 					*(int*) op = _mm_cvtsi128_si32( v8 );
 
-					ip += 4;
-					op += 4;
-					l4--;
-				}
-			}
-
-			_MM_SET_ROUNDING_MODE( prevrm );
-
-		#elif defined( LANCIR_NEON )
-
-			const float32x4_t minv = vdupq_n_f32( 0.0f );
-			const float32x4_t maxv = vdupq_n_f32( (float) Clamp );
-			const float32x4_t om = vdupq_n_f32( OutMul );
-			const float32x4_t v05 = vdupq_n_f32( 0.5f );
-
-			if( sizeof( op[ 0 ]) == 4 )
-			{
-				while( l4 != 0 )
-				{
-					const float32x4_t v = vld1q_f32( ip );
-					const float32x4_t cv = vmaxq_f32( vminq_f32(
-						( IsUnityMul ? v : vmulq_f32( v, om )),
-						maxv ), minv );
-
-					vst1q_u32( (unsigned int*) op, vcvtq_u32_f32( vaddq_f32(
-						cv, v05 )));
-
-					ip += 4;
-					op += 4;
-					l4--;
-				}
-			}
-			else
-			if( sizeof( op[ 0 ]) == 2 )
-			{
-				while( l4 != 0 )
-				{
-					const float32x4_t v = vld1q_f32( ip );
-					const float32x4_t cv = vmaxq_f32( vminq_f32(
-						( IsUnityMul ? v : vmulq_f32( v, om )),
-						maxv ), minv );
-
-					const uint32x4_t v32 = vcvtq_u32_f32(
-						vaddq_f32( cv, v05 ));
-
-					const uint16x4_t v16 = vmovn_u32( v32 );
-
-					vst1_u16( (unsigned short*) op, v16 );
-
-					ip += 4;
-					op += 4;
-					l4--;
-				}
-			}
-			else
-			{
-				while( l4 != 0 )
-				{
-					const float32x4_t v = vld1q_f32( ip );
-					const float32x4_t cv = vmaxq_f32( vminq_f32(
-						( IsUnityMul ? v : vmulq_f32( v, om )),
-						maxv ), minv );
+				#elif defined( LANCIR_NEON )
 
 					const uint32x4_t v32 = vcvtq_u32_f32(
 						vaddq_f32( cv, v05 ));
@@ -1921,13 +1979,29 @@ protected:
 
 					*(unsigned int*) op = vget_lane_u32( (uint32x2_t) v8, 0 );
 
+				#elif defined( LANCIR_WASM )
+
+					const v128_t v32 = wasm_i32x4_trunc_sat_f32x4(
+						wasm_f32x4_add( cv, v05 ));
+
+					const v128_t v16 = wasm_u16x8_narrow_i32x4( v32, v32 );
+
+					wasm_v128_store32_lane( op,
+						wasm_u8x16_narrow_i16x8( v16, v16 ), 0 );
+
+				#endif // defined( LANCIR_WASM )
+
 					ip += 4;
 					op += 4;
 					l4--;
 				}
 			}
 
-		#else // defined( LANCIR_NEON )
+			#if defined( LANCIR_SSE2 )
+				_MM_SET_ROUNDING_MODE( prevrm );
+			#endif // defined( LANCIR_SSE2 )
+
+		#else // LANCIR_ALIGN > 4
 
 			if( IsUnityMul )
 			{
@@ -1956,7 +2030,7 @@ protected:
 				}
 			}
 
-		#endif // defined( LANCIR_NEON )
+		#endif // LANCIR_ALIGN > 4
 
 			if( IsUnityMul )
 			{
@@ -2022,7 +2096,7 @@ protected:
 	 * @param rp Source scanline offsets and resizing filters.
 	 * @param kl Filter kernel's length, in taps (always an even value).
 	 * @param DstLen Destination length, in pixels.
-	 * @tparam UseSP `true` if `sp` pointer should be added to `spo`.
+	 * @tparam UseSP `true`, if `sp` pointer should be added to `spo`.
 	 */
 
 	template< bool UseSP >
@@ -2037,44 +2111,22 @@ protected:
 
 			int c = ci;
 
-		#if defined( LANCIR_SSE2 )
+		#if LANCIR_ALIGN > 4
 
-			__m128 sum = _mm_mul_ps( _mm_load_ps( flt ), _mm_loadu_ps( ip ));
-
-			while( --c != 0 )
-			{
-				flt += 4;
-				ip += 4;
-				sum = _mm_add_ps( sum, _mm_mul_ps( _mm_load_ps( flt ),
-					_mm_loadu_ps( ip )));
-			}
-
-			sum = _mm_add_ps( sum, _mm_movehl_ps( sum, sum ));
-
-			_mm_store_ss( op, _mm_add_ss( sum,
-				_mm_shuffle_ps( sum, sum, 1 )));
-
-		#elif defined( LANCIR_NEON )
-
-			float32x4_t sum = vmulq_f32( vld1q_f32( flt ), vld1q_f32( ip ));
+			lancvec_t sum = lancvec_mul(
+				lancvec_load( flt ), lancvec_loadu( ip ));
 
 			while( --c != 0 )
 			{
 				flt += 4;
 				ip += 4;
-				sum = vmlaq_f32( sum, vld1q_f32( flt ), vld1q_f32( ip ));
+				sum = lancvec_madd( sum, lancvec_load( flt ),
+					lancvec_loadu( ip ));
 			}
 
-			#if defined( LANCIR_ARM32 )
-				const float32x2_t sum2 = vadd_f32( vget_high_f32( sum ),
-					vget_low_f32( sum ));
+			lancvec_store32_hadd( op, sum );
 
-				op[ 0 ] = vget_lane_f32( sum2, 0 ) + vget_lane_f32( sum2, 1 );
-			#else // defined( LANCIR_ARM32 )
-				op[ 0 ] = vaddvq_f32( sum );
-			#endif // defined( LANCIR_ARM32 )
-
-		#else // defined( LANCIR_NEON )
+		#else // LANCIR_ALIGN > 4
 
 			float sum0 = flt[ 0 ] * ip[ 0 ];
 			float sum1 = flt[ 1 ] * ip[ 1 ];
@@ -2093,7 +2145,7 @@ protected:
 
 			op[ 0 ] = ( sum0 + sum1 ) + ( sum2 + sum3 );
 
-		#endif // defined( LANCIR_NEON )
+		#endif // LANCIR_ALIGN > 4
 
 			LANCIR_LF_POST
 		}
@@ -2103,51 +2155,47 @@ protected:
 
 			int c = ci;
 
-		#if defined( LANCIR_SSE2 )
+		#if LANCIR_ALIGN > 4
 
-			__m128 sum = _mm_mul_ps( _mm_load_ps( flt ), _mm_loadu_ps( ip ));
-
-			while( --c != 0 )
-			{
-				flt += 4;
-				ip += 4;
-				sum = _mm_add_ps( sum, _mm_mul_ps( _mm_load_ps( flt ),
-					_mm_loadu_ps( ip )));
-			}
-
-			sum = _mm_add_ps( sum, _mm_movehl_ps( sum, sum ));
-
-			const __m128 sum2 = _mm_mul_ps( _mm_loadu_ps( flt + 2 ),
-				_mm_loadu_ps( ip + 2 ));
-
-			sum = _mm_add_ps( sum, _mm_movehl_ps( sum2, sum2 ));
-
-			_mm_store_ss( op, _mm_add_ss( sum,
-				_mm_shuffle_ps( sum, sum, 1 )));
-
-		#elif defined( LANCIR_NEON )
-
-			float32x4_t sum = vmulq_f32( vld1q_f32( flt ), vld1q_f32( ip ));
+			lancvec_t sum = lancvec_mul( lancvec_load( flt ),
+				lancvec_loadu( ip ));
 
 			while( --c != 0 )
 			{
 				flt += 4;
 				ip += 4;
-				sum = vmlaq_f32( sum, vld1q_f32( flt ), vld1q_f32( ip ));
+				sum = lancvec_madd( sum, lancvec_load( flt ),
+					lancvec_loadu( ip ));
 			}
 
-			float32x2_t sum2 = vadd_f32( vget_high_f32( sum ),
-				vget_low_f32( sum ));
+			#if defined( LANCIR_NEON )
 
-			sum2 = vmla_f32( sum2, vld1_f32( flt + 4 ), vld1_f32( ip + 4 ));
+				float32x2_t sum2 = vadd_f32( vget_high_f32( sum ),
+					vget_low_f32( sum ));
 
-			#if defined( LANCIR_ARM32 )
-				op[ 0 ] = vget_lane_f32( sum2, 0 ) + vget_lane_f32( sum2, 1 );
-			#else // defined( LANCIR_ARM32 )
-				op[ 0 ] = vaddv_f32( sum2 );
-			#endif // defined( LANCIR_ARM32 )
+				sum2 = vmla_f32( sum2, vld1_f32( flt + 4 ),
+					vld1_f32( ip + 4 ));
 
-		#else // defined( LANCIR_NEON )
+				#if defined( LANCIR_ARM32 )
+					op[ 0 ] = vget_lane_f32( sum2, 0 ) +
+						vget_lane_f32( sum2, 1 );
+				#else // defined( LANCIR_ARM32 )
+					op[ 0 ] = vaddv_f32( sum2 );
+				#endif // defined( LANCIR_ARM32 )
+
+			#else // defined( LANCIR_NEON )
+
+				const lancvec_t sum2 = lancvec_mul( lancvec_loadu( flt + 2 ),
+					lancvec_loadu( ip + 2 ));
+
+				sum = lancvec_addhl( sum, sum );
+				sum = lancvec_addhl( sum, sum2 );
+
+				lancvec_store32_addhl( op, sum );
+
+			#endif // defined( LANCIR_NEON )
+
+		#else // LANCIR_ALIGN > 4
 
 			float sum0 = flt[ 0 ] * ip[ 0 ];
 			float sum1 = flt[ 1 ] * ip[ 1 ];
@@ -2167,7 +2215,7 @@ protected:
 			op[ 0 ] = ( sum0 + sum1 ) + ( sum2 + sum3 ) +
 				flt[ 4 ] * ip[ 4 ] + flt[ 5 ] * ip[ 5 ];
 
-		#endif // defined( LANCIR_NEON )
+		#endif // LANCIR_ALIGN > 4
 
 			LANCIR_LF_POST
 		}
@@ -2210,67 +2258,39 @@ protected:
 				_mm_loadu_ps( ip + 8 )));
 		}
 
-		res = _mm_add_ps( res, _mm_movehl_ps( res, res ));
+		_mm_storel_pi( (__m64*) op,
+			_mm_add_ps( res, _mm_movehl_ps( res, res )));
 
-		_mm_store_ss( op, res );
-		_mm_store_ss( op + 1, _mm_shuffle_ps( res, res, 1 ));
+	#elif LANCIR_ALIGN > 4
 
-	#elif defined( LANCIR_SSE2 )
+		lancvec_t sumA = lancvec_mul(
+			lancvec_load( flt ), lancvec_loadu( ip ));
 
-		__m128 sumA = _mm_mul_ps( _mm_load_ps( flt ), _mm_loadu_ps( ip ));
-		__m128 sumB = _mm_mul_ps( _mm_load_ps( flt + 4 ),
-			_mm_loadu_ps( ip + 4 ));
-
-		while( --c != 0 )
-		{
-			flt += 8;
-			ip += 8;
-			sumA = _mm_add_ps( sumA, _mm_mul_ps( _mm_load_ps( flt ),
-				_mm_loadu_ps( ip )));
-
-			sumB = _mm_add_ps( sumB, _mm_mul_ps( _mm_load_ps( flt + 4 ),
-				_mm_loadu_ps( ip + 4 )));
-		}
-
-		sumA = _mm_add_ps( sumA, sumB );
-
-		if( cir == 2 )
-		{
-			sumA = _mm_add_ps( sumA, _mm_mul_ps( _mm_load_ps( flt + 8 ),
-				_mm_loadu_ps( ip + 8 )));
-		}
-
-		sumA = _mm_add_ps( sumA, _mm_movehl_ps( sumA, sumA ));
-
-		_mm_store_ss( op, sumA );
-		_mm_store_ss( op + 1, _mm_shuffle_ps( sumA, sumA, 1 ));
-
-	#elif defined( LANCIR_NEON )
-
-		float32x4_t sumA = vmulq_f32( vld1q_f32( flt ), vld1q_f32( ip ));
-		float32x4_t sumB = vmulq_f32( vld1q_f32( flt + 4 ),
-			vld1q_f32( ip + 4 ));
+		lancvec_t sumB = lancvec_mul(
+			lancvec_load( flt + 4 ), lancvec_loadu( ip + 4 ));
 
 		while( --c != 0 )
 		{
 			flt += 8;
 			ip += 8;
-			sumA = vmlaq_f32( sumA, vld1q_f32( flt ), vld1q_f32( ip ));
-			sumB = vmlaq_f32( sumB, vld1q_f32( flt + 4 ),
-				vld1q_f32( ip + 4 ));
+			sumA = lancvec_madd( sumA, lancvec_load( flt ),
+				lancvec_loadu( ip ));
+
+			sumB = lancvec_madd( sumB, lancvec_load( flt + 4 ),
+				lancvec_loadu( ip + 4 ));
 		}
 
-		sumA = vaddq_f32( sumA, sumB );
+		sumA = lancvec_add( sumA, sumB );
 
 		if( cir == 2 )
 		{
-			sumA = vmlaq_f32( sumA, vld1q_f32( flt + 8 ),
-				vld1q_f32( ip + 8 ));
+			sumA = lancvec_madd( sumA, lancvec_load( flt + 8 ),
+				lancvec_loadu( ip + 8 ));
 		}
 
-		vst1_f32( op, vadd_f32( vget_high_f32( sumA ), vget_low_f32( sumA )));
+		lancvec_store64_addhl( op, sumA );
 
-	#else // defined( LANCIR_NEON )
+	#else // LANCIR_ALIGN > 4
 
 		const float xx = flt[ 0 ];
 		const float xx2 = flt[ 1 ];
@@ -2294,7 +2314,7 @@ protected:
 		op[ 0 ] = sum0 + sum2;
 		op[ 1 ] = sum1 + sum3;
 
-	#endif // defined( LANCIR_NEON )
+	#endif // LANCIR_ALIGN > 4
 
 		LANCIR_LF_POST
 	}
@@ -2313,7 +2333,7 @@ protected:
 		float res[ 12 ];
 		int c = ci;
 
-		#if defined( LANCIR_AVX )
+	#if defined( LANCIR_AVX )
 
 		__m128 sumA = _mm_mul_ps( _mm_load_ps( flt ), _mm_loadu_ps( ip ));
 		__m256 sumB = _mm256_mul_ps( _mm256_loadu_ps( flt + 4 ),
@@ -2347,81 +2367,47 @@ protected:
 		o1 += res[ 4 ];
 		o2 += res[ 5 ];
 
-		#elif defined( LANCIR_SSE2 )
+	#else // defined( LANCIR_AVX )
 
-		__m128 sumA = _mm_mul_ps( _mm_load_ps( flt ), _mm_loadu_ps( ip ));
-		__m128 sumB = _mm_mul_ps( _mm_load_ps( flt + 4 ),
-			_mm_loadu_ps( ip + 4 ));
+		lancvec_t sumA = lancvec_mul( lancvec_load( flt ),
+			lancvec_loadu( ip ));
 
-		__m128 sumC = _mm_mul_ps( _mm_load_ps( flt + 8 ),
-			_mm_loadu_ps( ip + 8 ));
+		lancvec_t sumB = lancvec_mul( lancvec_load( flt + 4 ),
+			lancvec_loadu( ip + 4 ));
 
-		while( --c != 0 )
-		{
-			flt += 12;
-			ip += 12;
-			sumA = _mm_add_ps( sumA, _mm_mul_ps( _mm_load_ps( flt ),
-				_mm_loadu_ps( ip )));
-
-			sumB = _mm_add_ps( sumB, _mm_mul_ps( _mm_load_ps( flt + 4 ),
-				_mm_loadu_ps( ip + 4 )));
-
-			sumC = _mm_add_ps( sumC, _mm_mul_ps( _mm_load_ps( flt + 8 ),
-				_mm_loadu_ps( ip + 8 )));
-		}
-
-		if( cir == 2 )
-		{
-			sumA = _mm_add_ps( sumA, _mm_mul_ps( _mm_load_ps( flt + 12 ),
-				_mm_loadu_ps( ip + 12 )));
-		}
-
-		_mm_storeu_ps( res, sumA );
-		_mm_storeu_ps( res + 4, sumB );
-
-		float o0 = res[ 0 ] + res[ 3 ];
-		float o1 = res[ 1 ] + res[ 4 ];
-		float o2 = res[ 2 ] + res[ 5 ];
-
-		_mm_storeu_ps( res + 8, sumC );
-
-		#elif defined( LANCIR_NEON )
-
-		float32x4_t sumA = vmulq_f32( vld1q_f32( flt ), vld1q_f32( ip ));
-		float32x4_t sumB = vmulq_f32( vld1q_f32( flt + 4 ),
-			vld1q_f32( ip + 4 ));
-
-		float32x4_t sumC = vmulq_f32( vld1q_f32( flt + 8 ),
-			vld1q_f32( ip + 8 ));
+		lancvec_t sumC = lancvec_mul( lancvec_load( flt + 8 ),
+			lancvec_loadu( ip + 8 ));
 
 		while( --c != 0 )
 		{
 			flt += 12;
 			ip += 12;
-			sumA = vmlaq_f32( sumA, vld1q_f32( flt ), vld1q_f32( ip ));
-			sumB = vmlaq_f32( sumB, vld1q_f32( flt + 4 ),
-				vld1q_f32( ip + 4 ));
+			sumA = lancvec_madd( sumA, lancvec_load( flt ),
+				lancvec_loadu( ip ));
 
-			sumC = vmlaq_f32( sumC, vld1q_f32( flt + 8 ),
-				vld1q_f32( ip + 8 ));
+			sumB = lancvec_madd( sumB, lancvec_load( flt + 4 ),
+				lancvec_loadu( ip + 4 ));
+
+			sumC = lancvec_madd( sumC, lancvec_load( flt + 8 ),
+				lancvec_loadu( ip + 8 ));
 		}
 
 		if( cir == 2 )
 		{
-			sumA = vmlaq_f32( sumA, vld1q_f32( flt + 12 ),
-				vld1q_f32( ip + 12 ));
+			sumA = lancvec_madd( sumA, lancvec_load( flt + 12 ),
+				lancvec_loadu( ip + 12 ));
 		}
 
-		vst1q_f32( res, sumA );
-		vst1q_f32( res + 4, sumB );
+		lancvec_storeu( res, sumA );
+		lancvec_storeu( res + 4, sumB );
 
 		float o0 = res[ 0 ] + res[ 3 ];
 		float o1 = res[ 1 ] + res[ 4 ];
 		float o2 = res[ 2 ] + res[ 5 ];
 
-		vst1q_f32( res + 8, sumC );
+		lancvec_storeu( res + 8, sumC );
 
-		#endif // defined( LANCIR_NEON )
+	#endif // defined( LANCIR_AVX )
 
 		o0 += res[ 6 ] + res[ 9 ];
 		o1 += res[ 7 ] + res[ 10 ];
@@ -2507,43 +2493,28 @@ protected:
 		_mm_store_ps( op, _mm_add_ps( _mm256_extractf128_ps( sum, 0 ),
 			_mm256_extractf128_ps( sum, 1 )));
 
-	#elif defined( LANCIR_SSE2 )
+	#elif LANCIR_ALIGN > 4
 
-		__m128 sumA = _mm_mul_ps( _mm_load_ps( flt ), _mm_load_ps( ip ));
-		__m128 sumB = _mm_mul_ps( _mm_load_ps( flt + 4 ),
-			_mm_load_ps( ip + 4 ));
+		lancvec_t sumA = lancvec_mul( lancvec_load( flt ),
+			lancvec_load( ip ));
 
-		while( --c != 0 )
-		{
-			flt += 8;
-			ip += 8;
-			sumA = _mm_add_ps( sumA, _mm_mul_ps( _mm_load_ps( flt ),
-				_mm_load_ps( ip )));
-
-			sumB = _mm_add_ps( sumB, _mm_mul_ps( _mm_load_ps( flt + 4 ),
-				_mm_load_ps( ip + 4 )));
-		}
-
-		_mm_store_ps( op, _mm_add_ps( sumA, sumB ));
-
-	#elif defined( LANCIR_NEON )
-
-		float32x4_t sumA = vmulq_f32( vld1q_f32( flt ), vld1q_f32( ip ));
-		float32x4_t sumB = vmulq_f32( vld1q_f32( flt + 4 ),
-			vld1q_f32( ip + 4 ));
+		lancvec_t sumB = lancvec_mul( lancvec_load( flt + 4 ),
+			lancvec_load( ip + 4 ));
 
 		while( --c != 0 )
 		{
 			flt += 8;
 			ip += 8;
-			sumA = vmlaq_f32( sumA, vld1q_f32( flt ), vld1q_f32( ip ));
-			sumB = vmlaq_f32( sumB, vld1q_f32( flt + 4 ),
-				vld1q_f32( ip + 4 ));
+			sumA = lancvec_madd( sumA, lancvec_load( flt ),
+				lancvec_load( ip ));
+
+			sumB = lancvec_madd( sumB, lancvec_load( flt + 4 ),
+				lancvec_load( ip + 4 ));
 		}
 
-		vst1q_f32( op, vaddq_f32( sumA, sumB ));
+		lancvec_store( op, lancvec_add( sumA, sumB ));
 
-	#else // defined( LANCIR_NEON )
+	#else // LANCIR_ALIGN > 4
 
 		const float xx = flt[ 0 ];
 		float sum0 = xx * ip[ 0 ];
@@ -2567,7 +2538,7 @@ protected:
 		op[ 2 ] = sum2;
 		op[ 3 ] = sum3;
 
-	#endif // defined( LANCIR_NEON )
+	#endif // LANCIR_ALIGN > 4
 
 		LANCIR_LF_POST
 	}
@@ -2577,6 +2548,23 @@ protected:
 	#undef LANCIR_LF_PRE
 	#undef LANCIR_LF_POST
 };
+
+#undef lancvec_t
+#undef lancvec_const_splat
+#undef lancvec_load32_splat
+#undef lancvec_load
+#undef lancvec_loadu
+#undef lancvec_store
+#undef lancvec_storeu
+#undef lancvec_add
+#undef lancvec_mul
+#undef lancvec_min
+#undef lancvec_max
+#undef lancvec_madd
+#undef lancvec_addhl
+#undef lancvec_store32_addhl
+#undef lancvec_store32_hadd
+#undef lancvec_store64_addhl
 
 #if defined( LANCIR_NULLPTR )
 	#undef nullptr

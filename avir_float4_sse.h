@@ -1,22 +1,26 @@
-//$ nobt
-//$ nocpp
-
 /**
  * @file avir_float4_sse.h
+ *
+ * @version 3.1
  *
  * @brief Inclusion file for the "float4" type.
  *
  * This file includes the "float4" SSE-based type used for SIMD variable
  * storage and processing.
  *
- * AVIR Copyright (c) 2015-2020 Aleksey Vaneev
+ * AVIR Copyright (c) 2015-2025 Aleksey Vaneev
+ *
+ * See the "LICENSE" file for license.
  */
 
 #ifndef AVIR_FLOAT4_SSE_INCLUDED
 #define AVIR_FLOAT4_SSE_INCLUDED
 
-#include <xmmintrin.h>
-#include <emmintrin.h>
+#if defined( _MSC_VER )
+	#include <intrin.h>
+#else // defined( _MSC_VER )
+	#include <emmintrin.h>
+#endif // defined( _MSC_VER )
 
 namespace avir {
 
@@ -32,6 +36,8 @@ namespace avir {
 class float4
 {
 public:
+	__m128 value; ///< Packed value of 4 floats.
+
 	float4()
 	{
 	}
@@ -46,8 +52,18 @@ public:
 	{
 	}
 
+	float4( const int s )
+		: value( _mm_set1_ps( (float) s ))
+	{
+	}
+
 	float4( const float s )
 		: value( _mm_set1_ps( s ))
+	{
+	}
+
+	float4( const double s )
+		: value( _mm_set1_ps( (float) s ))
 	{
 	}
 
@@ -75,9 +91,11 @@ public:
 	}
 
 	/**
+	 * @brief Returns float4 value loaded from the specified memory location.
+	 *
 	 * @param p Pointer to memory from where the value should be loaded,
 	 * should be 16-byte aligned.
-	 * @return float4 value loaded from the specified memory location.
+	 * @return Loaded value.
 	 */
 
 	static float4 load( const float* const p )
@@ -86,9 +104,11 @@ public:
 	}
 
 	/**
+	 * @brief Returns float4 value loaded from the specified memory location.
+	 *
 	 * @param p Pointer to memory from where the value should be loaded,
 	 * may have any alignment.
-	 * @return float4 value loaded from the specified memory location.
+	 * @return Loaded value.
 	 */
 
 	static float4 loadu( const float* const p )
@@ -97,11 +117,13 @@ public:
 	}
 
 	/**
+	 * @brief Returns float4 value loaded from the specified memory location,
+	 * with elements beyond "lim" set to 0.
+	 *
 	 * @param p Pointer to memory from where the value should be loaded,
 	 * may have any alignment.
-	 * @param lim The maximum number of elements to load, >0.
-	 * @return float4 value loaded from the specified memory location, with
-	 * elements beyond "lim" set to 0.
+	 * @param lim The maximum number of elements to load, greater than 0.
+	 * @return Loaded value.
 	 */
 
 	static float4 loadu( const float* const p, int lim )
@@ -131,7 +153,7 @@ public:
 	}
 
 	/**
-	 * Function stores *this value to the specified memory location.
+	 * @brief Stores *this* value to the specified memory location.
 	 *
 	 * @param[out] p Output memory location, should be 16-byte aligned.
 	 */
@@ -142,7 +164,7 @@ public:
 	}
 
 	/**
-	 * Function stores *this value to the specified memory location.
+	 * @brief Stores *this* value to the specified memory location.
 	 *
 	 * @param[out] p Output memory location, may have any alignment.
 	 */
@@ -153,11 +175,11 @@ public:
 	}
 
 	/**
-	 * Function stores "lim" lower elements of *this value to the specified
+	 * @brief Stores "lim" lower elements of *this* value to the specified
 	 * memory location.
 	 *
 	 * @param[out] p Output memory location, may have any alignment.
-	 * @param lim The number of lower elements to store, >0.
+	 * @param lim The number of lower elements to store, greater than 0.
 	 */
 
 	void storeu( float* const p, int lim ) const
@@ -232,18 +254,19 @@ public:
 	}
 
 	/**
-	 * @return Horizontal sum of elements.
+	 * @brief Returns horizontal sum of elements.
 	 */
 
 	float hadd() const
 	{
 		const __m128 v = _mm_add_ps( value, _mm_movehl_ps( value, value ));
 		const __m128 res = _mm_add_ss( v, _mm_shuffle_ps( v, v, 1 ));
+
 		return( _mm_cvtss_f32( res ));
 	}
 
 	/**
-	 * Function performs in-place addition of a value located in memory and
+	 * @brief Performs in-place addition of a value located in memory, and
 	 * the specified value.
 	 *
 	 * @param p Pointer to value where addition happens. May be unaligned.
@@ -256,25 +279,22 @@ public:
 	}
 
 	/**
-	 * Function performs in-place addition of a value located in memory and
+	 * @brief Performs in-place addition of a value located in memory, and
 	 * the specified value. Limited to the specfied number of elements.
 	 *
 	 * @param p Pointer to value where addition happens. May be unaligned.
 	 * @param v Value to add.
-	 * @param lim The element number limit, >0.
+	 * @param lim The element number limit, greater than 0.
 	 */
 
 	static void addu( float* const p, const float4& v, const int lim )
 	{
 		( loadu( p, lim ) + v ).storeu( p, lim );
 	}
-
-	__m128 value; ///< Packed value of 4 floats.
-		///<
 };
 
 /**
- * SIMD rounding function, exact result.
+ * @brief SIMD rounding function, exact result.
  *
  * @param v Value to round.
  * @return Rounded SIMD value.
@@ -293,13 +313,13 @@ inline float4 round( const float4& v )
 }
 
 /**
- * SIMD function "clamps" (clips) the specified packed values so that they are
- * not lesser than "minv", and not greater than "maxv".
+ * @brief SIMD function "clamps" (clips) the specified packed values so that
+ * they are not lesser than "minv", and not greater than "maxv".
  *
  * @param Value Value to clamp.
  * @param minv Minimal allowed value.
  * @param maxv Maximal allowed value.
- * @return The clamped value.
+ * @return Clamped value.
  */
 
 inline float4 clamp( const float4& Value, const float4& minv,
@@ -312,7 +332,6 @@ typedef fpclass_def< avir :: float4, float > fpclass_float4; ///<
 	///< Class that can be used as the "fpclass" template parameter of the
 	///< avir::CImageResizer class to perform calculation using default
 	///< interleaved algorithm, using SIMD float4 type.
-	///<
 
 } // namespace avir
 
